@@ -141,3 +141,41 @@ func CreateInitialCommit(branch string) error {
 
 	return nil
 }
+
+// Merge merges a branch into the current branch
+func Merge(branch string) error {
+	cmd := exec.Command("git", "merge", "--no-ff", branch)
+	_, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to merge branch: %w", err)
+	}
+	return nil
+}
+
+// Rebase rebases the current branch onto another branch
+func Rebase(branch string) error {
+	cmd := exec.Command("git", "rebase", branch)
+	_, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to rebase branch: %w", err)
+	}
+	return nil
+}
+
+// SquashMerge performs a squash merge of a branch into the current branch
+func SquashMerge(branch string) error {
+	cmd := exec.Command("git", "merge", "--squash", branch)
+	_, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to squash merge branch: %w", err)
+	}
+
+	// Commit the squashed changes
+	cmd = exec.Command("git", "commit", "-m", fmt.Sprintf("Squashed commit of branch '%s'", branch))
+	_, err = cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to commit squashed changes: %w", err)
+	}
+
+	return nil
+}
