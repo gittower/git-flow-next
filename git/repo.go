@@ -179,3 +179,22 @@ func SquashMerge(branch string) error {
 
 	return nil
 }
+
+// ListBranches returns a list of all branches in the repository
+func ListBranches() ([]string, error) {
+	cmd := exec.Command("git", "branch", "--format=%(refname:short)")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list branches: %w", err)
+	}
+
+	// Split the output by newlines and remove empty lines
+	branches := []string{}
+	for _, branch := range strings.Split(string(output), "\n") {
+		if branch != "" {
+			branches = append(branches, strings.TrimSpace(branch))
+		}
+	}
+
+	return branches, nil
+}

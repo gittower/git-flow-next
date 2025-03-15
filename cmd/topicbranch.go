@@ -99,8 +99,8 @@ func registerBranchCommand(branchType string) {
 		Example: fmt.Sprintf("  git flow %s list", branchType),
 		Args:    cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			// For now, just print a message
-			fmt.Println("Not implemented yet")
+			// Call the generic list command with the branch type
+			ListCommand(branchType)
 		},
 	}
 	branchCmd.AddCommand(listCmd)
