@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gittower/git-flow-next/config"
+	"github.com/gittower/git-flow-next/errors"
 	"github.com/gittower/git-flow-next/git"
 	"github.com/gittower/git-flow-next/model"
 	"github.com/gittower/git-flow-next/util"
@@ -13,68 +14,72 @@ import (
 
 // FinishCommand is the implementation of the finish command for topic branches
 func FinishCommand(branchType string, name string, continueOp bool, abortOp bool) {
+	if err := executeFinish(branchType, name, continueOp, abortOp); err != nil {
+		var exitCode errors.ExitCode
+		if flowErr, ok := err.(errors.Error); ok {
+			exitCode = flowErr.ExitCode()
+		} else {
+			exitCode = errors.ExitCodeGitError
+		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(int(exitCode))
+	}
+}
+
+// executeFinish performs the actual branch finishing logic and returns any errors
+func executeFinish(branchType string, name string, continueOp bool, abortOp bool) error {
 	// Check if there's a merge in progress
 	if util.IsMergeInProgress() {
 		state, err := util.LoadMergeState()
 		if err != nil {
-			fmt.Printf("Error loading merge state: %v\n", err)
-			return
+			return &errors.GitError{Operation: "load merge state", Err: err}
 		}
 
 		if abortOp {
-			handleAbort(state)
-			return
+			return handleAbort(state)
 		}
 
 		if continueOp {
-			handleContinue(state)
-			return
+			return handleContinue(state)
 		}
 
-		fmt.Printf("A merge is already in progress for branch '%s'. Use --continue or --abort.\n", state.FullBranchName)
-		return
+		return &errors.MergeInProgressError{BranchName: state.FullBranchName}
 	}
 
 	// Don't allow continue or abort if no merge is in progress
 	if continueOp || abortOp {
-		fmt.Println("No merge in progress. Nothing to continue or abort.")
-		return
+		return &errors.NoMergeInProgressError{}
 	}
 
 	// Regular finish command flow
-	finishBranch(branchType, name)
+	return finishBranch(branchType, name)
 }
 
-func finishBranch(branchType string, name string) {
+func finishBranch(branchType string, name string) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized()
 	if err != nil {
-		fmt.Printf("Error checking if git-flow is initialized: %v\n", err)
-		return
+		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
 	if !initialized {
-		fmt.Println("Git flow is not initialized. Run 'git flow init' first.")
-		return
+		return &errors.NotInitializedError{}
 	}
 
 	// Validate inputs
 	if name == "" {
-		fmt.Println("Branch name cannot be empty")
-		return
+		return &errors.InvalidBranchNameError{Name: name}
 	}
 
 	// Get configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Printf("Error loading configuration: %v\n", err)
-		return
+		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
 
 	// Get branch configuration
 	branchConfig, ok := cfg.Branches[branchType]
 	if !ok {
-		fmt.Printf("Unknown branch type: %s\n", branchType)
-		return
+		return &errors.InvalidBranchTypeError{BranchType: branchType}
 	}
 
 	// Get full branch name
@@ -82,8 +87,7 @@ func finishBranch(branchType string, name string) {
 
 	// Check if branch exists
 	if !git.BranchExists(fullBranchName) {
-		fmt.Printf("Branch '%s' does not exist\n", fullBranchName)
-		return
+		return &errors.BranchNotFoundError{BranchName: fullBranchName}
 	}
 
 	// Get target branch (always the parent branch)
@@ -91,28 +95,24 @@ func finishBranch(branchType string, name string) {
 
 	// Check if target branch exists
 	if !git.BranchExists(targetBranch) {
-		fmt.Printf("Target branch '%s' does not exist\n", targetBranch)
-		return
+		return &errors.BranchNotFoundError{BranchName: targetBranch}
 	}
 
 	// Finish the branch
-	if err := finish(branchType, name, branchConfig, targetBranch, fullBranchName); err != nil {
-		os.Exit(1)
-	}
+	return finish(branchType, name, branchConfig, targetBranch, fullBranchName)
 }
 
-func handleContinue(state *model.MergeState) {
+func handleContinue(state *model.MergeState) error {
 	// Check if there are still conflicts
 	if git.HasConflicts() {
-		fmt.Println("There are still unresolved conflicts. Resolve them and try again.")
-		return
+		return &errors.UnresolvedConflictsError{}
 	}
 
 	// Complete the merge
-	completeMerge(state)
+	return completeMerge(state)
 }
 
-func handleAbort(state *model.MergeState) {
+func handleAbort(state *model.MergeState) error {
 	// Abort the merge based on strategy
 	var err error
 	switch state.MergeStrategy {
@@ -125,40 +125,35 @@ func handleAbort(state *model.MergeState) {
 	}
 
 	if err != nil {
-		fmt.Printf("Error aborting merge: %v\n", err)
-		return
+		return &errors.GitError{Operation: "abort merge", Err: err}
 	}
 
 	// Checkout the original branch
 	if err := git.Checkout(state.FullBranchName); err != nil {
-		fmt.Printf("Error checking out original branch: %v\n", err)
+		return &errors.GitError{Operation: fmt.Sprintf("checkout original branch '%s'", state.FullBranchName), Err: err}
 	}
 
 	// Clear the merge state
 	if err := util.ClearMergeState(); err != nil {
-		fmt.Printf("Error clearing merge state: %v\n", err)
-		return
+		return &errors.GitError{Operation: "clear merge state", Err: err}
 	}
 
-	fmt.Printf("Merge aborted. Returned to branch '%s'\n", state.FullBranchName)
+	return nil
 }
 
-func completeMerge(state *model.MergeState) {
+func completeMerge(state *model.MergeState) error {
 	// Delete branch
 	err := git.DeleteBranch(state.FullBranchName)
 	if err != nil {
-		fmt.Printf("Error deleting branch '%s': %v\n", state.FullBranchName, err)
-		return
+		return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", state.FullBranchName), Err: err}
 	}
-	fmt.Printf("Deleted branch '%s'\n", state.FullBranchName)
 
 	// Clear the merge state
 	if err := util.ClearMergeState(); err != nil {
-		fmt.Printf("Error clearing merge state: %v\n", err)
-		return
+		return &errors.GitError{Operation: "clear merge state", Err: err}
 	}
 
-	fmt.Printf("Successfully finished branch '%s'\n", state.FullBranchName)
+	return nil
 }
 
 func finish(branchType string, name string, branchConfig config.BranchConfig, targetBranch string, fullBranchName string) error {
@@ -166,18 +161,15 @@ func finish(branchType string, name string, branchConfig config.BranchConfig, ta
 	if util.IsMergeInProgress() {
 		state, err := util.LoadMergeState()
 		if err != nil {
-			fmt.Printf("Error loading merge state: %v\n", err)
-			return err
+			return &errors.GitError{Operation: "load merge state", Err: err}
 		}
-		handleContinue(state)
-		return nil
+		return handleContinue(state)
 	}
 
 	// Get current branch
 	currentBranch, err := git.GetCurrentBranch()
 	if err != nil {
-		fmt.Printf("Error getting current branch: %v\n", err)
-		return err
+		return &errors.GitError{Operation: "get current branch", Err: err}
 	}
 
 	// Check if we're on the branch to finish
@@ -185,8 +177,7 @@ func finish(branchType string, name string, branchConfig config.BranchConfig, ta
 		// Checkout the branch to finish
 		err = git.Checkout(fullBranchName)
 		if err != nil {
-			fmt.Printf("Error checking out branch '%s': %v\n", fullBranchName, err)
-			return err
+			return &errors.GitError{Operation: fmt.Sprintf("checkout branch '%s'", fullBranchName), Err: err}
 		}
 		fmt.Printf("Switched to branch '%s'\n", fullBranchName)
 	}
@@ -194,8 +185,7 @@ func finish(branchType string, name string, branchConfig config.BranchConfig, ta
 	// Checkout target branch
 	err = git.Checkout(targetBranch)
 	if err != nil {
-		fmt.Printf("Error checking out target branch '%s': %v\n", targetBranch, err)
-		return err
+		return &errors.GitError{Operation: fmt.Sprintf("checkout target branch '%s'", targetBranch), Err: err}
 	}
 	fmt.Printf("Switched to branch '%s'\n", targetBranch)
 
@@ -210,8 +200,7 @@ func finish(branchType string, name string, branchConfig config.BranchConfig, ta
 		FullBranchName: fullBranchName,
 	}
 	if err := util.SaveMergeState(state); err != nil {
-		fmt.Printf("Error saving merge state: %v\n", err)
-		return err
+		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
 	// Perform merge based on strategy
@@ -224,8 +213,7 @@ func finish(branchType string, name string, branchConfig config.BranchConfig, ta
 		// 1. Stay on feature branch
 		err = git.Checkout(fullBranchName)
 		if err != nil {
-			fmt.Printf("Error checking out feature branch: %v\n", err)
-			return err
+			return &errors.GitError{Operation: "checkout feature branch for rebase", Err: err}
 		}
 		// 2. Rebase onto target branch
 		mergeErr = git.Rebase(targetBranch)
@@ -233,8 +221,7 @@ func finish(branchType string, name string, branchConfig config.BranchConfig, ta
 			// 3. If rebase succeeds, checkout target and merge (should be fast-forward)
 			err = git.Checkout(targetBranch)
 			if err != nil {
-				fmt.Printf("Error checking out target branch: %v\n", err)
-				return err
+				return &errors.GitError{Operation: "checkout target branch after rebase", Err: err}
 			}
 			mergeErr = git.Merge(fullBranchName)
 		}
@@ -243,9 +230,7 @@ func finish(branchType string, name string, branchConfig config.BranchConfig, ta
 	case "merge":
 		mergeErr = git.Merge(fullBranchName)
 	default:
-		err := fmt.Errorf("unknown merge strategy: %s", strings.ToLower(branchConfig.UpstreamStrategy))
-		fmt.Println(err)
-		return err
+		return &errors.GitError{Operation: fmt.Sprintf("unknown merge strategy: %s", strings.ToLower(branchConfig.UpstreamStrategy)), Err: nil}
 	}
 
 	if mergeErr != nil {
@@ -253,14 +238,11 @@ func finish(branchType string, name string, branchConfig config.BranchConfig, ta
 			msg := fmt.Sprintf("Merge conflicts detected. Resolve conflicts and run 'git flow %s finish --continue %s'\n", branchType, name)
 			msg += fmt.Sprintf("To abort the merge, run 'git flow %s finish --abort %s'", branchType, name)
 			fmt.Println(msg)
-			return fmt.Errorf("merge conflict: %v", mergeErr)
+			return &errors.UnresolvedConflictsError{}
 		}
-		fmt.Printf("Error merging branch: %v\n", mergeErr)
-		util.ClearMergeState()
-		return mergeErr
+		return &errors.GitError{Operation: "merge branch", Err: mergeErr}
 	}
 
 	// Complete the merge
-	completeMerge(state)
-	return nil
+	return completeMerge(state)
 }

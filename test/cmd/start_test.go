@@ -1,34 +1,27 @@
 package cmd_test
 
 import (
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
-)
 
-// runGit runs a git command in the specified directory and returns its output
-func runGit(t *testing.T, dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = filepath.Join(dir)
-	output, err := cmd.CombinedOutput()
-	return string(output), err
-}
+	"github.com/gittower/git-flow-next/errors"
+	"github.com/gittower/git-flow-next/test/testutil"
+)
 
 // TestStartFeatureBranch tests the start command for feature branches
 func TestStartFeatureBranch(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := runGitFlow(t, dir, "init", "--defaults", "--create-branches")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults", "--create-branches")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
 	// Run git-flow feature start my-feature
-	output, err = runGitFlow(t, dir, "feature", "start", "my-feature")
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
 	}
@@ -39,14 +32,12 @@ func TestStartFeatureBranch(t *testing.T) {
 	}
 
 	// Check if the branch was actually created
-	if !branchExists(t, dir, "feature/my-feature") {
+	if !testutil.BranchExists(t, dir, "feature/my-feature") {
 		t.Errorf("Expected 'feature/my-feature' branch to exist")
 	}
 
 	// Check if the branch is based on develop
-	cmd := exec.Command("git", "merge-base", "--is-ancestor", "develop", "feature/my-feature")
-	cmd.Dir = dir
-	err = cmd.Run()
+	_, err = testutil.RunGit(t, dir, "merge-base", "--is-ancestor", "develop", "feature/my-feature")
 	if err != nil {
 		t.Errorf("Expected 'feature/my-feature' to be based on 'develop'")
 	}
@@ -55,17 +46,17 @@ func TestStartFeatureBranch(t *testing.T) {
 // TestStartReleaseAndHotfixBranches tests the start command for release and hotfix branches
 func TestStartReleaseAndHotfixBranches(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := runGitFlow(t, dir, "init", "--defaults", "--create-branches")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults", "--create-branches")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
 	// Run git-flow release start 1.0.0
-	output, err = runGitFlow(t, dir, "release", "start", "1.0.0")
+	output, err = testutil.RunGitFlow(t, dir, "release", "start", "1.0.0")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow release start: %v\nOutput: %s", err, output)
 	}
@@ -76,12 +67,12 @@ func TestStartReleaseAndHotfixBranches(t *testing.T) {
 	}
 
 	// Check if the branch was actually created
-	if !branchExists(t, dir, "release/1.0.0") {
+	if !testutil.BranchExists(t, dir, "release/1.0.0") {
 		t.Errorf("Expected 'release/1.0.0' branch to exist")
 	}
 
 	// Run git-flow hotfix start 1.0.1
-	output, err = runGitFlow(t, dir, "hotfix", "start", "1.0.1")
+	output, err = testutil.RunGitFlow(t, dir, "hotfix", "start", "1.0.1")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow hotfix start: %v\nOutput: %s", err, output)
 	}
@@ -92,7 +83,7 @@ func TestStartReleaseAndHotfixBranches(t *testing.T) {
 	}
 
 	// Check if the branch was actually created
-	if !branchExists(t, dir, "hotfix/1.0.1") {
+	if !testutil.BranchExists(t, dir, "hotfix/1.0.1") {
 		t.Errorf("Expected 'hotfix/1.0.1' branch to exist")
 	}
 }
@@ -100,18 +91,18 @@ func TestStartReleaseAndHotfixBranches(t *testing.T) {
 // TestStartWithCustomConfig tests the start command with custom configuration
 func TestStartWithCustomConfig(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with custom configuration
 	input := "custom-main\ncustom-dev\nf/\nr/\nh/\ns/\n"
-	output, err := runGitFlowWithInput(t, dir, input, "init", "--create-branches")
+	output, err := testutil.RunGitFlowWithInput(t, dir, input, "init", "--create-branches")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
 	// Run git-flow feature start my-feature
-	output, err = runGitFlow(t, dir, "feature", "start", "my-feature")
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
 	}
@@ -122,14 +113,12 @@ func TestStartWithCustomConfig(t *testing.T) {
 	}
 
 	// Check if the branch was actually created
-	if !branchExists(t, dir, "f/my-feature") {
+	if !testutil.BranchExists(t, dir, "f/my-feature") {
 		t.Errorf("Expected 'f/my-feature' branch to exist")
 	}
 
 	// Check if the branch is based on custom-dev
-	cmd := exec.Command("git", "merge-base", "--is-ancestor", "custom-dev", "f/my-feature")
-	cmd.Dir = dir
-	err = cmd.Run()
+	_, err = testutil.RunGit(t, dir, "merge-base", "--is-ancestor", "custom-dev", "f/my-feature")
 	if err != nil {
 		t.Errorf("Expected 'f/my-feature' to be based on 'custom-dev'")
 	}
@@ -138,87 +127,98 @@ func TestStartWithCustomConfig(t *testing.T) {
 // TestStartWithExistingBranch tests the start command with an existing branch
 func TestStartWithExistingBranch(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := runGitFlow(t, dir, "init", "--defaults", "--create-branches")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults", "--create-branches")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
-	// Create a feature branch manually
-	cmd := exec.Command("git", "checkout", "-b", "feature/existing-feature", "develop")
-	cmd.Dir = dir
-	err = cmd.Run()
+	// Create a feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
 	if err != nil {
-		t.Fatalf("Failed to create feature branch: %v", err)
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
 	}
 
-	// Return to develop
-	cmd = exec.Command("git", "checkout", "develop")
-	cmd.Dir = dir
-	err = cmd.Run()
-	if err != nil {
-		t.Fatalf("Failed to checkout develop: %v", err)
+	// Try to create the same feature branch again
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
+	if err == nil {
+		t.Error("Expected command to fail with existing branch, but it succeeded")
 	}
 
-	// Run git-flow feature start existing-feature
-	output, err = runGitFlow(t, dir, "feature", "start", "existing-feature")
-	if err != nil {
-		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
+	// Check exit code
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeBranchExists) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeBranchExists, exitErr.ExitCode)
+		}
+	} else {
+		t.Error("Expected ExitError")
 	}
 
-	// Check if the output contains the expected message
-	if !strings.Contains(output, "Branch 'feature/existing-feature' already exists") {
-		t.Errorf("Expected output to contain 'Branch 'feature/existing-feature' already exists', got: %s", output)
+	// Verify error message
+	expectedError := "Error: branch 'feature/my-feature' already exists"
+	if !strings.Contains(output, expectedError) {
+		t.Errorf("Expected error message to contain '%s', got: %s", expectedError, output)
 	}
 }
 
 // TestStartWithNonExistentStartPoint tests the start command with a non-existent start point
 func TestStartWithNonExistentStartPoint(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
-	// Initialize git-flow with defaults but don't create branches
-	output, err := runGitFlow(t, dir, "init", "--defaults")
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults", "--create-branches")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
-	// Run git-flow feature start my-feature
-	output, err = runGitFlow(t, dir, "feature", "start", "my-feature")
+	// Delete the develop branch to make it non-existent
+	_, err = testutil.RunGit(t, dir, "branch", "-D", "develop")
 	if err != nil {
-		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
+		t.Fatalf("Failed to delete develop branch: %v", err)
 	}
 
-	// Check if the output contains the expected message
-	if !strings.Contains(output, "Start point branch 'develop' does not exist") {
-		t.Errorf("Expected output to contain 'Start point branch 'develop' does not exist', got: %s", output)
+	// Try to create a feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
+	if err == nil {
+		t.Error("Expected command to fail when start point doesn't exist, but it succeeded")
 	}
 
-	// Check that the branch was not created
-	if branchExists(t, dir, "feature/my-feature") {
-		t.Errorf("Expected 'feature/my-feature' branch to not exist")
+	// Check exit code
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeBranchNotFound) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeBranchNotFound, exitErr.ExitCode)
+		}
+	} else {
+		t.Error("Expected ExitError")
+	}
+
+	// Verify error message
+	expectedError := "Error: start point branch 'develop' does not exist"
+	if !strings.Contains(output, expectedError) {
+		t.Errorf("Expected error message to contain '%s', got: %s", expectedError, output)
 	}
 }
 
 // TestStartWithNoStartPoint tests that when start point is not specified, parent branch is used
 func TestStartWithNoStartPoint(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with custom configuration
 	input := "main\ndevelop\nf/\nr/\nh/\ns/\n"
-	output, err := runGitFlowWithInput(t, dir, input, "init", "--create-branches")
+	output, err := testutil.RunGitFlowWithInput(t, dir, input, "init", "--create-branches")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
 	// Create a feature branch
-	output, err = runGitFlow(t, dir, "feature", "start", "test-feature")
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "test-feature")
 	if err != nil {
 		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
 	}
@@ -229,7 +229,7 @@ func TestStartWithNoStartPoint(t *testing.T) {
 	}
 
 	// Verify that the branch exists
-	output, err = runGit(t, dir, "branch", "--list", "f/test-feature")
+	output, err = testutil.RunGit(t, dir, "branch", "--list", "f/test-feature")
 	if err != nil {
 		t.Fatalf("Failed to list branches: %v\nOutput: %s", err, output)
 	}
@@ -238,13 +238,13 @@ func TestStartWithNoStartPoint(t *testing.T) {
 	}
 
 	// Get the commit hash of develop
-	developHash, err := runGit(t, dir, "rev-parse", "develop")
+	developHash, err := testutil.RunGit(t, dir, "rev-parse", "develop")
 	if err != nil {
 		t.Fatalf("Failed to get develop hash: %v\nOutput: %s", err, output)
 	}
 
 	// Get the commit hash of the feature branch
-	featureHash, err := runGit(t, dir, "rev-parse", "f/test-feature")
+	featureHash, err := testutil.RunGit(t, dir, "rev-parse", "f/test-feature")
 	if err != nil {
 		t.Fatalf("Failed to get feature hash: %v\nOutput: %s", err, output)
 	}
@@ -252,5 +252,142 @@ func TestStartWithNoStartPoint(t *testing.T) {
 	// Verify that the feature branch was created from develop
 	if developHash != featureHash {
 		t.Errorf("Expected feature branch to be at the same commit as develop")
+	}
+}
+
+// TestStartWithEmptyBranchName tests the start command with an empty branch name
+func TestStartWithEmptyBranchName(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults", "--create-branches")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Try to create a feature branch with empty name
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "")
+	if err == nil {
+		t.Error("Expected command to fail with empty branch name, but it succeeded")
+	}
+
+	// Check exit code
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeInvalidInput) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeInvalidInput, exitErr.ExitCode)
+		}
+	} else {
+		t.Error("Expected ExitError")
+	}
+
+	// Verify error message
+	expectedError := "Error: branch name cannot be empty"
+	if !strings.Contains(output, expectedError) {
+		t.Errorf("Expected error message to contain '%s', got: %s", expectedError, output)
+	}
+}
+
+// TestStartWithInvalidBranchType tests the start command with an invalid branch type
+func TestStartWithInvalidBranchType(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Try to start a branch with an invalid type
+	output, err = testutil.RunGitFlow(t, dir, "invalid", "start", "test")
+	if err == nil {
+		t.Fatal("Expected error when using invalid branch type")
+	}
+
+	// Verify error code (Cobra's default exit code for unknown command is 1)
+	if exitErr, ok := err.(*testutil.ExitError); !ok || exitErr.ExitCode != 1 {
+		t.Errorf("Expected exit code 1, got %v", err)
+	}
+
+	// Verify error message matches Cobra's unknown command error
+	expectedError := "Error: unknown command \"invalid\" for \"git-flow\""
+	if !strings.Contains(output, expectedError) {
+		t.Errorf("Expected error message to contain '%s', got: %s", expectedError, output)
+	}
+
+	// Also verify that Cobra's help suggestion is included
+	if !strings.Contains(output, "Run 'git-flow --help' for usage") {
+		t.Errorf("Expected error message to contain help suggestion, got: %s", output)
+	}
+}
+
+// TestStartWithoutInitialization tests the start command without git-flow initialization
+func TestStartWithoutInitialization(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Verify git-flow is not initialized
+	output, err := testutil.RunGit(t, dir, "config", "--get", "gitflow.initialized")
+	if err == nil {
+		t.Error("Expected git-flow to not be initialized, but it is")
+	}
+
+	// Try to create a feature branch without initializing git-flow
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
+	if err == nil {
+		t.Error("Expected command to fail without git-flow initialization, but it succeeded")
+	}
+
+	// Check exit code
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeNotInitialized) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeNotInitialized, exitErr.ExitCode)
+		}
+	} else {
+		t.Error("Expected ExitError")
+	}
+
+	// Verify error message
+	expectedError := "Error: git flow is not initialized"
+	if !strings.Contains(output, expectedError) {
+		t.Errorf("Expected error message to contain '%s', got: %s", expectedError, output)
+	}
+
+	// Verify no branch was created
+	if testutil.BranchExists(t, dir, "feature/my-feature") {
+		t.Error("Expected no branch to be created, but 'feature/my-feature' exists")
+	}
+
+	// Verify git-flow is still not initialized
+	_, err = testutil.RunGit(t, dir, "config", "--get", "gitflow.initialized")
+	if err == nil {
+		t.Error("Expected git-flow to still not be initialized after failed command")
+	}
+
+	// Verify only the default branch exists
+	branches, err := testutil.RunGit(t, dir, "branch")
+	if err != nil {
+		t.Fatalf("Failed to list branches: %v", err)
+	}
+	expectedBranches := []string{"main", "master"}
+	foundExpectedBranch := false
+	for _, expectedBranch := range expectedBranches {
+		if strings.Contains(branches, expectedBranch) {
+			foundExpectedBranch = true
+			break
+		}
+	}
+	if !foundExpectedBranch {
+		t.Errorf("Expected to find one of %v branches, but got: %s", expectedBranches, branches)
+	}
+	if strings.Contains(branches, "feature/") {
+		t.Error("Found unexpected feature branch")
+	}
+	if strings.Contains(branches, "develop") {
+		t.Error("Found unexpected develop branch")
 	}
 }

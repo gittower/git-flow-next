@@ -1,7 +1,6 @@
 package cmd_test
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -218,84 +217,57 @@ func TestFinishWithMergeConflict(t *testing.T) {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
-	// Set merge strategy to merge using Git config
-	_, err = testutil.RunGit(t, dir, "config", "gitflow.branch.feature.merge-strategy", "merge")
+	// Set merge strategy to merge for feature branches
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.branch.feature.upstreamstrategy", "merge")
 	if err != nil {
 		t.Fatalf("Failed to set merge strategy: %v", err)
 	}
 
-	// Create feature branch
+	// Create and switch to feature branch
 	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "conflict-test")
 	if err != nil {
 		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
 	}
 
-	// Create and modify file in feature branch
-	testutil.WriteFile(t, dir, "conflict.txt", "content from feature branch")
-	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	// Create file in feature branch
+	testutil.WriteFile(t, dir, "test.txt", "feature content")
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
 	if err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add conflict.txt in feature")
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add test.txt in feature")
 	if err != nil {
 		t.Fatalf("Failed to commit file: %v", err)
 	}
 
-	// Switch to develop and modify the same file
+	// Switch to develop and create the same file with different content
 	_, err = testutil.RunGit(t, dir, "checkout", "develop")
 	if err != nil {
 		t.Fatalf("Failed to checkout develop: %v", err)
 	}
 
-	testutil.WriteFile(t, dir, "conflict.txt", "content from develop branch")
-	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	testutil.WriteFile(t, dir, "test.txt", "develop content")
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
 	if err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add conflict.txt in develop")
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add test.txt in develop")
 	if err != nil {
 		t.Fatalf("Failed to commit file: %v", err)
 	}
 
-	// Switch back to feature branch
-	_, err = testutil.RunGit(t, dir, "checkout", "feature/conflict-test")
-	if err != nil {
-		t.Fatalf("Failed to checkout feature branch: %v", err)
-	}
-
-	// Try to finish the feature branch
+	// Try to finish the feature branch (should fail due to conflict)
 	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "conflict-test")
 	if err == nil {
-		t.Fatalf("Expected finish command to fail due to merge conflict, but it succeeded. Output: %s", output)
+		t.Fatal("Expected finish to fail due to merge conflict")
 	}
 
-	// Check if merge state file exists
-	if _, err := os.Stat(filepath.Join(dir, ".git", "gitflow", "state", "merge.json")); os.IsNotExist(err) {
-		t.Error("Expected merge state file to exist")
-	}
-
-	// Read merge state file and verify its contents
-	stateFile := filepath.Join(dir, ".git", "gitflow", "state", "merge.json")
-	data, err := os.ReadFile(stateFile)
+	// Verify merge state
+	state, err := testutil.LoadMergeState(t, dir)
 	if err != nil {
-		t.Fatalf("Failed to read merge state file: %v", err)
+		t.Fatalf("Failed to load merge state: %v", err)
 	}
 
-	var state struct {
-		Action         string `json:"action"`
-		BranchType     string `json:"branchType"`
-		BranchName     string `json:"branchName"`
-		CurrentStep    string `json:"currentStep"`
-		ParentBranch   string `json:"parentBranch"`
-		MergeStrategy  string `json:"mergeStrategy"`
-		FullBranchName string `json:"fullBranchName"`
-	}
-
-	if err := json.Unmarshal(data, &state); err != nil {
-		t.Fatalf("Failed to parse merge state file: %v", err)
-	}
-
-	// Verify merge state contents
 	if state.Action != "finish" {
 		t.Errorf("Expected action to be 'finish', got '%s'", state.Action)
 	}
@@ -330,10 +302,36 @@ func TestFinishWithMergeAbort(t *testing.T) {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
-	// Create a file in develop
-	testutil.WriteFile(t, dir, "test.txt", "develop content")
+	// Set merge strategy to merge for feature branches
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.branch.feature.upstreamstrategy", "merge")
+	if err != nil {
+		t.Fatalf("Failed to set merge strategy: %v", err)
+	}
 
-	// Commit the file in develop
+	// Create and switch to feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "abort-feature")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Create file in feature branch
+	testutil.WriteFile(t, dir, "test.txt", "feature content")
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add test.txt in feature")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Switch to develop and create the same file with different content
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+
+	testutil.WriteFile(t, dir, "test.txt", "develop content")
 	_, err = testutil.RunGit(t, dir, "add", "test.txt")
 	if err != nil {
 		t.Fatalf("Failed to add file: %v", err)
@@ -343,29 +341,15 @@ func TestFinishWithMergeAbort(t *testing.T) {
 		t.Fatalf("Failed to commit file: %v", err)
 	}
 
-	// Create and switch to feature branch
-	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "abort-feature")
-	if err != nil {
-		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
-	}
-
-	// Modify the same file in feature branch
-	testutil.WriteFile(t, dir, "test.txt", "feature content")
-
-	// Commit the changes in feature branch
-	_, err = testutil.RunGit(t, dir, "add", "test.txt")
-	if err != nil {
-		t.Fatalf("Failed to add file: %v", err)
-	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "Modify test.txt in feature")
-	if err != nil {
-		t.Fatalf("Failed to commit file: %v", err)
-	}
-
 	// Try to finish the feature branch (should fail due to conflict)
 	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "abort-feature")
 	if err == nil {
 		t.Fatal("Expected finish to fail due to merge conflict")
+	}
+
+	// Verify we're in a merge conflict state
+	if !testutil.IsMergeInProgress(t, dir) {
+		t.Error("Expected to be in merge conflict state")
 	}
 
 	// Abort the merge
@@ -378,6 +362,17 @@ func TestFinishWithMergeAbort(t *testing.T) {
 	currentBranch := testutil.GetCurrentBranch(t, dir)
 	if !strings.Contains(currentBranch, "abort-feature") {
 		t.Errorf("Expected to be back on feature branch after abort, got %s", currentBranch)
+	}
+
+	// Verify the merge was aborted (no merge in progress)
+	if testutil.IsMergeInProgress(t, dir) {
+		t.Error("Expected no merge in progress after abort")
+	}
+
+	// Verify the file content is back to the feature branch version
+	content := testutil.ReadFile(t, dir, "test.txt")
+	if content != "feature content" {
+		t.Errorf("Expected file content to be 'feature content', got '%s'", content)
 	}
 }
 
@@ -434,5 +429,109 @@ func TestFinishWithRebaseConflict(t *testing.T) {
 	currentBranch := testutil.GetCurrentBranch(t, dir)
 	if !strings.Contains(currentBranch, "rebase-feature") {
 		t.Errorf("Expected to be on feature branch during rebase conflict, got %s", currentBranch)
+	}
+}
+
+// TestFinishWithMergeContinue tests the continue functionality after resolving a merge conflict
+func TestFinishWithMergeContinue(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults and create branches
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Set merge strategy to merge for feature branches
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.branch.feature.upstreamstrategy", "merge")
+	if err != nil {
+		t.Fatalf("Failed to set merge strategy: %v", err)
+	}
+
+	// Create and switch to feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "continue-test")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Create file in feature branch
+	testutil.WriteFile(t, dir, "test.txt", "feature content")
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add test.txt in feature")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Switch to develop and create the same file with different content
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+
+	testutil.WriteFile(t, dir, "test.txt", "develop content")
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add test.txt in develop")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Try to finish the feature branch (should fail due to conflict)
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "continue-test")
+	if err == nil {
+		t.Fatal("Expected finish to fail due to merge conflict")
+	}
+
+	// Verify we're in a merge conflict state
+	if !testutil.IsMergeInProgress(t, dir) {
+		t.Error("Expected to be in merge conflict state")
+	}
+
+	// Resolve the conflict by choosing the feature branch version
+	testutil.WriteFile(t, dir, "test.txt", "feature content")
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add resolved file: %v", err)
+	}
+
+	// Commit the merge resolution
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Merge resolved")
+	if err != nil {
+		t.Fatalf("Failed to commit merge resolution: %v", err)
+	}
+
+	// Continue the finish operation
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "--continue", "continue-test")
+	if err != nil {
+		t.Fatalf("Failed to continue finish operation: %v\nOutput: %s", err, output)
+	}
+
+	// Verify we're no longer in a merge state
+	if testutil.IsMergeInProgress(t, dir) {
+		t.Error("Expected no merge in progress after continue")
+	}
+
+	// Verify we're on the develop branch
+	currentBranch := testutil.GetCurrentBranch(t, dir)
+	if !strings.Contains(currentBranch, "develop") {
+		t.Errorf("Expected to be on develop branch after continue, got %s", currentBranch)
+	}
+
+	// Verify the feature branch was deleted
+	if testutil.BranchExists(t, dir, "feature/continue-test") {
+		t.Error("Expected feature branch to be deleted after successful finish")
+	}
+
+	// Verify the file content matches our resolution
+	content := testutil.ReadFile(t, dir, "test.txt")
+	if content != "feature content" {
+		t.Errorf("Expected file content to be 'feature content', got '%s'", content)
 	}
 }

@@ -1,8 +1,7 @@
 package testutil
 
 import (
-	"bytes"
-	"io"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,7 +29,10 @@ func RunGit(t *testing.T, dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	output, err := cmd.CombinedOutput()
-	return string(output), err
+	if err != nil {
+		return string(output), fmt.Errorf("git command failed: %w\nOutput: %s", err, output)
+	}
+	return string(output), nil
 }
 
 // RunGitFlow runs a git-flow command in the specified directory and returns its output
@@ -38,37 +40,34 @@ func RunGitFlow(t *testing.T, dir string, args ...string) (string, error) {
 	cmd := exec.Command(gitFlowPath, args...)
 	cmd.Dir = dir
 	output, err := cmd.CombinedOutput()
-	return string(output), err
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return string(output), &ExitError{
+				ExitCode: exitErr.ExitCode(),
+				Err:      fmt.Errorf("%s", output),
+			}
+		}
+		return string(output), err
+	}
+	return string(output), nil
 }
 
 // RunGitFlowWithInput runs a git-flow command with the provided input and returns its output
 func RunGitFlowWithInput(t *testing.T, dir string, input string, args ...string) (string, error) {
 	cmd := exec.Command(gitFlowPath, args...)
 	cmd.Dir = dir
-
-	// Create a pipe for stdin
-	stdin, err := cmd.StdinPipe()
+	cmd.Stdin = strings.NewReader(input)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", err
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return string(output), &ExitError{
+				ExitCode: exitErr.ExitCode(),
+				Err:      fmt.Errorf("%s", output),
+			}
+		}
+		return string(output), err
 	}
-
-	// Create a buffer for stdout and stderr
-	var output bytes.Buffer
-	cmd.Stdout = &output
-	cmd.Stderr = &output
-
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return output.String(), err
-	}
-
-	// Write input to stdin
-	io.WriteString(stdin, input)
-	stdin.Close()
-
-	// Wait for the command to complete
-	err = cmd.Wait()
-	return output.String(), err
+	return string(output), nil
 }
 
 // SetupTestRepo creates a temporary Git repository for testing
@@ -138,5 +137,5 @@ func GetCurrentBranch(t *testing.T, dir string) string {
 	if err != nil {
 		t.Fatalf("Failed to get current branch: %v", err)
 	}
-	return strings.TrimSpace(output)
+	return output
 }

@@ -2,42 +2,53 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/gittower/git-flow-next/config"
+	"github.com/gittower/git-flow-next/errors"
 	"github.com/gittower/git-flow-next/git"
 )
 
 // StartCommand is the implementation of the start command for topic branches
 func StartCommand(branchType string, name string) {
+	if err := start(branchType, name); err != nil {
+		var exitCode errors.ExitCode
+		if flowErr, ok := err.(errors.Error); ok {
+			exitCode = flowErr.ExitCode()
+		} else {
+			exitCode = errors.ExitCodeGitError
+		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(int(exitCode))
+	}
+}
+
+// start performs the actual branch creation logic and returns any errors
+func start(branchType string, name string) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized()
 	if err != nil {
-		fmt.Printf("Error checking if git-flow is initialized: %v\n", err)
-		return
+		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
 	if !initialized {
-		fmt.Println("Git flow is not initialized. Run 'git flow init' first.")
-		return
+		return &errors.NotInitializedError{}
 	}
 
 	// Validate inputs
 	if name == "" {
-		fmt.Println("Branch name cannot be empty")
-		return
+		return &errors.EmptyBranchNameError{}
 	}
 
 	// Get configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Printf("Error loading configuration: %v\n", err)
-		return
+		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
 
 	// Get branch configuration
 	branchConfig, ok := cfg.Branches[branchType]
 	if !ok {
-		fmt.Printf("Unknown branch type: %s\n", branchType)
-		return
+		return &errors.InvalidBranchTypeError{BranchType: branchType}
 	}
 
 	// Get full branch name
@@ -45,8 +56,7 @@ func StartCommand(branchType string, name string) {
 
 	// Check if branch already exists
 	if git.BranchExists(fullBranchName) {
-		fmt.Printf("Branch '%s' already exists\n", fullBranchName)
-		return
+		return &errors.BranchExistsError{BranchName: fullBranchName}
 	}
 
 	// Get start point
@@ -58,23 +68,22 @@ func StartCommand(branchType string, name string) {
 
 	// Check if start point exists
 	if !git.BranchExists(startPoint) {
-		fmt.Printf("Start point branch '%s' does not exist\n", startPoint)
-		return
+		return &errors.BranchNotFoundError{BranchName: startPoint}
 	}
 
 	// Create branch
 	err = git.CreateBranch(fullBranchName, startPoint)
 	if err != nil {
-		fmt.Printf("Error creating branch: %v\n", err)
-		return
+		return &errors.GitError{Operation: "create branch", Err: err}
 	}
 
 	// Store the start point in Git config
 	configKey := fmt.Sprintf("gitflow.branch.%s.base", fullBranchName)
 	err = git.SetConfig(configKey, startPoint)
 	if err != nil {
-		fmt.Printf("Warning: Failed to store start point in config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: Failed to store start point in config: %v\n", err)
 	}
 
 	fmt.Printf("Created branch '%s' from '%s'\n", fullBranchName, startPoint)
+	return nil
 }
