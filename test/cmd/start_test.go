@@ -2,9 +2,18 @@ package cmd_test
 
 import (
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// runGit runs a git command in the specified directory and returns its output
+func runGit(t *testing.T, dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = filepath.Join(dir)
+	output, err := cmd.CombinedOutput()
+	return string(output), err
+}
 
 // TestStartFeatureBranch tests the start command for feature branches
 func TestStartFeatureBranch(t *testing.T) {
@@ -192,5 +201,56 @@ func TestStartWithNonExistentStartPoint(t *testing.T) {
 	// Check that the branch was not created
 	if branchExists(t, dir, "feature/my-feature") {
 		t.Errorf("Expected 'feature/my-feature' branch to not exist")
+	}
+}
+
+// TestStartWithNoStartPoint tests that when start point is not specified, parent branch is used
+func TestStartWithNoStartPoint(t *testing.T) {
+	// Setup
+	dir := setupTestRepo(t)
+	defer cleanupTestRepo(t, dir)
+
+	// Initialize git-flow with custom configuration
+	input := "main\ndevelop\nf/\nr/\nh/\ns/\n"
+	output, err := runGitFlowWithInput(t, dir, input, "init", "--create-branches")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create a feature branch
+	output, err = runGitFlow(t, dir, "feature", "start", "test-feature")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify that the branch was created from develop (parent branch)
+	if !strings.Contains(output, "Created branch 'f/test-feature' from 'develop'") {
+		t.Errorf("Expected branch to be created from 'develop', got: %s", output)
+	}
+
+	// Verify that the branch exists
+	output, err = runGit(t, dir, "branch", "--list", "f/test-feature")
+	if err != nil {
+		t.Fatalf("Failed to list branches: %v\nOutput: %s", err, output)
+	}
+	if !strings.Contains(output, "f/test-feature") {
+		t.Errorf("Expected branch 'f/test-feature' to exist, got: %s", output)
+	}
+
+	// Get the commit hash of develop
+	developHash, err := runGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop hash: %v\nOutput: %s", err, output)
+	}
+
+	// Get the commit hash of the feature branch
+	featureHash, err := runGit(t, dir, "rev-parse", "f/test-feature")
+	if err != nil {
+		t.Fatalf("Failed to get feature hash: %v\nOutput: %s", err, output)
+	}
+
+	// Verify that the feature branch was created from develop
+	if developHash != featureHash {
+		t.Errorf("Expected feature branch to be at the same commit as develop")
 	}
 }

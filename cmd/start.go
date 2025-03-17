@@ -50,10 +50,10 @@ func StartCommand(branchType string, name string) {
 	}
 
 	// Get start point
-	startPoint := branchConfig.StartPoint
-	if startPoint == "" {
-		// If no start point is specified, use the parent branch
-		startPoint = branchConfig.Parent
+	startPoint := branchConfig.Parent
+	if branchConfig.StartPoint != "" {
+		// If start point is specified, use it instead of parent
+		startPoint = branchConfig.StartPoint
 	}
 
 	// Check if start point exists
