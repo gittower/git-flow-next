@@ -85,10 +85,19 @@ func registerBranchCommand(branchType string) {
 		Example: fmt.Sprintf("  git flow %s finish my-feature", branchType),
 		Args:    cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			// Get flags
+			continueOp, _ := cmd.Flags().GetBool("continue")
+			abortOp, _ := cmd.Flags().GetBool("abort")
+
 			// Call the generic finish command with the branch type and name
-			FinishCommand(branchType, args[0])
+			FinishCommand(branchType, args[0], continueOp, abortOp)
 		},
 	}
+
+	// Add flags
+	finishCmd.Flags().BoolP("continue", "c", false, "Continue the finish operation after resolving conflicts")
+	finishCmd.Flags().BoolP("abort", "a", false, "Abort the finish operation and return to the original state")
+
 	branchCmd.AddCommand(finishCmd)
 
 	// Add list subcommand

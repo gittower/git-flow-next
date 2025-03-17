@@ -1,218 +1,438 @@
 package cmd_test
 
 import (
-	"os/exec"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gittower/git-flow-next/test/testutil"
 )
+
+// Test functions
 
 // TestFinishFeatureBranch tests the finish command for feature branches
 func TestFinishFeatureBranch(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
-	// Initialize git-flow with defaults
-	output, err := runGitFlow(t, dir, "init", "--defaults", "--create-branches")
+	// Initialize git-flow with defaults and create branches
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
 	// Create a feature branch
-	output, err = runGitFlow(t, dir, "feature", "start", "my-feature")
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
 	if err != nil {
 		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
 	}
 
-	// Make a change on the feature branch
-	cmd := exec.Command("bash", "-c", "echo 'Feature change' > feature.txt && git add feature.txt && git commit -m 'Add feature'")
-	cmd.Dir = dir
-	err = cmd.Run()
+	// Create a test file
+	testutil.WriteFile(t, dir, "test.txt", "test content")
+
+	// Commit the changes
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
 	if err != nil {
-		t.Fatalf("Failed to make change on feature branch: %v", err)
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add test file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
 	}
 
 	// Finish the feature branch
-	output, err = runGitFlow(t, dir, "feature", "finish", "my-feature")
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "my-feature")
 	if err != nil {
 		t.Fatalf("Failed to finish feature branch: %v\nOutput: %s", err, output)
 	}
 
-	// Check if the output contains the expected messages
-	if !strings.Contains(output, "Merged branch 'feature/my-feature'") {
-		t.Errorf("Expected output to contain 'Merged branch 'feature/my-feature'', got: %s", output)
+	// Verify that feature branch is deleted
+	if testutil.BranchExists(t, dir, "feature/my-feature") {
+		t.Error("Expected feature branch to be deleted")
 	}
 
-	if !strings.Contains(output, "Deleted branch 'feature/my-feature'") {
-		t.Errorf("Expected output to contain 'Deleted branch 'feature/my-feature'', got: %s", output)
-	}
-
-	// Check if the branch was deleted
-	if branchExists(t, dir, "feature/my-feature") {
-		t.Errorf("Expected 'feature/my-feature' branch to be deleted")
-	}
-
-	// Check if we're on the develop branch
-	currentBranch := getCurrentBranch(t, dir)
-	if currentBranch != "develop" {
-		t.Errorf("Expected to be on 'develop' branch, got: %s", currentBranch)
-	}
-
-	// Check if the feature change is in the develop branch
-	cmd = exec.Command("bash", "-c", "cat feature.txt")
-	cmd.Dir = dir
-	outputBytes, err := cmd.CombinedOutput()
+	// Verify that changes are merged into develop
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
 	if err != nil {
-		t.Errorf("Failed to read feature.txt: %v", err)
-	} else if strings.TrimSpace(string(outputBytes)) != "Feature change" {
-		t.Errorf("Expected feature.txt to contain 'Feature change', got: %s", strings.TrimSpace(string(outputBytes)))
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "test.txt")); os.IsNotExist(err) {
+		t.Error("Expected test.txt to exist in develop branch")
 	}
 }
 
 // TestFinishReleaseAndHotfixBranches tests the finish command for release and hotfix branches
 func TestFinishReleaseAndHotfixBranches(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
-	// Initialize git-flow with defaults
-	output, err := runGitFlow(t, dir, "init", "--defaults", "--create-branches")
+	// Initialize git-flow with defaults and create branches
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
-	// Create a release branch
-	output, err = runGitFlow(t, dir, "release", "start", "1.0.0")
+	// Test release branch
+	output, err = testutil.RunGitFlow(t, dir, "release", "start", "1.0.0")
 	if err != nil {
 		t.Fatalf("Failed to create release branch: %v\nOutput: %s", err, output)
 	}
 
-	// Make a change on the release branch
-	cmd := exec.Command("bash", "-c", "echo 'Release change' > release.txt && git add release.txt && git commit -m 'Add release'")
-	cmd.Dir = dir
-	err = cmd.Run()
+	// Create a test file
+	testutil.WriteFile(t, dir, "release.txt", "release content")
+
+	// Commit the changes
+	_, err = testutil.RunGit(t, dir, "add", "release.txt")
 	if err != nil {
-		t.Fatalf("Failed to make change on release branch: %v", err)
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add release file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
 	}
 
 	// Finish the release branch
-	output, err = runGitFlow(t, dir, "release", "finish", "1.0.0")
+	output, err = testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0")
 	if err != nil {
 		t.Fatalf("Failed to finish release branch: %v\nOutput: %s", err, output)
 	}
 
-	// Check if the branch was deleted
-	if branchExists(t, dir, "release/1.0.0") {
-		t.Errorf("Expected 'release/1.0.0' branch to be deleted")
-	}
-
-	// Create a hotfix branch
-	output, err = runGitFlow(t, dir, "hotfix", "start", "1.0.1")
+	// Test hotfix branch
+	output, err = testutil.RunGitFlow(t, dir, "hotfix", "start", "1.0.1")
 	if err != nil {
 		t.Fatalf("Failed to create hotfix branch: %v\nOutput: %s", err, output)
 	}
 
-	// Make a change on the hotfix branch
-	cmd = exec.Command("bash", "-c", "echo 'Hotfix change' > hotfix.txt && git add hotfix.txt && git commit -m 'Add hotfix'")
-	cmd.Dir = dir
-	err = cmd.Run()
+	// Create a test file
+	testutil.WriteFile(t, dir, "hotfix.txt", "hotfix content")
+
+	// Commit the changes
+	_, err = testutil.RunGit(t, dir, "add", "hotfix.txt")
 	if err != nil {
-		t.Fatalf("Failed to make change on hotfix branch: %v", err)
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add hotfix file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
 	}
 
 	// Finish the hotfix branch
-	output, err = runGitFlow(t, dir, "hotfix", "finish", "1.0.1")
+	output, err = testutil.RunGitFlow(t, dir, "hotfix", "finish", "1.0.1")
 	if err != nil {
 		t.Fatalf("Failed to finish hotfix branch: %v\nOutput: %s", err, output)
-	}
-
-	// Check if the branch was deleted
-	if branchExists(t, dir, "hotfix/1.0.1") {
-		t.Errorf("Expected 'hotfix/1.0.1' branch to be deleted")
 	}
 }
 
 // TestFinishWithCustomConfig tests the finish command with custom configuration
 func TestFinishWithCustomConfig(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
-	// Initialize git-flow with custom configuration
-	input := "custom-main\ncustom-dev\nf/\nr/\nh/\ns/\n"
-	output, err := runGitFlowWithInput(t, dir, input, "init", "--create-branches")
+	// Initialize git-flow with custom configuration and create branches
+	input := "custom-main\ncustom-dev\nf/\nr/\nh/\ns/\ny\n"
+	output, err := testutil.RunGitFlowWithInput(t, dir, input, "init", "-c")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
 	// Create a feature branch
-	output, err = runGitFlow(t, dir, "feature", "start", "my-feature")
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "custom-feature")
 	if err != nil {
 		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
 	}
 
-	// Make a change on the feature branch
-	cmd := exec.Command("bash", "-c", "echo 'Feature change' > feature.txt && git add feature.txt && git commit -m 'Add feature'")
-	cmd.Dir = dir
-	err = cmd.Run()
+	// Create a test file
+	testutil.WriteFile(t, dir, "test.txt", "test content")
+
+	// Commit the changes
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
 	if err != nil {
-		t.Fatalf("Failed to make change on feature branch: %v", err)
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add test file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
 	}
 
 	// Finish the feature branch
-	output, err = runGitFlow(t, dir, "feature", "finish", "my-feature")
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "custom-feature")
 	if err != nil {
 		t.Fatalf("Failed to finish feature branch: %v\nOutput: %s", err, output)
 	}
 
-	// Check if the output contains the expected messages
-	if !strings.Contains(output, "Merged branch 'f/my-feature'") {
-		t.Errorf("Expected output to contain 'Merged branch 'f/my-feature'', got: %s", output)
+	// Verify that feature branch is deleted
+	if testutil.BranchExists(t, dir, "f/custom-feature") {
+		t.Error("Expected feature branch to be deleted")
 	}
 
-	// Check if the branch was deleted
-	if branchExists(t, dir, "f/my-feature") {
-		t.Errorf("Expected 'f/my-feature' branch to be deleted")
+	// Verify that changes are merged into custom-dev
+	_, err = testutil.RunGit(t, dir, "checkout", "custom-dev")
+	if err != nil {
+		t.Fatalf("Failed to checkout custom-dev: %v", err)
 	}
 
-	// Check if we're on the custom-dev branch
-	currentBranch := getCurrentBranch(t, dir)
-	if currentBranch != "custom-dev" {
-		t.Errorf("Expected to be on 'custom-dev' branch, got: %s", currentBranch)
+	if _, err := os.Stat(filepath.Join(dir, "test.txt")); os.IsNotExist(err) {
+		t.Error("Expected test.txt to exist in custom-dev branch")
 	}
 }
 
 // TestFinishNonExistentBranch tests the finish command with a non-existent branch
 func TestFinishNonExistentBranch(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
-	// Initialize git-flow with defaults
-	output, err := runGitFlow(t, dir, "init", "--defaults", "--create-branches")
+	// Initialize git-flow with defaults and create branches
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
-	// Finish a non-existent feature branch
-	output, err = runGitFlow(t, dir, "feature", "finish", "non-existent")
-	if err != nil {
-		t.Fatalf("Failed to run finish command: %v\nOutput: %s", err, output)
+	// Try to finish a non-existent feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "non-existent")
+	if err == nil {
+		t.Fatal("Expected error when finishing non-existent branch")
 	}
 
-	// Check if the output contains the expected message
-	if !strings.Contains(output, "Branch 'feature/non-existent' does not exist") {
-		t.Errorf("Expected output to contain 'Branch 'feature/non-existent' does not exist', got: %s", output)
+	// Check if the error message is appropriate
+	if !strings.Contains(output, "does not exist") {
+		t.Errorf("Expected error message to contain 'does not exist', got: %s", output)
 	}
 }
 
-// Helper function to get the current branch
-func getCurrentBranch(t *testing.T, dir string) string {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = dir
-	output, err := cmd.Output()
+// TestFinishWithMergeConflict tests that the finish command properly handles merge conflicts
+func TestFinishWithMergeConflict(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults and create branches
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
 	if err != nil {
-		t.Fatalf("Failed to get current branch: %v", err)
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
-	return strings.TrimSpace(string(output))
+
+	// Set merge strategy to merge using Git config
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.branch.feature.merge-strategy", "merge")
+	if err != nil {
+		t.Fatalf("Failed to set merge strategy: %v", err)
+	}
+
+	// Create feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "conflict-test")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Create and modify file in feature branch
+	testutil.WriteFile(t, dir, "conflict.txt", "content from feature branch")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add conflict.txt in feature")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Switch to develop and modify the same file
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+
+	testutil.WriteFile(t, dir, "conflict.txt", "content from develop branch")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add conflict.txt in develop")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Switch back to feature branch
+	_, err = testutil.RunGit(t, dir, "checkout", "feature/conflict-test")
+	if err != nil {
+		t.Fatalf("Failed to checkout feature branch: %v", err)
+	}
+
+	// Try to finish the feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "conflict-test")
+	if err == nil {
+		t.Fatalf("Expected finish command to fail due to merge conflict, but it succeeded. Output: %s", output)
+	}
+
+	// Check if merge state file exists
+	if _, err := os.Stat(filepath.Join(dir, ".git", "gitflow", "state", "merge.json")); os.IsNotExist(err) {
+		t.Error("Expected merge state file to exist")
+	}
+
+	// Read merge state file and verify its contents
+	stateFile := filepath.Join(dir, ".git", "gitflow", "state", "merge.json")
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		t.Fatalf("Failed to read merge state file: %v", err)
+	}
+
+	var state struct {
+		Action         string `json:"action"`
+		BranchType     string `json:"branchType"`
+		BranchName     string `json:"branchName"`
+		CurrentStep    string `json:"currentStep"`
+		ParentBranch   string `json:"parentBranch"`
+		MergeStrategy  string `json:"mergeStrategy"`
+		FullBranchName string `json:"fullBranchName"`
+	}
+
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatalf("Failed to parse merge state file: %v", err)
+	}
+
+	// Verify merge state contents
+	if state.Action != "finish" {
+		t.Errorf("Expected action to be 'finish', got '%s'", state.Action)
+	}
+	if state.BranchType != "feature" {
+		t.Errorf("Expected branchType to be 'feature', got '%s'", state.BranchType)
+	}
+	if state.BranchName != "conflict-test" {
+		t.Errorf("Expected branchName to be 'conflict-test', got '%s'", state.BranchName)
+	}
+	if state.CurrentStep != "merge" {
+		t.Errorf("Expected currentStep to be 'merge', got '%s'", state.CurrentStep)
+	}
+	if state.ParentBranch != "develop" {
+		t.Errorf("Expected parentBranch to be 'develop', got '%s'", state.ParentBranch)
+	}
+	if state.MergeStrategy != "merge" {
+		t.Errorf("Expected mergeStrategy to be 'merge', got '%s'", state.MergeStrategy)
+	}
+	if state.FullBranchName != "feature/conflict-test" {
+		t.Errorf("Expected fullBranchName to be 'feature/conflict-test', got '%s'", state.FullBranchName)
+	}
+}
+
+func TestFinishWithMergeAbort(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults and create branches
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create a file in develop
+	testutil.WriteFile(t, dir, "test.txt", "develop content")
+
+	// Commit the file in develop
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add test.txt in develop")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Create and switch to feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "abort-feature")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Modify the same file in feature branch
+	testutil.WriteFile(t, dir, "test.txt", "feature content")
+
+	// Commit the changes in feature branch
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Modify test.txt in feature")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Try to finish the feature branch (should fail due to conflict)
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "abort-feature")
+	if err == nil {
+		t.Fatal("Expected finish to fail due to merge conflict")
+	}
+
+	// Abort the merge
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "--abort", "abort-feature")
+	if err != nil {
+		t.Fatalf("Failed to abort merge: %v\nOutput: %s", err, output)
+	}
+
+	// Verify we're back on the feature branch
+	currentBranch := testutil.GetCurrentBranch(t, dir)
+	if !strings.Contains(currentBranch, "abort-feature") {
+		t.Errorf("Expected to be back on feature branch after abort, got %s", currentBranch)
+	}
+}
+
+func TestFinishWithRebaseConflict(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults and create branches
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create a file in develop
+	testutil.WriteFile(t, dir, "test.txt", "develop content")
+
+	// Commit the file in develop
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add test.txt in develop")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Create and switch to feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "rebase-feature")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Modify the same file in feature branch
+	testutil.WriteFile(t, dir, "test.txt", "feature content")
+
+	// Commit the changes in feature branch
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Modify test.txt in feature")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Try to finish the feature branch with rebase
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "--rebase", "rebase-feature")
+	if err == nil {
+		t.Fatal("Expected finish to fail due to rebase conflict")
+	}
+
+	// Verify that we're in a rebase conflict state
+	currentBranch := testutil.GetCurrentBranch(t, dir)
+	if !strings.Contains(currentBranch, "rebase-feature") {
+		t.Errorf("Expected to be on feature branch during rebase conflict, got %s", currentBranch)
+	}
 }

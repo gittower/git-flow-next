@@ -144,20 +144,47 @@ func CreateInitialCommit(branch string) error {
 
 // Merge merges a branch into the current branch
 func Merge(branch string) error {
-	cmd := exec.Command("git", "merge", "--no-ff", branch)
-	_, err := cmd.Output()
+	cmd := exec.Command("git", "merge", "--no-ff", "--no-commit", "--no-rerere", branch)
+	output, err := cmd.CombinedOutput()
+	outputStr := string(output)
+
+	fmt.Printf("Merge output: %s\n", outputStr)
+	fmt.Printf("Merge error: %v\n", err)
+
+	// Check for merge conflicts - Git returns exit code 1 and specific output patterns
 	if err != nil {
-		return fmt.Errorf("failed to merge branch: %w", err)
+		// Check if there are unmerged paths (conflicts)
+		conflictCmd := exec.Command("git", "ls-files", "--unmerged")
+		conflictOutput, _ := conflictCmd.Output()
+
+		if len(conflictOutput) > 0 ||
+			strings.Contains(outputStr, "Automatic merge failed") ||
+			strings.Contains(outputStr, "CONFLICT") ||
+			strings.Contains(outputStr, "merge failed") ||
+			strings.Contains(outputStr, "needs merge") {
+			return fmt.Errorf("merge conflict: %s", outputStr)
+		}
+		return fmt.Errorf("failed to merge branch: %s", outputStr)
 	}
+
+	// If no conflicts, commit the merge
+	commitCmd := exec.Command("git", "commit", "--no-edit")
+	if err := commitCmd.Run(); err != nil {
+		return fmt.Errorf("failed to commit merge: %w", err)
+	}
+
 	return nil
 }
 
 // Rebase rebases the current branch onto another branch
 func Rebase(branch string) error {
 	cmd := exec.Command("git", "rebase", branch)
-	_, err := cmd.Output()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to rebase branch: %w", err)
+		if strings.Contains(string(output), "conflict") {
+			return fmt.Errorf("rebase conflict: %s", string(output))
+		}
+		return fmt.Errorf("failed to rebase branch: %s", string(output))
 	}
 	return nil
 }
@@ -165,16 +192,19 @@ func Rebase(branch string) error {
 // SquashMerge performs a squash merge of a branch into the current branch
 func SquashMerge(branch string) error {
 	cmd := exec.Command("git", "merge", "--squash", branch)
-	_, err := cmd.Output()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to squash merge branch: %w", err)
+		if strings.Contains(string(output), "conflict") {
+			return fmt.Errorf("squash merge conflict: %s", string(output))
+		}
+		return fmt.Errorf("failed to squash merge branch: %s", string(output))
 	}
 
 	// Commit the squashed changes
 	cmd = exec.Command("git", "commit", "-m", fmt.Sprintf("Squashed commit of branch '%s'", branch))
-	_, err = cmd.Output()
+	output, err = cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to commit squashed changes: %w", err)
+		return fmt.Errorf("failed to commit squashed changes: %s", string(output))
 	}
 
 	return nil
@@ -197,4 +227,34 @@ func ListBranches() ([]string, error) {
 	}
 
 	return branches, nil
+}
+
+// HasConflicts checks if there are unresolved conflicts
+func HasConflicts() bool {
+	// Check for unmerged paths
+	cmd := exec.Command("git", "diff", "--name-only", "--diff-filter=U")
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return len(output) > 0
+}
+
+// MergeAbort aborts the current merge
+func MergeAbort() error {
+	cmd := exec.Command("git", "merge", "--abort")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to abort merge: %w", err)
+	}
+	return nil
+}
+
+// RebaseAbort aborts the current rebase
+func RebaseAbort() error {
+	cmd := exec.Command("git", "rebase", "--abort")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to abort rebase: %s", string(output))
+	}
+	return nil
 }

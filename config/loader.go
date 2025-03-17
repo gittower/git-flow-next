@@ -98,13 +98,13 @@ func LoadConfig() (*Config, error) {
 	branchMap := make(map[string]map[string]string)
 	for key, value := range branchConfigs {
 		// Parse key: gitflow.branch.<branchname>.<property>
-		parts := strings.Split(strings.ToLower(key), ".")
+		parts := strings.Split(key, ".")
 		if len(parts) < 4 {
 			continue
 		}
 
-		branchName := parts[2]
-		property := parts[3]
+		branchName := strings.ToLower(parts[2])
+		property := strings.ToLower(parts[3])
 
 		// Initialize branch map if needed
 		if _, ok := branchMap[branchName]; !ok {
