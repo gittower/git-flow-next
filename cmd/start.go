@@ -69,5 +69,12 @@ func StartCommand(branchType string, name string) {
 		return
 	}
 
+	// Store the start point in Git config
+	configKey := fmt.Sprintf("gitflow.branch.%s.base", fullBranchName)
+	err = git.SetConfig(configKey, startPoint)
+	if err != nil {
+		fmt.Printf("Warning: Failed to store start point in config: %v\n", err)
+	}
+
 	fmt.Printf("Created branch '%s' from '%s'\n", fullBranchName, startPoint)
 }
