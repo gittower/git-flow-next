@@ -98,7 +98,7 @@ func LoadConfig() (*Config, error) {
 	branchMap := make(map[string]map[string]string)
 	for key, value := range branchConfigs {
 		// Parse key: gitflow.branch.<branchname>.<property>
-		parts := strings.Split(key, ".")
+		parts := strings.Split(strings.ToLower(key), ".")
 		if len(parts) < 4 {
 			continue
 		}
@@ -120,14 +120,14 @@ func LoadConfig() (*Config, error) {
 		branchConfig := BranchConfig{
 			Type:               properties["type"],
 			Parent:             properties["parent"],
-			StartPoint:         properties["startPoint"],
-			UpstreamStrategy:   properties["upstreamStrategy"],
-			DownstreamStrategy: properties["downstreamStrategy"],
+			StartPoint:         properties["startpoint"],
+			UpstreamStrategy:   properties["upstreamstrategy"],
+			DownstreamStrategy: properties["downstreamstrategy"],
 			Prefix:             properties["prefix"],
 		}
 
 		// Handle boolean properties
-		if autoUpdate, ok := properties["autoUpdate"]; ok {
+		if autoUpdate, ok := properties["autoupdate"]; ok {
 			branchConfig.AutoUpdate = autoUpdate == "true"
 		}
 
