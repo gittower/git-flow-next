@@ -129,33 +129,21 @@ func createGitFlowBranches(cfg *config.Config) error {
 	}
 
 	// Create main branch if it doesn't exist
-	if mainBranch != "" && !git.BranchExists(mainBranch) {
-		if !hasCommits {
-			// Create an initial commit
-			err = git.CreateInitialCommit(mainBranch)
-			if err != nil {
-				return fmt.Errorf("failed to create initial commit: %w", err)
-			}
-			fmt.Printf("Created branch '%s' with initial commit\n", mainBranch)
-
-			// Update current branch
-			currentBranch = mainBranch
-		} else {
-			// Create branch from current branch
-			err = git.CreateBranch(mainBranch, currentBranch)
-			if err != nil {
-				return fmt.Errorf("failed to create branch '%s': %w", mainBranch, err)
-			}
-			fmt.Printf("Created branch '%s'\n", mainBranch)
+	if err := git.BranchExists(mainBranch); err != nil {
+		// Create main branch
+		err = git.CreateBranch(mainBranch, "")
+		if err != nil {
+			return &errors.GitError{Operation: fmt.Sprintf("create main branch '%s'", mainBranch), Err: err}
 		}
+		fmt.Printf("Created branch '%s'\n", mainBranch)
 	}
 
 	// Create develop branch if it doesn't exist
-	if developBranch != "" && !git.BranchExists(developBranch) {
-		// Create branch from main branch
+	if err := git.BranchExists(developBranch); err != nil {
+		// Create develop branch from main
 		err = git.CreateBranch(developBranch, mainBranch)
 		if err != nil {
-			return fmt.Errorf("failed to create branch '%s': %w", developBranch, err)
+			return &errors.GitError{Operation: fmt.Sprintf("create develop branch '%s'", developBranch), Err: err}
 		}
 		fmt.Printf("Created branch '%s'\n", developBranch)
 	}

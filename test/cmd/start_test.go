@@ -177,6 +177,10 @@ func TestStartWithNonExistentStartPoint(t *testing.T) {
 	}
 
 	// Delete the develop branch to make it non-existent
+	_, err = testutil.RunGit(t, dir, "checkout", "main")
+	if err != nil {
+		t.Fatalf("Failed to switch to main branch: %v", err)
+	}
 	_, err = testutil.RunGit(t, dir, "branch", "-D", "develop")
 	if err != nil {
 		t.Fatalf("Failed to delete develop branch: %v", err)

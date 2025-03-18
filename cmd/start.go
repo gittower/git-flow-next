@@ -55,7 +55,7 @@ func start(branchType string, name string) error {
 	fullBranchName := branchConfig.Prefix + name
 
 	// Check if branch already exists
-	if git.BranchExists(fullBranchName) {
+	if err := git.BranchExists(fullBranchName); err == nil {
 		return &errors.BranchExistsError{BranchName: fullBranchName}
 	}
 
@@ -67,7 +67,7 @@ func start(branchType string, name string) error {
 	}
 
 	// Check if start point exists
-	if !git.BranchExists(startPoint) {
+	if err := git.BranchExists(startPoint); err != nil {
 		return &errors.BranchNotFoundError{BranchName: startPoint}
 	}
 

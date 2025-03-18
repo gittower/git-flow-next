@@ -8,6 +8,7 @@ import (
 	"github.com/gittower/git-flow-next/config"
 	"github.com/gittower/git-flow-next/errors"
 	"github.com/gittower/git-flow-next/git"
+	"github.com/gittower/git-flow-next/internal/update"
 	"github.com/gittower/git-flow-next/model"
 	"github.com/gittower/git-flow-next/util"
 )
@@ -86,7 +87,7 @@ func finishBranch(branchType string, name string) error {
 	fullBranchName := branchConfig.Prefix + name
 
 	// Check if branch exists
-	if !git.BranchExists(fullBranchName) {
+	if err := git.BranchExists(fullBranchName); err != nil {
 		return &errors.BranchNotFoundError{BranchName: fullBranchName}
 	}
 
@@ -94,7 +95,7 @@ func finishBranch(branchType string, name string) error {
 	targetBranch := branchConfig.Parent
 
 	// Check if target branch exists
-	if !git.BranchExists(targetBranch) {
+	if err := git.BranchExists(targetBranch); err != nil {
 		return &errors.BranchNotFoundError{BranchName: targetBranch}
 	}
 
@@ -103,13 +104,99 @@ func finishBranch(branchType string, name string) error {
 }
 
 func handleContinue(state *model.MergeState) error {
-	// Check if there are still conflicts
-	if git.HasConflicts() {
-		return &errors.UnresolvedConflictsError{}
-	}
+	switch state.CurrentStep {
+	case "merge":
+		// Check if there are still conflicts
+		if git.HasConflicts() {
+			return &errors.UnresolvedConflictsError{}
+		}
 
-	// Complete the merge
-	return completeMerge(state)
+		// Move to next step
+		state.CurrentStep = "update_children"
+		if err := util.SaveMergeState(state); err != nil {
+			return &errors.GitError{Operation: "save merge state", Err: err}
+		}
+		return handleContinue(state)
+
+	case "update_children":
+		// Find next child branch to update
+		var nextBranch string
+		for _, branch := range state.ChildBranches {
+			alreadyUpdated := false
+			for _, updated := range state.UpdatedBranches {
+				if branch == updated {
+					alreadyUpdated = true
+					break
+				}
+			}
+			if !alreadyUpdated {
+				nextBranch = branch
+				break
+			}
+		}
+
+		// If no more branches to update, move to final step
+		if nextBranch == "" {
+			state.CurrentStep = "delete_branch"
+			if err := util.SaveMergeState(state); err != nil {
+				return &errors.GitError{Operation: "save merge state", Err: err}
+			}
+			return handleContinue(state)
+		}
+
+		// Update the next child branch
+		fmt.Printf("Updating child base branch '%s' from '%s'...\n", nextBranch, state.ParentBranch)
+
+		// Load config to get merge strategy for this base branch
+		cfg, err := config.LoadConfig()
+		if err != nil {
+			return &errors.GitError{Operation: "load configuration", Err: err}
+		}
+
+		branchConfig, ok := cfg.Branches[nextBranch]
+		if !ok {
+			return &errors.GitError{Operation: fmt.Sprintf("get config for branch '%s'", nextBranch), Err: fmt.Errorf("branch config not found")}
+		}
+
+		// Use the shared update logic
+		err = update.UpdateBranchFromParent(nextBranch, state.ParentBranch, branchConfig.DownstreamStrategy, true, state)
+		if err != nil {
+			if _, ok := err.(*errors.UnresolvedConflictsError); ok {
+				msg := fmt.Sprintf("Merge conflicts detected while updating base branch '%s'. Resolve conflicts and run 'git flow %s finish --continue %s'\n", nextBranch, state.BranchType, state.BranchName)
+				msg += fmt.Sprintf("To abort the merge, run 'git flow %s finish --abort %s'", state.BranchType, state.BranchName)
+				fmt.Println(msg)
+				return err
+			}
+			return err
+		}
+
+		// Mark this branch as updated
+		state.UpdatedBranches = append(state.UpdatedBranches, nextBranch)
+		if err := util.SaveMergeState(state); err != nil {
+			return &errors.GitError{Operation: "save merge state", Err: err}
+		}
+
+		// Continue with next branch
+		return handleContinue(state)
+
+	case "delete_branch":
+		// Delete the original branch
+		err := git.DeleteBranch(state.FullBranchName)
+		if err != nil {
+			return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", state.FullBranchName), Err: err}
+		}
+
+		// Clear the merge state
+		if err := util.ClearMergeState(); err != nil {
+			return &errors.GitError{Operation: "clear merge state", Err: err}
+		}
+
+		fmt.Printf("Successfully finished branch '%s' and updated %d child base branches\n", state.FullBranchName, len(state.UpdatedBranches))
+		return nil
+
+	default:
+		return &errors.GitError{Operation: fmt.Sprintf("unknown step '%s'", state.CurrentStep), Err: nil}
+	}
 }
 
 func handleAbort(state *model.MergeState) error {
@@ -131,21 +218,6 @@ func handleAbort(state *model.MergeState) error {
 	// Checkout the original branch
 	if err := git.Checkout(state.FullBranchName); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("checkout original branch '%s'", state.FullBranchName), Err: err}
-	}
-
-	// Clear the merge state
-	if err := util.ClearMergeState(); err != nil {
-		return &errors.GitError{Operation: "clear merge state", Err: err}
-	}
-
-	return nil
-}
-
-func completeMerge(state *model.MergeState) error {
-	// Delete branch
-	err := git.DeleteBranch(state.FullBranchName)
-	if err != nil {
-		return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", state.FullBranchName), Err: err}
 	}
 
 	// Clear the merge state
@@ -189,15 +261,31 @@ func finish(branchType string, name string, branchConfig config.BranchConfig, ta
 	}
 	fmt.Printf("Switched to branch '%s'\n", targetBranch)
 
+	// Find child base branches that need to be updated
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return &errors.GitError{Operation: "load configuration", Err: err}
+	}
+
+	childBranches := []string{}
+	for branchName, branch := range cfg.Branches {
+		if branch.Type == string(config.BranchTypeBase) && branch.Parent == targetBranch {
+			fmt.Printf("Found child base branch '%s' to update\n", branchName)
+			childBranches = append(childBranches, branchName)
+		}
+	}
+
 	// Save merge state before starting
 	state := &model.MergeState{
-		Action:         "finish",
-		BranchType:     branchType,
-		BranchName:     name,
-		CurrentStep:    "merge",
-		ParentBranch:   targetBranch,
-		MergeStrategy:  branchConfig.UpstreamStrategy,
-		FullBranchName: fullBranchName,
+		Action:          "finish",
+		BranchType:      branchType,
+		BranchName:      name,
+		CurrentStep:     "merge",
+		ParentBranch:    targetBranch,
+		MergeStrategy:   branchConfig.UpstreamStrategy,
+		FullBranchName:  fullBranchName,
+		ChildBranches:   childBranches,
+		UpdatedBranches: []string{},
 	}
 	if err := util.SaveMergeState(state); err != nil {
 		return &errors.GitError{Operation: "save merge state", Err: err}
@@ -243,6 +331,11 @@ func finish(branchType string, name string, branchConfig config.BranchConfig, ta
 		return &errors.GitError{Operation: "merge branch", Err: mergeErr}
 	}
 
-	// Complete the merge
-	return completeMerge(state)
+	// Move to next step
+	state.CurrentStep = "update_children"
+	if err := util.SaveMergeState(state); err != nil {
+		return &errors.GitError{Operation: "save merge state", Err: err}
+	}
+
+	return handleContinue(state)
 }

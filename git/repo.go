@@ -36,10 +36,13 @@ func GetCurrentBranch() (string, error) {
 }
 
 // BranchExists checks if a branch exists
-func BranchExists(branch string) bool {
+func BranchExists(branch string) error {
 	cmd := exec.Command("git", "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
 	err := cmd.Run()
-	return err == nil
+	if err != nil {
+		return fmt.Errorf("branch '%s' does not exist", branch)
+	}
+	return nil
 }
 
 // CreateBranch creates a new branch

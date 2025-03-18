@@ -82,6 +82,12 @@ func TestFinishReleaseAndHotfixBranches(t *testing.T) {
 		t.Fatalf("Failed to create release branch: %v\nOutput: %s", err, output)
 	}
 
+	// Ensure we're on the release branch
+	_, err = testutil.RunGit(t, dir, "checkout", "release/1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to checkout release branch: %v", err)
+	}
+
 	// Create a test file
 	testutil.WriteFile(t, dir, "release.txt", "release content")
 
@@ -99,6 +105,44 @@ func TestFinishReleaseAndHotfixBranches(t *testing.T) {
 	output, err = testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0")
 	if err != nil {
 		t.Fatalf("Failed to finish release branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify that release branch is deleted
+	if testutil.BranchExists(t, dir, "release/1.0.0") {
+		t.Error("Expected release branch to be deleted")
+	}
+
+	// Verify changes are in main branch
+	_, err = testutil.RunGit(t, dir, "checkout", "main")
+	if err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+
+	content, err := testutil.RunGit(t, dir, "--no-pager", "show", "HEAD:release.txt")
+	if err != nil {
+		t.Fatalf("Failed to read file content from main: %v", err)
+	}
+	if content != "release content" {
+		t.Errorf("Expected release.txt content in main to be 'release content', got '%s'", content)
+	}
+
+	// Verify changes are in develop branch (as it's a child base branch of main)
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+
+	content, err = testutil.RunGit(t, dir, "--no-pager", "show", "HEAD:release.txt")
+	if err != nil {
+		t.Fatalf("Failed to read file content from develop: %v", err)
+	}
+	if content != "release content" {
+		t.Errorf("Expected release.txt content in develop to be 'release content', got '%s'", content)
+	}
+
+	// Verify no merge state is left
+	if testutil.IsMergeInProgress(t, dir) {
+		t.Error("Expected no merge in progress after successful finish")
 	}
 
 	// Test hotfix branch
@@ -533,5 +577,162 @@ func TestFinishWithMergeContinue(t *testing.T) {
 	content := testutil.ReadFile(t, dir, "test.txt")
 	if content != "feature content" {
 		t.Errorf("Expected file content to be 'feature content', got '%s'", content)
+	}
+}
+
+// TestFinishWithChildBranchConflict tests that conflicts in child base branches are handled properly
+func TestFinishWithChildBranchConflict(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create a release branch
+	output, err = testutil.RunGitFlow(t, dir, "release", "start", "1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to create release branch: %v\nOutput: %s", err, output)
+	}
+
+	// Add a file in release branch
+	testutil.WriteFile(t, dir, "version.txt", "1.0.0")
+	_, err = testutil.RunGit(t, dir, "add", "version.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add version file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Switch to develop and create conflicting change
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+
+	testutil.WriteFile(t, dir, "version.txt", "dev-version")
+	_, err = testutil.RunGit(t, dir, "add", "version.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add dev version")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Try to finish the release branch (should succeed for main but fail for develop)
+	output, err = testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0")
+	if err == nil {
+		t.Fatal("Expected finish to fail due to conflict in develop branch")
+	}
+
+	// Verify merge state
+	state, err := testutil.LoadMergeState(t, dir)
+	if err != nil {
+		t.Fatalf("Failed to load merge state: %v", err)
+	}
+
+	if state.Action != "finish" {
+		t.Errorf("Expected action to be 'finish', got '%s'", state.Action)
+	}
+	if state.BranchType != "release" {
+		t.Errorf("Expected branchType to be 'release', got '%s'", state.BranchType)
+	}
+	if state.BranchName != "1.0.0" {
+		t.Errorf("Expected branchName to be '1.0.0', got '%s'", state.BranchName)
+	}
+	if state.CurrentStep != "update_children" {
+		t.Errorf("Expected currentStep to be 'update_children', got '%s'", state.CurrentStep)
+	}
+	if state.ParentBranch != "main" {
+		t.Errorf("Expected parentBranch to be 'main', got '%s'", state.ParentBranch)
+	}
+	if len(state.ChildBranches) != 1 || state.ChildBranches[0] != "develop" {
+		t.Errorf("Expected ChildBranches to contain ['develop'], got %v", state.ChildBranches)
+	}
+	if len(state.UpdatedBranches) != 0 {
+		t.Errorf("Expected UpdatedBranches to be empty, got %v", state.UpdatedBranches)
+	}
+
+	// Verify we're on develop branch with conflict
+	currentBranch := testutil.GetCurrentBranch(t, dir)
+	if !strings.Contains(currentBranch, "develop") {
+		t.Errorf("Expected to be on develop branch, got %s", currentBranch)
+	}
+
+	// Verify the file contents from both branches during merge
+	content, err := testutil.RunGit(t, dir, "--no-pager", "show", ":2:version.txt")
+	if err != nil {
+		t.Fatalf("Failed to read develop version of file: %v", err)
+	}
+	if content != "dev-version" {
+		t.Errorf("Expected version.txt content in develop to be 'dev-version', got '%s'", content)
+	}
+
+	content, err = testutil.RunGit(t, dir, "--no-pager", "show", ":3:version.txt")
+	if err != nil {
+		t.Fatalf("Failed to read release version of file: %v", err)
+	}
+	if content != "1.0.0" {
+		t.Errorf("Expected version.txt content in release to be '1.0.0', got '%s'", content)
+	}
+
+	// Resolve the conflict by taking the release version
+	testutil.WriteFile(t, dir, "version.txt", "1.0.0")
+	_, err = testutil.RunGit(t, dir, "add", "version.txt")
+	if err != nil {
+		t.Fatalf("Failed to add resolved file: %v", err)
+	}
+
+	// Commit the merge resolution
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Merge resolved")
+	if err != nil {
+		t.Fatalf("Failed to commit merge resolution: %v", err)
+	}
+
+	// Continue the finish operation
+	output, err = testutil.RunGitFlow(t, dir, "release", "finish", "--continue", "1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to continue finish operation: %v\nOutput: %s", err, output)
+	}
+
+	// Verify final state
+	if testutil.IsMergeInProgress(t, dir) {
+		t.Error("Expected no merge in progress after continue")
+	}
+
+	// Verify release branch was deleted
+	if testutil.BranchExists(t, dir, "release/1.0.0") {
+		t.Error("Expected release branch to be deleted")
+	}
+
+	// Verify content in both main and develop
+	_, err = testutil.RunGit(t, dir, "checkout", "main")
+	if err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+	content, err = testutil.RunGit(t, dir, "--no-pager", "show", "HEAD:version.txt")
+	if err != nil {
+		t.Fatalf("Failed to read file content from main: %v", err)
+	}
+	if content != "1.0.0" {
+		t.Errorf("Expected version.txt content in main to be '1.0.0', got '%s'", content)
+	}
+
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	content, err = testutil.RunGit(t, dir, "--no-pager", "show", "HEAD:version.txt")
+	if err != nil {
+		t.Fatalf("Failed to read file content from develop: %v", err)
+	}
+	if content != "1.0.0" {
+		t.Errorf("Expected version.txt content in develop to be '1.0.0', got '%s'", content)
 	}
 }

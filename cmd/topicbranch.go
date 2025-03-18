@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/gittower/git-flow-next/config"
+	"github.com/gittower/git-flow-next/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -113,6 +115,33 @@ func registerBranchCommand(branchType string) {
 		},
 	}
 	branchCmd.AddCommand(listCmd)
+
+	// Add update subcommand
+	updateCmd := &cobra.Command{
+		Use:     "update [name]",
+		Short:   fmt.Sprintf("Update a %s branch with changes from its parent branch", branchType),
+		Long:    fmt.Sprintf("Update a %s branch with changes from its parent branch using the configured downstream strategy", branchType),
+		Example: fmt.Sprintf("  git flow %s update my-feature", branchType),
+		Args:    cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var name string
+			if len(args) > 0 {
+				name = args[0]
+			}
+			if err := executeUpdate(branchType, name); err != nil {
+				var exitCode errors.ExitCode
+				if flowErr, ok := err.(errors.Error); ok {
+					exitCode = flowErr.ExitCode()
+				} else {
+					exitCode = errors.ExitCodeGitError
+				}
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(int(exitCode))
+			}
+			return nil
+		},
+	}
+	branchCmd.AddCommand(updateCmd)
 
 	// Add the branch command to the root command
 	rootCmd.AddCommand(branchCmd)
