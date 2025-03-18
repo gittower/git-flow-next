@@ -79,7 +79,7 @@ func SetupTestRepo(t *testing.T) string {
 	}
 
 	// Initialize Git repository
-	_, err = RunGit(t, dir, "init")
+	_, err = RunGit(t, dir, "init", "--initial-branch=main")
 	if err != nil {
 		t.Fatalf("Failed to initialize Git repository: %v", err)
 	}
