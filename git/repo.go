@@ -144,12 +144,9 @@ func CreateInitialCommit(branch string) error {
 
 // Merge merges a branch into the current branch
 func Merge(branch string) error {
-	cmd := exec.Command("git", "merge", "--no-ff", "--no-commit", "--no-rerere", branch)
+	cmd := exec.Command("git", "merge", "--no-ff", branch)
 	output, err := cmd.CombinedOutput()
 	outputStr := string(output)
-
-	fmt.Printf("Merge output: %s\n", outputStr)
-	fmt.Printf("Merge error: %v\n", err)
 
 	// Check for merge conflicts - Git returns exit code 1 and specific output patterns
 	if err != nil {
@@ -165,12 +162,6 @@ func Merge(branch string) error {
 			return fmt.Errorf("merge conflict: %s", outputStr)
 		}
 		return fmt.Errorf("failed to merge branch: %s", outputStr)
-	}
-
-	// If no conflicts, commit the merge
-	commitCmd := exec.Command("git", "commit", "--no-edit")
-	if err := commitCmd.Run(); err != nil {
-		return fmt.Errorf("failed to commit merge: %w", err)
 	}
 
 	return nil
