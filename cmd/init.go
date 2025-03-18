@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gittower/git-flow-next/config"
+	"github.com/gittower/git-flow-next/errors"
 	"github.com/gittower/git-flow-next/git"
 	"github.com/spf13/cobra"
 )
@@ -18,71 +19,84 @@ var initCmd = &cobra.Command{
 This will set up the necessary configuration for git-flow to work.
 If git-flow-avh configuration exists, it will be imported.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Check if we're in a git repo
-		if !git.IsGitRepo() {
-			fmt.Println("Not a git repository. Please run 'git init' first.")
-			return
-		}
-
-		// Get flags
 		useDefaults, _ := cmd.Flags().GetBool("defaults")
 		createBranches, _ := cmd.Flags().GetBool("create-branches")
-
-		var cfg *config.Config
-
-		// Check if git-flow-avh config exists
-		if config.CheckGitFlowAVHConfig() {
-			fmt.Println("Found existing git-flow-avh configuration, importing...")
-			var err error
-			cfg, err = config.ImportGitFlowAVHConfig()
-			if err != nil {
-				fmt.Printf("Error importing git-flow-avh configuration: %v\n", err)
-				return
-			}
-			fmt.Println("Successfully imported git-flow-avh configuration")
-		} else if useDefaults {
-			fmt.Println("Initializing git-flow with default settings")
-			cfg = config.DefaultConfig()
-		} else {
-			fmt.Println("Initializing git-flow")
-			cfg = interactiveConfig()
-		}
-
-		// Save the configuration
-		err := config.SaveConfig(cfg)
-		if err != nil {
-			fmt.Printf("Error saving configuration: %v\n", err)
-			return
-		}
-
-		// Mark the repository as initialized
-		err = config.MarkRepoInitialized()
-		if err != nil {
-			fmt.Printf("Error marking repository as initialized: %v\n", err)
-			return
-		}
-
-		// Create branches if requested or if interactive mode and user confirms
-		shouldCreateBranches := createBranches
-		if !useDefaults && !createBranches {
-			// In interactive mode, ask if branches should be created
-			reader := bufio.NewReader(os.Stdin)
-			fmt.Print("Do you want to create branches now? [y/N]: ")
-			answer, _ := reader.ReadString('\n')
-			answer = strings.TrimSpace(strings.ToLower(answer))
-			shouldCreateBranches = answer == "y" || answer == "yes"
-		}
-
-		if shouldCreateBranches {
-			err = createGitFlowBranches(cfg)
-			if err != nil {
-				fmt.Printf("Error creating branches: %v\n", err)
-				return
-			}
-		}
-
-		fmt.Println("Git flow has been initialized")
+		InitCommand(useDefaults, createBranches)
 	},
+}
+
+// InitCommand is the implementation of the init command
+func InitCommand(useDefaults, createBranches bool) {
+	if err := initFlow(useDefaults, createBranches); err != nil {
+		var exitCode errors.ExitCode
+		if flowErr, ok := err.(errors.Error); ok {
+			exitCode = flowErr.ExitCode()
+		} else {
+			exitCode = errors.ExitCodeGitError
+		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(int(exitCode))
+	}
+}
+
+// initFlow performs the actual initialization logic and returns any errors
+func initFlow(useDefaults, createBranches bool) error {
+	// Check if we're in a git repo
+	if !git.IsGitRepo() {
+		return &errors.GitError{Operation: "check if git repository", Err: fmt.Errorf("not a git repository. Please run 'git init' first")}
+	}
+
+	var cfg *config.Config
+
+	// Check if git-flow-avh config exists
+	if config.CheckGitFlowAVHConfig() {
+		fmt.Println("Found existing git-flow-avh configuration, importing...")
+		var err error
+		cfg, err = config.ImportGitFlowAVHConfig()
+		if err != nil {
+			return &errors.GitError{Operation: "import git-flow-avh configuration", Err: err}
+		}
+		fmt.Println("Successfully imported git-flow-avh configuration")
+	} else if useDefaults {
+		fmt.Println("Initializing git-flow with default settings")
+		cfg = config.DefaultConfig()
+	} else {
+		fmt.Println("Initializing git-flow")
+		cfg = interactiveConfig()
+	}
+
+	// Save the configuration
+	err := config.SaveConfig(cfg)
+	if err != nil {
+		return &errors.GitError{Operation: "save configuration", Err: err}
+	}
+
+	// Mark the repository as initialized
+	err = config.MarkRepoInitialized()
+	if err != nil {
+		return &errors.GitError{Operation: "mark repository as initialized", Err: err}
+	}
+
+	// Create branches if requested or if interactive mode and user confirms
+	shouldCreateBranches := createBranches
+	if !useDefaults && !createBranches {
+		// In interactive mode, ask if branches should be created
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("Do you want to create branches now? [y/N]: ")
+		answer, _ := reader.ReadString('\n')
+		answer = strings.TrimSpace(strings.ToLower(answer))
+		shouldCreateBranches = answer == "y" || answer == "yes"
+	}
+
+	if shouldCreateBranches {
+		err = createGitFlowBranches(cfg)
+		if err != nil {
+			return &errors.GitError{Operation: "create branches", Err: err}
+		}
+	}
+
+	fmt.Println("Git flow has been initialized")
+	return nil
 }
 
 // createGitFlowBranches creates the base branches if they don't exist

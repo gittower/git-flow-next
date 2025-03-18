@@ -2,37 +2,49 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/gittower/git-flow-next/config"
+	"github.com/gittower/git-flow-next/errors"
 	"github.com/gittower/git-flow-next/git"
 )
 
 // ListCommand is the implementation of the list command for topic branches
 func ListCommand(branchType string) {
+	if err := list(branchType); err != nil {
+		var exitCode errors.ExitCode
+		if flowErr, ok := err.(errors.Error); ok {
+			exitCode = flowErr.ExitCode()
+		} else {
+			exitCode = errors.ExitCodeGitError
+		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(int(exitCode))
+	}
+}
+
+// list performs the actual branch listing logic and returns any errors
+func list(branchType string) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized()
 	if err != nil {
-		fmt.Printf("Error checking if git-flow is initialized: %v\n", err)
-		return
+		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
 	if !initialized {
-		fmt.Println("Git flow is not initialized. Run 'git flow init' first.")
-		return
+		return &errors.NotInitializedError{}
 	}
 
 	// Get configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Printf("Error loading configuration: %v\n", err)
-		return
+		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
 
 	// Get branch configuration
 	branchConfig, ok := cfg.Branches[branchType]
 	if !ok {
-		fmt.Printf("Unknown branch type: %s\n", branchType)
-		return
+		return &errors.InvalidBranchTypeError{BranchType: branchType}
 	}
 
 	// Get the prefix for this branch type
@@ -41,8 +53,7 @@ func ListCommand(branchType string) {
 	// Get all branches
 	branches, err := git.ListBranches()
 	if err != nil {
-		fmt.Printf("Error listing branches: %v\n", err)
-		return
+		return &errors.GitError{Operation: "list branches", Err: err}
 	}
 
 	// Filter branches by prefix
@@ -58,7 +69,7 @@ func ListCommand(branchType string) {
 	// Print the branches
 	if len(topicBranches) == 0 {
 		fmt.Printf("No %s branches found\n", branchType)
-		return
+		return nil
 	}
 
 	// Capitalize the first letter of the branch type
@@ -71,4 +82,6 @@ func ListCommand(branchType string) {
 	for _, branch := range topicBranches {
 		fmt.Printf("  %s\n", branch)
 	}
+
+	return nil
 }
