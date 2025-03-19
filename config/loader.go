@@ -36,7 +36,7 @@ func DefaultConfig() *Config {
 			},
 			"release": {
 				Type:               string(BranchTypeTopic),
-				Parent:             "develop",
+				Parent:             "main",
 				StartPoint:         "develop",
 				UpstreamStrategy:   string(MergeStrategyMerge),
 				DownstreamStrategy: string(MergeStrategyMerge),
