@@ -218,6 +218,27 @@ func TestInitWithDefaults(t *testing.T) {
 	if featurePrefix != "feature/" {
 		t.Errorf("Expected gitflow.branch.feature.prefix to be 'feature/', got: %s", featurePrefix)
 	}
+
+	// Check if tag configuration was set correctly for release and hotfix branches
+	releaseTag := getGitConfig(t, dir, "gitflow.branch.release.tag")
+	if releaseTag != "true" {
+		t.Errorf("Expected gitflow.branch.release.tag to be 'true', got: %s", releaseTag)
+	}
+
+	releaseTagPrefix := getGitConfig(t, dir, "gitflow.branch.release.tagprefix")
+	if releaseTagPrefix != "" {
+		t.Errorf("Expected gitflow.branch.release.tagprefix to be empty, got: %s", releaseTagPrefix)
+	}
+
+	hotfixTag := getGitConfig(t, dir, "gitflow.branch.hotfix.tag")
+	if hotfixTag != "true" {
+		t.Errorf("Expected gitflow.branch.hotfix.tag to be 'true', got: %s", hotfixTag)
+	}
+
+	hotfixTagPrefix := getGitConfig(t, dir, "gitflow.branch.hotfix.tagprefix")
+	if hotfixTagPrefix != "" {
+		t.Errorf("Expected gitflow.branch.hotfix.tagprefix to be empty, got: %s", hotfixTagPrefix)
+	}
 }
 
 // TestInitWithAVHConfig tests the init command with existing git-flow-avh configuration
@@ -228,6 +249,13 @@ func TestInitWithAVHConfig(t *testing.T) {
 
 	// Setup git-flow-avh configuration
 	setupGitFlowAVH(t, dir)
+
+	// Add tag configuration to git-flow-avh setup
+	cmd := exec.Command("git", "config", "gitflow.prefix.versiontag", "ver-")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to set gitflow.prefix.versiontag: %v", err)
+	}
 
 	// Run git-flow init
 	output, err := runGitFlow(t, dir, "init")
@@ -262,6 +290,27 @@ func TestInitWithAVHConfig(t *testing.T) {
 	featurePrefix := getGitConfig(t, dir, "gitflow.branch.feature.prefix")
 	if featurePrefix != "feat/" {
 		t.Errorf("Expected gitflow.branch.feature.prefix to be 'feat/', got: %s", featurePrefix)
+	}
+
+	// Check if the tag configuration was imported correctly
+	releaseTag := getGitConfig(t, dir, "gitflow.branch.release.tag")
+	if releaseTag != "true" {
+		t.Errorf("Expected gitflow.branch.release.tag to be 'true', got: %s", releaseTag)
+	}
+
+	releaseTagPrefix := getGitConfig(t, dir, "gitflow.branch.release.tagprefix")
+	if releaseTagPrefix != "ver-" {
+		t.Errorf("Expected gitflow.branch.release.tagprefix to be 'ver-', got: %s", releaseTagPrefix)
+	}
+
+	hotfixTag := getGitConfig(t, dir, "gitflow.branch.hotfix.tag")
+	if hotfixTag != "true" {
+		t.Errorf("Expected gitflow.branch.hotfix.tag to be 'true', got: %s", hotfixTag)
+	}
+
+	hotfixTagPrefix := getGitConfig(t, dir, "gitflow.branch.hotfix.tagprefix")
+	if hotfixTagPrefix != "ver-" {
+		t.Errorf("Expected gitflow.branch.hotfix.tagprefix to be 'ver-', got: %s", hotfixTagPrefix)
 	}
 }
 

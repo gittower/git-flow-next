@@ -62,10 +62,19 @@ func TestFinishFeatureBranch(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "test.txt")); os.IsNotExist(err) {
 		t.Error("Expected test.txt to exist in develop branch")
 	}
+
+	// Verify that no tag was created (feature branches don't create tags)
+	output, err = testutil.RunGit(t, dir, "tag", "-l")
+	if err != nil {
+		t.Fatalf("Failed to list tags: %v", err)
+	}
+	if output != "" {
+		t.Error("Expected no tags to be created for feature branches")
+	}
 }
 
-// TestFinishReleaseAndHotfixBranches tests the finish command for release and hotfix branches
-func TestFinishReleaseAndHotfixBranches(t *testing.T) {
+// TestFinishReleaseBranch tests the finish command for release branches
+func TestFinishReleaseBranch(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -74,6 +83,12 @@ func TestFinishReleaseAndHotfixBranches(t *testing.T) {
 	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Set tag prefix for release branches
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.branch.release.tagprefix", "v")
+	if err != nil {
+		t.Fatalf("Failed to set tag prefix: %v", err)
 	}
 
 	// Test release branch
@@ -145,6 +160,34 @@ func TestFinishReleaseAndHotfixBranches(t *testing.T) {
 		t.Error("Expected no merge in progress after successful finish")
 	}
 
+	// Verify that a tag was created
+	output, err = testutil.RunGit(t, dir, "tag", "-l")
+	if err != nil {
+		t.Fatalf("Failed to list tags: %v", err)
+	}
+	if !strings.Contains(output, "v1.0.0") {
+		t.Error("Expected tag 'v1.0.0' to be created")
+	}
+}
+
+// TestFinishHotfixBranch tests the finish command for hotfix branches
+func TestFinishHotfixBranch(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults and create branches
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Set tag prefix for hotfix branches
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.branch.hotfix.tagprefix", "v")
+	if err != nil {
+		t.Fatalf("Failed to set tag prefix: %v", err)
+	}
+
 	// Test hotfix branch
 	output, err = testutil.RunGitFlow(t, dir, "hotfix", "start", "1.0.1")
 	if err != nil {
@@ -168,6 +211,53 @@ func TestFinishReleaseAndHotfixBranches(t *testing.T) {
 	output, err = testutil.RunGitFlow(t, dir, "hotfix", "finish", "1.0.1")
 	if err != nil {
 		t.Fatalf("Failed to finish hotfix branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify that hotfix branch is deleted
+	if testutil.BranchExists(t, dir, "hotfix/1.0.1") {
+		t.Error("Expected hotfix branch to be deleted")
+	}
+
+	// Verify changes are in main branch
+	_, err = testutil.RunGit(t, dir, "checkout", "main")
+	if err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+
+	content, err := testutil.RunGit(t, dir, "--no-pager", "show", "HEAD:hotfix.txt")
+	if err != nil {
+		t.Fatalf("Failed to read file content from main: %v", err)
+	}
+	if content != "hotfix content" {
+		t.Errorf("Expected hotfix.txt content in main to be 'hotfix content', got '%s'", content)
+	}
+
+	// Verify changes are in develop branch
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+
+	content, err = testutil.RunGit(t, dir, "--no-pager", "show", "HEAD:hotfix.txt")
+	if err != nil {
+		t.Fatalf("Failed to read file content from develop: %v", err)
+	}
+	if content != "hotfix content" {
+		t.Errorf("Expected hotfix.txt content in develop to be 'hotfix content', got '%s'", content)
+	}
+
+	// Verify no merge state is left
+	if testutil.IsMergeInProgress(t, dir) {
+		t.Error("Expected no merge in progress after successful finish")
+	}
+
+	// Verify that a tag was created
+	output, err = testutil.RunGit(t, dir, "tag", "-l")
+	if err != nil {
+		t.Fatalf("Failed to list tags: %v", err)
+	}
+	if !strings.Contains(output, "v1.0.1") {
+		t.Error("Expected tag 'v1.0.1' to be created")
 	}
 }
 
@@ -734,5 +824,118 @@ func TestFinishWithChildBranchConflict(t *testing.T) {
 	}
 	if content != "1.0.0" {
 		t.Errorf("Expected version.txt content in develop to be '1.0.0', got '%s'", content)
+	}
+}
+
+// TestFinishReleaseWithMergeContinue tests the continue functionality after resolving a merge conflict for release branches
+func TestFinishReleaseWithMergeContinue(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults and create branches
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Set tag prefix for release branches
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.branch.release.tagprefix", "v")
+	if err != nil {
+		t.Fatalf("Failed to set tag prefix: %v", err)
+	}
+
+	// Create and switch to release branch
+	output, err = testutil.RunGitFlow(t, dir, "release", "start", "1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to create release branch: %v\nOutput: %s", err, output)
+	}
+
+	// Create file in release branch
+	testutil.WriteFile(t, dir, "version.txt", "1.0.0")
+	_, err = testutil.RunGit(t, dir, "add", "version.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add version file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Switch to main and create the same file with different content
+	_, err = testutil.RunGit(t, dir, "checkout", "main")
+	if err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+
+	testutil.WriteFile(t, dir, "version.txt", "main content")
+	_, err = testutil.RunGit(t, dir, "add", "version.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add version file in main")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Try to finish the release branch (should fail due to conflict)
+	output, err = testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0")
+	if err == nil {
+		t.Fatal("Expected finish to fail due to merge conflict")
+	}
+
+	// Verify we're in a merge conflict state
+	if !testutil.IsMergeInProgress(t, dir) {
+		t.Error("Expected to be in merge conflict state")
+	}
+
+	// Resolve the conflict by choosing the release branch version
+	testutil.WriteFile(t, dir, "version.txt", "1.0.0")
+	_, err = testutil.RunGit(t, dir, "add", "version.txt")
+	if err != nil {
+		t.Fatalf("Failed to add resolved file: %v", err)
+	}
+
+	// Commit the merge resolution
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Merge resolved")
+	if err != nil {
+		t.Fatalf("Failed to commit merge resolution: %v", err)
+	}
+
+	// Continue the finish operation
+	output, err = testutil.RunGitFlow(t, dir, "release", "finish", "--continue", "1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to continue finish operation: %v\nOutput: %s", err, output)
+	}
+
+	// Verify we're no longer in a merge state
+	if testutil.IsMergeInProgress(t, dir) {
+		t.Error("Expected no merge in progress after continue")
+	}
+
+	// Verify we're on the main branch
+	currentBranch := testutil.GetCurrentBranch(t, dir)
+	if !strings.Contains(currentBranch, "main") {
+		t.Errorf("Expected to be on main branch after continue, got %s", currentBranch)
+	}
+
+	// Verify the release branch was deleted
+	if testutil.BranchExists(t, dir, "release/1.0.0") {
+		t.Error("Expected release branch to be deleted after successful finish")
+	}
+
+	// Verify the file content matches our resolution
+	content := testutil.ReadFile(t, dir, "version.txt")
+	if content != "1.0.0" {
+		t.Errorf("Expected file content to be '1.0.0', got '%s'", content)
+	}
+
+	// Verify that a tag was created
+	output, err = testutil.RunGit(t, dir, "tag", "-l")
+	if err != nil {
+		t.Fatalf("Failed to list tags: %v", err)
+	}
+	if !strings.Contains(output, "v1.0.0") {
+		t.Error("Expected tag 'v1.0.0' to be created")
 	}
 }

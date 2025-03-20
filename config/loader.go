@@ -41,6 +41,8 @@ func DefaultConfig() *Config {
 				UpstreamStrategy:   string(MergeStrategyMerge),
 				DownstreamStrategy: string(MergeStrategyMerge),
 				Prefix:             "release/",
+				Tag:                true, // Enable tagging by default
+				TagPrefix:          "",   // No default prefix, will be asked during init
 			},
 			"hotfix": {
 				Type:               string(BranchTypeTopic),
@@ -49,6 +51,8 @@ func DefaultConfig() *Config {
 				UpstreamStrategy:   string(MergeStrategyMerge),
 				DownstreamStrategy: string(MergeStrategyMerge),
 				Prefix:             "hotfix/",
+				Tag:                true, // Enable tagging by default
+				TagPrefix:          "",   // No default prefix, will be asked during init
 			},
 			"support": {
 				Type:               string(BranchTypeTopic),
@@ -130,6 +134,14 @@ func LoadConfig() (*Config, error) {
 		if autoUpdate, ok := properties["autoupdate"]; ok {
 			branchConfig.AutoUpdate = autoUpdate == "true"
 		}
+		if tag, ok := properties["tag"]; ok {
+			branchConfig.Tag = tag == "true"
+		}
+
+		// Handle tag prefix
+		if tagPrefix, ok := properties["tagprefix"]; ok {
+			branchConfig.TagPrefix = tagPrefix
+		}
 
 		// Add branch config to config
 		config.Branches[branchName] = branchConfig
@@ -209,10 +221,28 @@ func ImportGitFlowAVHConfig() (*Config, error) {
 		"release":    "release",
 		"hotfix":     "hotfix",
 		"support":    "support",
-		"versiontag": "", // Not used in our config
+		"versiontag": "release", // Map versiontag to release branch config
 	}
 
 	for avhName, ourName := range prefixMap {
+		if avhName == "versiontag" {
+			// Special handling for version tag prefix
+			prefix, err := git.GetConfig("gitflow.prefix." + avhName)
+			if err == nil && prefix != "" {
+				// Set the tag prefix for release and hotfix branches
+				releaseConfig := config.Branches["release"]
+				releaseConfig.TagPrefix = prefix
+				releaseConfig.Tag = true // Enable tagging for releases
+				config.Branches["release"] = releaseConfig
+
+				hotfixConfig := config.Branches["hotfix"]
+				hotfixConfig.TagPrefix = prefix
+				hotfixConfig.Tag = true // Enable tagging for hotfixes
+				config.Branches["hotfix"] = hotfixConfig
+			}
+			continue
+		}
+
 		if ourName == "" {
 			continue
 		}

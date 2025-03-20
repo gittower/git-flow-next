@@ -223,6 +223,11 @@ func interactiveConfig() *config.Config {
 		supportPrefix += "/"
 	}
 
+	// Prompt for version tag prefix
+	fmt.Print("Version tag prefix [v]: ")
+	tagPrefix, _ := reader.ReadString('\n')
+	tagPrefix = strings.TrimSpace(tagPrefix)
+
 	// Update config with user input
 	if mainBranch != "main" {
 		// Create a new main branch config
@@ -268,17 +273,19 @@ func interactiveConfig() *config.Config {
 		cfg.Branches["develop"] = developConfig
 	}
 
-	// Update prefixes
+	// Update branch prefixes and tag settings
 	featureConfig := cfg.Branches["feature"]
 	featureConfig.Prefix = featurePrefix
 	cfg.Branches["feature"] = featureConfig
 
 	releaseConfig := cfg.Branches["release"]
 	releaseConfig.Prefix = releasePrefix
+	releaseConfig.TagPrefix = tagPrefix
 	cfg.Branches["release"] = releaseConfig
 
 	hotfixConfig := cfg.Branches["hotfix"]
 	hotfixConfig.Prefix = hotfixPrefix
+	hotfixConfig.TagPrefix = tagPrefix
 	cfg.Branches["hotfix"] = hotfixConfig
 
 	supportConfig := cfg.Branches["support"]

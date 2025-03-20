@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/gittower/git-flow-next/config"
@@ -112,6 +113,37 @@ func handleContinue(state *model.MergeState) error {
 		}
 
 		// Move to next step
+		state.CurrentStep = "create_tag"
+		if err := util.SaveMergeState(state); err != nil {
+			return &errors.GitError{Operation: "save merge state", Err: err}
+		}
+		return handleContinue(state)
+
+	case "create_tag":
+		// Create tag if enabled for this branch type
+		cfg, err := config.LoadConfig()
+		if err != nil {
+			return &errors.GitError{Operation: "load configuration", Err: err}
+		}
+
+		branchConfig, ok := cfg.Branches[state.BranchType]
+		if !ok {
+			return &errors.GitError{Operation: fmt.Sprintf("get config for branch '%s'", state.BranchType), Err: fmt.Errorf("branch config not found")}
+		}
+
+		if branchConfig.Tag {
+			tagName := state.BranchName
+			if branchConfig.TagPrefix != "" {
+				tagName = branchConfig.TagPrefix + state.BranchName
+			}
+			message := fmt.Sprintf("Tagging version %s", tagName)
+			if err := createTag(tagName, state.ParentBranch, message); err != nil {
+				return &errors.GitError{Operation: fmt.Sprintf("create tag '%s'", tagName), Err: err}
+			}
+			fmt.Printf("Created tag '%s'\n", tagName)
+		}
+
+		// Move to next step
 		state.CurrentStep = "update_children"
 		if err := util.SaveMergeState(state); err != nil {
 			return &errors.GitError{Operation: "save merge state", Err: err}
@@ -186,6 +218,11 @@ func handleContinue(state *model.MergeState) error {
 			return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", state.FullBranchName), Err: err}
 		}
 
+		// Ensure we're on the parent branch at the end
+		if err := git.Checkout(state.ParentBranch); err != nil {
+			return &errors.GitError{Operation: fmt.Sprintf("checkout parent branch '%s'", state.ParentBranch), Err: err}
+		}
+
 		// Clear the merge state
 		if err := util.ClearMergeState(); err != nil {
 			return &errors.GitError{Operation: "clear merge state", Err: err}
@@ -238,24 +275,8 @@ func finish(branchType string, name string, branchConfig config.BranchConfig, ta
 		return handleContinue(state)
 	}
 
-	// Get current branch
-	currentBranch, err := git.GetCurrentBranch()
-	if err != nil {
-		return &errors.GitError{Operation: "get current branch", Err: err}
-	}
-
-	// Check if we're on the branch to finish
-	if currentBranch != fullBranchName {
-		// Checkout the branch to finish
-		err = git.Checkout(fullBranchName)
-		if err != nil {
-			return &errors.GitError{Operation: fmt.Sprintf("checkout branch '%s'", fullBranchName), Err: err}
-		}
-		fmt.Printf("Switched to branch '%s'\n", fullBranchName)
-	}
-
 	// Checkout target branch
-	err = git.Checkout(targetBranch)
+	err := git.Checkout(targetBranch)
 	if err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("checkout target branch '%s'", targetBranch), Err: err}
 	}
@@ -331,11 +352,29 @@ func finish(branchType string, name string, branchConfig config.BranchConfig, ta
 		return &errors.GitError{Operation: "merge branch", Err: mergeErr}
 	}
 
-	// Move to next step
-	state.CurrentStep = "update_children"
+	// Move to next step (tag creation)
+	state.CurrentStep = "create_tag"
 	if err := util.SaveMergeState(state); err != nil {
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
 	return handleContinue(state)
+}
+
+// createTag creates a new Git tag with the given name and message
+func createTag(tagName, targetBranch, message string) error {
+	// Check if tag already exists
+	cmd := exec.Command("git", "show-ref", "--tags", tagName)
+	if err := cmd.Run(); err == nil {
+		// Tag exists
+		return nil
+	}
+
+	// Create annotated tag
+	cmd = exec.Command("git", "tag", "-a", tagName, "-m", message)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create tag: %w", err)
+	}
+
+	return nil
 }

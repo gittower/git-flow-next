@@ -15,6 +15,8 @@ type BranchConfig struct {
 	DownstreamStrategy string
 	Prefix             string
 	AutoUpdate         bool
+	Tag                bool   // whether to create a tag when finishing
+	TagPrefix          string // prefix to use for tag names
 }
 
 // MergeStrategy represents the strategy for merging branches

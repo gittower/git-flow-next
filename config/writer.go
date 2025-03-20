@@ -68,6 +68,22 @@ func SaveConfig(config *Config) error {
 		if err != nil {
 			return fmt.Errorf("failed to set auto update for %s: %w", branchName, err)
 		}
+
+		// Set tag configuration only if true (false is default)
+		if branchConfig.Tag {
+			err = git.SetConfig(fmt.Sprintf("gitflow.branch.%s.tag", branchName), "true")
+			if err != nil {
+				return fmt.Errorf("failed to set tag configuration for %s: %w", branchName, err)
+			}
+		}
+
+		// Set tag prefix if it exists
+		if branchConfig.TagPrefix != "" {
+			err = git.SetConfig(fmt.Sprintf("gitflow.branch.%s.tagprefix", branchName), branchConfig.TagPrefix)
+			if err != nil {
+				return fmt.Errorf("failed to set tag prefix for %s: %w", branchName, err)
+			}
+		}
 	}
 
 	return nil
