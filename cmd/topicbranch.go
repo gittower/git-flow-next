@@ -143,6 +143,34 @@ func registerBranchCommand(branchType string) {
 	}
 	branchCmd.AddCommand(updateCmd)
 
+	// Add delete subcommand
+	deleteCmd := &cobra.Command{
+		Use:     "delete [name]",
+		Short:   fmt.Sprintf("Delete a %s branch", branchType),
+		Long:    fmt.Sprintf("Delete a %s branch from the repository", branchType),
+		Example: fmt.Sprintf("  git flow %s delete my-feature\n  git flow %s delete -f my-feature", branchType, branchType),
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			force, _ := cmd.Flags().GetBool("force")
+			if err := DeleteCommand(branchType, args[0], force); err != nil {
+				var exitCode errors.ExitCode
+				if flowErr, ok := err.(errors.Error); ok {
+					exitCode = flowErr.ExitCode()
+				} else {
+					exitCode = errors.ExitCodeGitError
+				}
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(int(exitCode))
+			}
+			return nil
+		},
+	}
+
+	// Add flags
+	deleteCmd.Flags().BoolP("force", "f", false, "Force delete the branch even if it has unmerged changes")
+
+	branchCmd.AddCommand(deleteCmd)
+
 	// Add the branch command to the root command
 	rootCmd.AddCommand(branchCmd)
 }
