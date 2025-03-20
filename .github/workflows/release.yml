@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for version info
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.19'
+
+      - name: Make build script executable
+        run: chmod +x scripts/build.sh
+
+      - name: Check if preview release
+        id: check_preview
+        run: |
+          if [[ ${{ github.ref }} =~ ^refs/tags/v.*-(alpha|beta|rc)\. ]]; then
+            echo "is_preview=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_preview=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build binaries
+        run: ./scripts/build.sh ${GITHUB_REF#refs/tags/}
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*-checksums.txt
+          draft: false
+          prerelease: ${{ steps.check_preview.outputs.is_preview }}
+          generate_release_notes: true
+          body: |
+            ${{ steps.check_preview.outputs.is_preview && '⚠️ This is a preview release and may not be stable.' || '' }}
+            
+            ## Installation
+            See the [installation instructions](https://github.com/gittower/git-flow-next#installation) in the README.
+            
+            ## Checksums
+            SHA-256 checksums for the release artifacts are available in the checksums.txt file.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

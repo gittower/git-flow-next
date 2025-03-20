@@ -439,3 +439,77 @@ Implement logic to check for and resume interrupted operations
 2. Create README with installation and basic usage
 3. Document configuration options and merge strategies
 4. Include migration guide for git-flow users
+
+### Installation
+
+#### macOS
+Using Homebrew:
+```bash
+brew install git-flow-next
+```
+
+Manual installation:
+```bash
+# For Intel Macs
+curl -Lo git-flow.tar.gz https://github.com/gittower/git-flow-next/releases/latest/download/git-flow-next-latest-darwin-amd64.tar.gz
+# For Apple Silicon Macs
+curl -Lo git-flow.tar.gz https://github.com/gittower/git-flow-next/releases/latest/download/git-flow-next-latest-darwin-arm64.tar.gz
+
+tar xzf git-flow.tar.gz
+sudo mv git-flow /usr/local/bin/
+rm git-flow.tar.gz
+```
+
+#### Linux
+Using package managers (coming soon):
+```bash
+# For Ubuntu/Debian
+sudo apt install git-flow-next
+
+# For Fedora
+sudo dnf install git-flow-next
+
+# For Arch Linux
+yay -S git-flow-next
+```
+
+Manual installation:
+```bash
+# For x86_64 systems
+curl -Lo git-flow.tar.gz https://github.com/gittower/git-flow-next/releases/latest/download/git-flow-next-latest-linux-amd64.tar.gz
+# For ARM64 systems
+curl -Lo git-flow.tar.gz https://github.com/gittower/git-flow-next/releases/latest/download/git-flow-next-latest-linux-arm64.tar.gz
+# For 32-bit systems
+curl -Lo git-flow.tar.gz https://github.com/gittower/git-flow-next/releases/latest/download/git-flow-next-latest-linux-386.tar.gz
+
+tar xzf git-flow.tar.gz
+sudo mv git-flow /usr/local/bin/
+rm git-flow.tar.gz
+```
+
+#### Windows
+Using Scoop:
+```powershell
+scoop install git-flow-next
+```
+
+Manual installation:
+1. Download the latest release for your system:
+   - [64-bit Windows](https://github.com/gittower/git-flow-next/releases/latest/download/git-flow-next-latest-windows-amd64.zip)
+   - [32-bit Windows](https://github.com/gittower/git-flow-next/releases/latest/download/git-flow-next-latest-windows-386.zip)
+2. Extract the ZIP file
+3. Move `git-flow.exe` to a directory in your PATH (e.g., `C:\Program Files\Git\cmd\`)
+
+#### Verifying the Installation
+After installation, verify that git-flow is installed correctly:
+```bash
+git flow version
+```
+
+#### Building from Source
+If you have Go 1.19 or later installed, you can build from source:
+```bash
+git clone https://github.com/gittower/git-flow-next.git
+cd git-flow-next
+go build -o git-flow
+```
