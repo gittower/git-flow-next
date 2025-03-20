@@ -137,5 +137,5 @@ func GetCurrentBranch(t *testing.T, dir string) string {
 	if err != nil {
 		t.Fatalf("Failed to get current branch: %v", err)
 	}
-	return output
+	return strings.TrimSpace(output)
 }
