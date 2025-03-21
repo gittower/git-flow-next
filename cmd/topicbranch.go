@@ -171,6 +171,30 @@ func registerBranchCommand(branchType string) {
 
 	branchCmd.AddCommand(deleteCmd)
 
+	// Add rename subcommand
+	renameCmd := &cobra.Command{
+		Use:     "rename [old-name] [new-name]",
+		Short:   fmt.Sprintf("Rename a %s branch", branchType),
+		Long:    fmt.Sprintf("Rename a %s branch to a new name", branchType),
+		Example: fmt.Sprintf("  git flow %s rename old-feature new-feature", branchType),
+		Args:    cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := RenameCommand(branchType, args[0], args[1]); err != nil {
+				var exitCode errors.ExitCode
+				if flowErr, ok := err.(errors.Error); ok {
+					exitCode = flowErr.ExitCode()
+				} else {
+					exitCode = errors.ExitCodeGitError
+				}
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(int(exitCode))
+			}
+			return nil
+		},
+	}
+
+	branchCmd.AddCommand(renameCmd)
+
 	// Add the branch command to the root command
 	rootCmd.AddCommand(branchCmd)
 }

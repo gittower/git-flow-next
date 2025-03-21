@@ -37,9 +37,8 @@ func GetCurrentBranch() (string, error) {
 
 // BranchExists checks if a branch exists
 func BranchExists(branch string) error {
-	cmd := exec.Command("git", "show-ref", "--verify", "--quiet", "refs/heads/"+branch)
-	err := cmd.Run()
-	if err != nil {
+	cmd := exec.Command("git", "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("branch '%s' does not exist", branch)
 	}
 	return nil
@@ -249,6 +248,23 @@ func RebaseAbort() error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to abort rebase: %s", string(output))
+	}
+	return nil
+}
+
+// RenameBranch renames a branch. If oldBranch is provided, it renames that branch to newBranch.
+// If oldBranch is not provided, it renames the current branch to newBranch.
+func RenameBranch(newBranch string, oldBranch ...string) error {
+	args := []string{"branch", "-m"}
+	if len(oldBranch) > 0 {
+		args = append(args, oldBranch[0])
+	}
+	args = append(args, newBranch)
+
+	cmd := exec.Command("git", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to rename branch: %s", strings.TrimSpace(string(output)))
 	}
 	return nil
 }
