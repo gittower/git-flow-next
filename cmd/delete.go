@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os/exec"
-	"strings"
 
 	"github.com/gittower/git-flow-next/config"
 	"github.com/gittower/git-flow-next/errors"
@@ -54,19 +52,7 @@ func DeleteCommand(branchType string, name string, force bool) error {
 	}
 
 	// Delete the branch with appropriate flag
-	var deleteErr error
-	if force {
-		// Use -D for force delete
-		cmd := exec.Command("git", "branch", "-D", fullBranchName)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			deleteErr = fmt.Errorf("%s", strings.TrimSpace(string(output)))
-		}
-	} else {
-		// Use -d for safe delete
-		deleteErr = git.DeleteBranch(fullBranchName)
-	}
-
+	deleteErr := git.DeleteBranch(fullBranchName, force)
 	if deleteErr != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", fullBranchName), Err: deleteErr}
 	}
