@@ -15,8 +15,8 @@ import (
 )
 
 // FinishCommand is the implementation of the finish command for topic branches
-func FinishCommand(branchType string, name string, continueOp bool, abortOp bool) {
-	if err := executeFinish(branchType, name, continueOp, abortOp); err != nil {
+func FinishCommand(branchType string, name string, continueOp bool, abortOp bool, force bool) {
+	if err := executeFinish(branchType, name, continueOp, abortOp, force); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -29,7 +29,7 @@ func FinishCommand(branchType string, name string, continueOp bool, abortOp bool
 }
 
 // executeFinish performs the actual branch finishing logic and returns any errors
-func executeFinish(branchType string, name string, continueOp bool, abortOp bool) error {
+func executeFinish(branchType string, name string, continueOp bool, abortOp bool, force bool) error {
 	// Get configuration early
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -71,6 +71,52 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 		return &errors.NoMergeInProgressError{}
 	}
 
+	// Check if the branch exists first
+	branchExists := false
+	if err := git.BranchExists(name); err == nil {
+		branchExists = true
+	} else if !strings.HasPrefix(name, branchConfig.Prefix) {
+		// If not found as-is, try with prefix
+		fullName := branchConfig.Prefix + name
+		if err := git.BranchExists(fullName); err == nil {
+			name = fullName
+			branchExists = true
+		}
+	}
+
+	// Return early if branch doesn't exist
+	if !branchExists {
+		return &errors.BranchNotFoundError{BranchName: name}
+	}
+
+	// If the branch exists but doesn't have the expected prefix
+	if !strings.HasPrefix(name, branchConfig.Prefix) {
+		if !force {
+			// Get the short name for tag creation
+			shortName := name
+			if strings.Contains(name, "/") {
+				parts := strings.Split(name, "/")
+				shortName = parts[len(parts)-1]
+			}
+
+			// Prompt user for confirmation
+			fmt.Printf("Warning: Branch '%s' is not a standard %s branch (missing prefix '%s').\n", name, branchType, branchConfig.Prefix)
+			fmt.Printf("Finishing this branch will:\n")
+			fmt.Printf("1. Merge it into '%s' using the %s strategy\n", branchConfig.Parent, branchConfig.UpstreamStrategy)
+			if branchConfig.Tag {
+				fmt.Printf("2. Create a tag '%s%s'\n", branchConfig.TagPrefix, shortName)
+			}
+			fmt.Printf("3. Delete the branch after successful merge\n\n")
+			fmt.Printf("Do you want to continue? [y/N]: ")
+
+			var response string
+			fmt.Scanln(&response)
+			if strings.ToLower(response) != "y" {
+				return fmt.Errorf("operation cancelled by user")
+			}
+		}
+	}
+
 	// Regular finish command flow
 	return finishBranch(branchType, name, branchConfig)
 }
@@ -90,12 +136,19 @@ func finishBranch(branchType string, name string, branchConfig config.BranchConf
 		return &errors.InvalidBranchNameError{Name: name}
 	}
 
-	// Get full branch name
-	fullBranchName := branchConfig.Prefix + name
+	// Get the short name by removing the prefix if it exists
+	shortName := name
+	if strings.HasPrefix(name, branchConfig.Prefix) {
+		shortName = strings.TrimPrefix(name, branchConfig.Prefix)
+	} else if strings.Contains(name, "/") {
+		// For non-standard branches, use the last part after the slash
+		parts := strings.Split(name, "/")
+		shortName = parts[len(parts)-1]
+	}
 
 	// Check if branch exists
-	if err := git.BranchExists(fullBranchName); err != nil {
-		return &errors.BranchNotFoundError{BranchName: fullBranchName}
+	if err := git.BranchExists(name); err != nil {
+		return &errors.BranchNotFoundError{BranchName: name}
 	}
 
 	// Get target branch (always the parent branch)
@@ -124,11 +177,11 @@ func finishBranch(branchType string, name string, branchConfig config.BranchConf
 	state := &model.MergeState{
 		Action:          "finish",
 		BranchType:      branchType,
-		BranchName:      name,
+		BranchName:      shortName,
 		CurrentStep:     "merge",
 		ParentBranch:    targetBranch,
 		MergeStrategy:   branchConfig.UpstreamStrategy,
-		FullBranchName:  fullBranchName,
+		FullBranchName:  name,
 		ChildBranches:   childBranches,
 		UpdatedBranches: []string{},
 	}
@@ -220,6 +273,7 @@ func handleContinue(state *model.MergeState, branchConfig config.BranchConfig) e
 	case "create_tag":
 		// Create tag if enabled for this branch type
 		if branchConfig.Tag {
+			// Use BranchName for tag creation - it's already the correct short name
 			tagName := state.BranchName
 			if branchConfig.TagPrefix != "" {
 				tagName = branchConfig.TagPrefix + state.BranchName

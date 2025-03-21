@@ -939,3 +939,159 @@ func TestFinishReleaseWithMergeContinue(t *testing.T) {
 		t.Error("Expected tag 'v1.0.0' to be created")
 	}
 }
+
+// TestFinishNonStandardBranchWithForce tests finishing a non-standard branch with force flag
+func TestFinishNonStandardBranchWithForce(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create a non-standard branch from develop
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "checkout", "-b", "custom/my-branch")
+	if err != nil {
+		t.Fatalf("Failed to create custom branch: %v", err)
+	}
+
+	// Add some changes
+	testutil.WriteFile(t, dir, "test.txt", "test content")
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add test file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Finish the branch using feature strategy with force flag
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "-f", "custom/my-branch")
+	if err != nil {
+		t.Fatalf("Failed to finish custom branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify branch was merged to develop
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+
+	// Check if test.txt exists in develop
+	if !testutil.FileExists(t, dir, "test.txt") {
+		t.Error("Expected test.txt to exist in develop branch")
+	}
+
+	// Verify custom branch was deleted
+	if testutil.BranchExists(t, dir, "custom/my-branch") {
+		t.Error("Expected custom branch to be deleted")
+	}
+}
+
+// TestFinishNonStandardBranchWithoutForce tests finishing a non-standard branch without force flag
+func TestFinishNonStandardBranchWithoutForce(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create a non-standard branch from develop
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "checkout", "-b", "custom/my-branch")
+	if err != nil {
+		t.Fatalf("Failed to create custom branch: %v", err)
+	}
+
+	// Add some changes
+	testutil.WriteFile(t, dir, "test.txt", "test content")
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add test file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Try to finish the branch without force flag (should fail)
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "custom/my-branch")
+	if err == nil {
+		t.Fatal("Expected finish to fail without force flag and user confirmation")
+	}
+
+	// Verify branch still exists
+	if !testutil.BranchExists(t, dir, "custom/my-branch") {
+		t.Error("Expected custom branch to still exist")
+	}
+
+	// Verify we're still on the custom branch
+	currentBranch := testutil.GetCurrentBranch(t, dir)
+	if currentBranch != "custom/my-branch" {
+		t.Errorf("Expected to be on custom/my-branch, got %s", currentBranch)
+	}
+}
+
+// TestFinishNonStandardBranchWithTag tests finishing a non-standard branch with tag creation
+func TestFinishNonStandardBranchWithTag(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults and tag configuration
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create a non-standard branch from develop
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "checkout", "-b", "custom/my-release")
+	if err != nil {
+		t.Fatalf("Failed to create custom branch: %v", err)
+	}
+
+	// Add some changes
+	testutil.WriteFile(t, dir, "release.txt", "release content")
+	_, err = testutil.RunGit(t, dir, "add", "release.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add release file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Finish the branch using release strategy with force flag
+	output, err = testutil.RunGitFlow(t, dir, "release", "finish", "-f", "custom/my-release")
+	if err != nil {
+		t.Fatalf("Failed to finish custom release branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify tag was created
+	tagExists, err := testutil.RunGit(t, dir, "tag", "-l", "my-release")
+	if err != nil {
+		t.Fatalf("Failed to list tags: %v", err)
+	}
+	if tagExists == "" {
+		t.Error("Expected tag 'my-release' to exist")
+	}
+}

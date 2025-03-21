@@ -51,3 +51,11 @@ func ReadFile(t *testing.T, dir string, name string) string {
 	}
 	return string(content)
 }
+
+// FileExists checks if a file exists in the repository
+func FileExists(t *testing.T, dir string, path string) bool {
+	t.Helper()
+	fullPath := filepath.Join(dir, path)
+	_, err := os.Stat(fullPath)
+	return err == nil
+}
