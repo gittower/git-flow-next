@@ -195,6 +195,38 @@ func registerBranchCommand(branchType string) {
 
 	branchCmd.AddCommand(renameCmd)
 
+	// Add checkout subcommand
+	checkoutCmd := &cobra.Command{
+		Use:     "checkout [name|nameprefix]",
+		Short:   fmt.Sprintf("Switch to a %s branch", branchType),
+		Long:    fmt.Sprintf("Switch to %s branch <name>. If only a prefix is provided, switch to the matching branch if unambiguous.", branchType),
+		Example: fmt.Sprintf("  git flow %s checkout my-feature\n  git flow %s checkout my", branchType, branchType),
+		Args:    cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			nameOrPrefix := ""
+			if len(args) > 0 {
+				nameOrPrefix = args[0]
+			}
+			showCommands, _ := cmd.Flags().GetBool("showcommands")
+			if err := CheckoutCommand(branchType, nameOrPrefix, showCommands); err != nil {
+				var exitCode errors.ExitCode
+				if flowErr, ok := err.(errors.Error); ok {
+					exitCode = flowErr.ExitCode()
+				} else {
+					exitCode = errors.ExitCodeGitError
+				}
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(int(exitCode))
+			}
+			return nil
+		},
+	}
+
+	// Add flags
+	checkoutCmd.Flags().Bool("showcommands", false, "Show git commands while executing them")
+
+	branchCmd.AddCommand(checkoutCmd)
+
 	// Add the branch command to the root command
 	rootCmd.AddCommand(branchCmd)
 }
