@@ -89,11 +89,16 @@ func Checkout(branch string) error {
 }
 
 // DeleteBranch deletes a branch
-func DeleteBranch(branch string) error {
-	cmd := exec.Command("git", "branch", "-d", branch)
-	_, err := cmd.Output()
+func DeleteBranch(branch string, force bool) error {
+	flag := "-d"
+	if force {
+		flag = "-D"
+	}
+
+	cmd := exec.Command("git", "branch", flag, branch)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to delete branch: %w", err)
+		return fmt.Errorf("failed to delete branch: %s", string(output))
 	}
 	return nil
 }
