@@ -30,8 +30,8 @@ func DefaultConfig() *Config {
 				Type:               string(BranchTypeTopic),
 				Parent:             "develop",
 				StartPoint:         "develop",
-				UpstreamStrategy:   string(MergeStrategyRebase),
-				DownstreamStrategy: string(MergeStrategySquash),
+				UpstreamStrategy:   string(MergeStrategyMerge),
+				DownstreamStrategy: string(MergeStrategyRebase),
 				Prefix:             "feature/",
 			},
 			"release": {
@@ -49,7 +49,7 @@ func DefaultConfig() *Config {
 				Parent:             "main",
 				StartPoint:         "main",
 				UpstreamStrategy:   string(MergeStrategyMerge),
-				DownstreamStrategy: string(MergeStrategyMerge),
+				DownstreamStrategy: string(MergeStrategyRebase),
 				Prefix:             "hotfix/",
 				Tag:                true, // Enable tagging by default
 				TagPrefix:          "",   // No default prefix, will be asked during init
