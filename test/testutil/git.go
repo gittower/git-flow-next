@@ -12,6 +12,12 @@ import (
 var gitFlowPath string
 
 func init() {
+	// Check for GIT_FLOW_PATH environment variable first
+	if envPath := os.Getenv("GIT_FLOW_PATH"); envPath != "" {
+		gitFlowPath = envPath
+		return
+	}
+
 	// Get the absolute path to the git-flow binary
 	wd, err := os.Getwd()
 	if err != nil {
