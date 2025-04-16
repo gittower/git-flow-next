@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/gittower/git-flow-next/config"
+	"github.com/stretchr/testify/assert"
 )
 
 func setupTestRepo(t *testing.T) string {
@@ -167,4 +168,205 @@ func TestLoadConfigWithMixedCaseProperties(t *testing.T) {
 	if feature.AutoUpdate != expected.AutoUpdate {
 		t.Errorf("Expected AutoUpdate %v, got %v", expected.AutoUpdate, feature.AutoUpdate)
 	}
+}
+
+func TestApplyOverrides_NoOverrides(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg = config.ApplyOverrides(cfg, config.ConfigOverrides{})
+
+	// Check main branch (base branch)
+	mainConfig, exists := cfg.Branches["main"]
+	assert.True(t, exists)
+	assert.Equal(t, string(config.BranchTypeBase), mainConfig.Type)
+	assert.Equal(t, "", mainConfig.Parent)
+	assert.Equal(t, "", mainConfig.StartPoint)
+
+	// Check develop branch (base branch)
+	developConfig, exists := cfg.Branches["develop"]
+	assert.True(t, exists)
+	assert.Equal(t, string(config.BranchTypeBase), developConfig.Type)
+	assert.Equal(t, "main", developConfig.Parent)
+	assert.Equal(t, "", developConfig.StartPoint)
+
+	// Check feature branch
+	featureConfig, exists := cfg.Branches["feature"]
+	assert.True(t, exists)
+	assert.Equal(t, "feature/", featureConfig.Prefix)
+	assert.Equal(t, "develop", featureConfig.Parent)
+	assert.Equal(t, "develop", featureConfig.StartPoint)
+
+	// Check release branch
+	releaseConfig, exists := cfg.Branches["release"]
+	assert.True(t, exists)
+	assert.Equal(t, "release/", releaseConfig.Prefix)
+	assert.Equal(t, "main", releaseConfig.Parent)
+	assert.Equal(t, "develop", releaseConfig.StartPoint)
+
+	// Check hotfix branch
+	hotfixConfig, exists := cfg.Branches["hotfix"]
+	assert.True(t, exists)
+	assert.Equal(t, "hotfix/", hotfixConfig.Prefix)
+	assert.Equal(t, "main", hotfixConfig.Parent)
+	assert.Equal(t, "main", hotfixConfig.StartPoint)
+
+	// Check support branch
+	supportConfig, exists := cfg.Branches["support"]
+	assert.True(t, exists)
+	assert.Equal(t, "support/", supportConfig.Prefix)
+	assert.Equal(t, "main", supportConfig.Parent)
+	assert.Equal(t, "main", supportConfig.StartPoint)
+}
+
+func TestApplyOverrides_CustomBranchNames(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg = config.ApplyOverrides(cfg, config.ConfigOverrides{
+		MainBranch:    "custom-main",
+		DevelopBranch: "custom-dev",
+	})
+
+	// Check main branch (base branch)
+	mainConfig, exists := cfg.Branches["custom-main"]
+	assert.True(t, exists)
+	assert.Equal(t, string(config.BranchTypeBase), mainConfig.Type)
+	assert.Equal(t, "", mainConfig.Parent)
+	assert.Equal(t, "", mainConfig.StartPoint)
+
+	// Check develop branch (base branch)
+	developConfig, exists := cfg.Branches["custom-dev"]
+	assert.True(t, exists)
+	assert.Equal(t, string(config.BranchTypeBase), developConfig.Type)
+	assert.Equal(t, "custom-main", developConfig.Parent)
+	assert.Equal(t, "", developConfig.StartPoint)
+
+	// Check feature branch parent and start point
+	featureConfig, exists := cfg.Branches["feature"]
+	assert.True(t, exists)
+	assert.Equal(t, "custom-dev", featureConfig.Parent)
+	assert.Equal(t, "custom-dev", featureConfig.StartPoint)
+
+	// Check release branch parent and start point
+	releaseConfig, exists := cfg.Branches["release"]
+	assert.True(t, exists)
+	assert.Equal(t, "custom-main", releaseConfig.Parent)
+	assert.Equal(t, "custom-dev", releaseConfig.StartPoint)
+
+	// Check hotfix branch parent and start point
+	hotfixConfig, exists := cfg.Branches["hotfix"]
+	assert.True(t, exists)
+	assert.Equal(t, "custom-main", hotfixConfig.Parent)
+	assert.Equal(t, "custom-main", hotfixConfig.StartPoint)
+
+	// Check support branch parent and start point
+	supportConfig, exists := cfg.Branches["support"]
+	assert.True(t, exists)
+	assert.Equal(t, "custom-main", supportConfig.Parent)
+	assert.Equal(t, "custom-main", supportConfig.StartPoint)
+
+	// Check old names don't exist
+	_, exists = cfg.Branches["main"]
+	assert.False(t, exists)
+	_, exists = cfg.Branches["develop"]
+	assert.False(t, exists)
+}
+
+func TestApplyOverrides_CustomPrefixes(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg = config.ApplyOverrides(cfg, config.ConfigOverrides{
+		FeaturePrefix: "f/",
+		ReleasePrefix: "r/",
+		HotfixPrefix:  "h/",
+		SupportPrefix: "s/",
+	})
+
+	// Check prefixes while verifying parents and start points remain unchanged
+	featureConfig := cfg.Branches["feature"]
+	assert.Equal(t, "f/", featureConfig.Prefix)
+	assert.Equal(t, "develop", featureConfig.Parent)
+	assert.Equal(t, "develop", featureConfig.StartPoint)
+
+	releaseConfig := cfg.Branches["release"]
+	assert.Equal(t, "r/", releaseConfig.Prefix)
+	assert.Equal(t, "main", releaseConfig.Parent)
+	assert.Equal(t, "develop", releaseConfig.StartPoint)
+
+	hotfixConfig := cfg.Branches["hotfix"]
+	assert.Equal(t, "h/", hotfixConfig.Prefix)
+	assert.Equal(t, "main", hotfixConfig.Parent)
+	assert.Equal(t, "main", hotfixConfig.StartPoint)
+
+	supportConfig := cfg.Branches["support"]
+	assert.Equal(t, "s/", supportConfig.Prefix)
+	assert.Equal(t, "main", supportConfig.Parent)
+	assert.Equal(t, "main", supportConfig.StartPoint)
+}
+
+func TestApplyOverrides_CustomTagPrefix(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg = config.ApplyOverrides(cfg, config.ConfigOverrides{
+		TagPrefix: "v",
+	})
+
+	// Check tag prefixes while verifying parents and start points remain unchanged
+	releaseConfig := cfg.Branches["release"]
+	assert.Equal(t, "v", releaseConfig.TagPrefix)
+	assert.Equal(t, "main", releaseConfig.Parent)
+	assert.Equal(t, "develop", releaseConfig.StartPoint)
+
+	hotfixConfig := cfg.Branches["hotfix"]
+	assert.Equal(t, "v", hotfixConfig.TagPrefix)
+	assert.Equal(t, "main", hotfixConfig.Parent)
+	assert.Equal(t, "main", hotfixConfig.StartPoint)
+}
+
+func TestApplyOverrides_AllOverrides(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg = config.ApplyOverrides(cfg, config.ConfigOverrides{
+		MainBranch:    "custom-main",
+		DevelopBranch: "custom-dev",
+		FeaturePrefix: "f/",
+		ReleasePrefix: "r/",
+		HotfixPrefix:  "h/",
+		SupportPrefix: "s/",
+		TagPrefix:     "v",
+	})
+
+	// Check main branch (base branch)
+	mainConfig, exists := cfg.Branches["custom-main"]
+	assert.True(t, exists)
+	assert.Equal(t, string(config.BranchTypeBase), mainConfig.Type)
+	assert.Equal(t, "", mainConfig.Parent)
+	assert.Equal(t, "", mainConfig.StartPoint)
+
+	// Check develop branch (base branch)
+	developConfig, exists := cfg.Branches["custom-dev"]
+	assert.True(t, exists)
+	assert.Equal(t, string(config.BranchTypeBase), developConfig.Type)
+	assert.Equal(t, "custom-main", developConfig.Parent)
+	assert.Equal(t, "", developConfig.StartPoint)
+
+	// Check feature branch
+	featureConfig := cfg.Branches["feature"]
+	assert.Equal(t, "f/", featureConfig.Prefix)
+	assert.Equal(t, "custom-dev", featureConfig.Parent)
+	assert.Equal(t, "custom-dev", featureConfig.StartPoint)
+
+	// Check release branch
+	releaseConfig := cfg.Branches["release"]
+	assert.Equal(t, "r/", releaseConfig.Prefix)
+	assert.Equal(t, "custom-main", releaseConfig.Parent)
+	assert.Equal(t, "custom-dev", releaseConfig.StartPoint)
+	assert.Equal(t, "v", releaseConfig.TagPrefix)
+
+	// Check hotfix branch
+	hotfixConfig := cfg.Branches["hotfix"]
+	assert.Equal(t, "h/", hotfixConfig.Prefix)
+	assert.Equal(t, "custom-main", hotfixConfig.Parent)
+	assert.Equal(t, "custom-main", hotfixConfig.StartPoint)
+	assert.Equal(t, "v", hotfixConfig.TagPrefix)
+
+	// Check support branch
+	supportConfig := cfg.Branches["support"]
+	assert.Equal(t, "s/", supportConfig.Prefix)
+	assert.Equal(t, "custom-main", supportConfig.Parent)
+	assert.Equal(t, "custom-main", supportConfig.StartPoint)
 }

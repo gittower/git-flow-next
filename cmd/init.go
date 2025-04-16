@@ -21,13 +21,21 @@ If git-flow-avh configuration exists, it will be imported.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		useDefaults, _ := cmd.Flags().GetBool("defaults")
 		createBranches, _ := cmd.Flags().GetBool("create-branches")
-		InitCommand(useDefaults, createBranches)
+		mainBranch, _ := cmd.Flags().GetString("main")
+		developBranch, _ := cmd.Flags().GetString("develop")
+		featurePrefix, _ := cmd.Flags().GetString("feature")
+		bugfixPrefix, _ := cmd.Flags().GetString("bugfix")
+		releasePrefix, _ := cmd.Flags().GetString("release")
+		hotfixPrefix, _ := cmd.Flags().GetString("hotfix")
+		supportPrefix, _ := cmd.Flags().GetString("support")
+		tagPrefix, _ := cmd.Flags().GetString("tag")
+		InitCommand(useDefaults, createBranches, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix)
 	},
 }
 
 // InitCommand is the implementation of the init command
-func InitCommand(useDefaults, createBranches bool) {
-	if err := initFlow(useDefaults, createBranches); err != nil {
+func InitCommand(useDefaults, createBranches bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string) {
+	if err := initFlow(useDefaults, createBranches, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -40,7 +48,7 @@ func InitCommand(useDefaults, createBranches bool) {
 }
 
 // initFlow performs the actual initialization logic and returns any errors
-func initFlow(useDefaults, createBranches bool) error {
+func initFlow(useDefaults, createBranches bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string) error {
 	// Check if we're in a git repo
 	if !git.IsGitRepo() {
 		return &errors.GitError{Operation: "check if git repository", Err: fmt.Errorf("not a git repository. Please run 'git init' first")}
@@ -57,40 +65,50 @@ func initFlow(useDefaults, createBranches bool) error {
 			return &errors.GitError{Operation: "import git-flow-avh configuration", Err: err}
 		}
 		fmt.Println("Successfully imported git-flow-avh configuration")
-	} else if useDefaults {
-		fmt.Println("Initializing git-flow with default settings")
-		cfg = config.DefaultConfig()
 	} else {
-		fmt.Println("Initializing git-flow")
-		cfg = interactiveConfig()
+		// Start with default config
+		message := "Initializing git-flow"
+		if useDefaults {
+			message += " with default settings"
+		}
+		fmt.Println(message)
+		cfg = config.DefaultConfig()
 	}
 
-	// Save the configuration
-	err := config.SaveConfig(cfg)
-	if err != nil {
+	// Collect overrides from command line flags
+	overrides := config.ConfigOverrides{
+		MainBranch:    mainBranch,
+		DevelopBranch: developBranch,
+		FeaturePrefix: featurePrefix,
+		BugfixPrefix:  bugfixPrefix,
+		ReleasePrefix: releasePrefix,
+		HotfixPrefix:  hotfixPrefix,
+		SupportPrefix: supportPrefix,
+		TagPrefix:     tagPrefix,
+	}
+
+	// Apply overrides if provided or if using defaults
+	if useDefaults || mainBranch != "" || developBranch != "" || featurePrefix != "" || bugfixPrefix != "" || releasePrefix != "" || hotfixPrefix != "" || supportPrefix != "" || tagPrefix != "" {
+		cfg = config.ApplyOverrides(cfg, overrides)
+	} else {
+		// Otherwise, prompt for input
+		interactiveOverrides := interactiveConfig()
+		cfg = config.ApplyOverrides(cfg, interactiveOverrides)
+	}
+
+	// Save configuration
+	if err := config.SaveConfig(cfg); err != nil {
 		return &errors.GitError{Operation: "save configuration", Err: err}
 	}
 
 	// Mark the repository as initialized
-	err = config.MarkRepoInitialized()
-	if err != nil {
+	if err := config.MarkRepoInitialized(); err != nil {
 		return &errors.GitError{Operation: "mark repository as initialized", Err: err}
 	}
 
-	// Create branches if requested or if interactive mode and user confirms
-	shouldCreateBranches := createBranches
-	if !useDefaults && !createBranches {
-		// In interactive mode, ask if branches should be created
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("Do you want to create branches now? [y/N]: ")
-		answer, _ := reader.ReadString('\n')
-		answer = strings.TrimSpace(strings.ToLower(answer))
-		shouldCreateBranches = answer == "y" || answer == "yes"
-	}
-
-	if shouldCreateBranches {
-		err = createGitFlowBranches(cfg)
-		if err != nil {
+	// Create branches if requested
+	if createBranches {
+		if err := createGitFlowBranches(cfg); err != nil {
 			return &errors.GitError{Operation: "create branches", Err: err}
 		}
 	}
@@ -160,139 +178,90 @@ func createGitFlowBranches(cfg *config.Config) error {
 }
 
 // interactiveConfig prompts the user for configuration values
-func interactiveConfig() *config.Config {
-	// Start with default config
-	cfg := config.DefaultConfig()
-
-	// Create a reader for user input
+func interactiveConfig() config.ConfigOverrides {
 	reader := bufio.NewReader(os.Stdin)
+	overrides := config.ConfigOverrides{}
 
 	// Prompt for main branch name
 	fmt.Print("Branch name for production releases [main]: ")
 	mainBranch, _ := reader.ReadString('\n')
 	mainBranch = strings.TrimSpace(mainBranch)
-	if mainBranch == "" {
-		mainBranch = "main"
+	if mainBranch != "" {
+		overrides.MainBranch = mainBranch
 	}
 
 	// Prompt for develop branch name
 	fmt.Print("Branch name for development [develop]: ")
 	developBranch, _ := reader.ReadString('\n')
 	developBranch = strings.TrimSpace(developBranch)
-	if developBranch == "" {
-		developBranch = "develop"
+	if developBranch != "" {
+		overrides.DevelopBranch = developBranch
 	}
 
-	// Prompt for feature prefix
+	// Prompt for feature branch prefix
 	fmt.Print("Feature branch prefix [feature/]: ")
 	featurePrefix, _ := reader.ReadString('\n')
 	featurePrefix = strings.TrimSpace(featurePrefix)
-	if featurePrefix == "" {
-		featurePrefix = "feature/"
-	} else if !strings.HasSuffix(featurePrefix, "/") {
-		featurePrefix += "/"
+	if featurePrefix != "" {
+		if !strings.HasSuffix(featurePrefix, "/") {
+			featurePrefix += "/"
+		}
+		overrides.FeaturePrefix = featurePrefix
 	}
 
-	// Prompt for release prefix
+	// Prompt for bugfix branch prefix
+	fmt.Print("Bugfix branch prefix [bugfix/]: ")
+	bugfixPrefix, _ := reader.ReadString('\n')
+	bugfixPrefix = strings.TrimSpace(bugfixPrefix)
+	if bugfixPrefix != "" {
+		if !strings.HasSuffix(bugfixPrefix, "/") {
+			bugfixPrefix += "/"
+		}
+		overrides.BugfixPrefix = bugfixPrefix
+	}
+
+	// Prompt for release branch prefix
 	fmt.Print("Release branch prefix [release/]: ")
 	releasePrefix, _ := reader.ReadString('\n')
 	releasePrefix = strings.TrimSpace(releasePrefix)
-	if releasePrefix == "" {
-		releasePrefix = "release/"
-	} else if !strings.HasSuffix(releasePrefix, "/") {
-		releasePrefix += "/"
+	if releasePrefix != "" {
+		if !strings.HasSuffix(releasePrefix, "/") {
+			releasePrefix += "/"
+		}
+		overrides.ReleasePrefix = releasePrefix
 	}
 
-	// Prompt for hotfix prefix
+	// Prompt for hotfix branch prefix
 	fmt.Print("Hotfix branch prefix [hotfix/]: ")
 	hotfixPrefix, _ := reader.ReadString('\n')
 	hotfixPrefix = strings.TrimSpace(hotfixPrefix)
-	if hotfixPrefix == "" {
-		hotfixPrefix = "hotfix/"
-	} else if !strings.HasSuffix(hotfixPrefix, "/") {
-		hotfixPrefix += "/"
+	if hotfixPrefix != "" {
+		if !strings.HasSuffix(hotfixPrefix, "/") {
+			hotfixPrefix += "/"
+		}
+		overrides.HotfixPrefix = hotfixPrefix
 	}
 
-	// Prompt for support prefix
+	// Prompt for support branch prefix
 	fmt.Print("Support branch prefix [support/]: ")
 	supportPrefix, _ := reader.ReadString('\n')
 	supportPrefix = strings.TrimSpace(supportPrefix)
-	if supportPrefix == "" {
-		supportPrefix = "support/"
-	} else if !strings.HasSuffix(supportPrefix, "/") {
-		supportPrefix += "/"
+	if supportPrefix != "" {
+		if !strings.HasSuffix(supportPrefix, "/") {
+			supportPrefix += "/"
+		}
+		overrides.SupportPrefix = supportPrefix
 	}
 
 	// Prompt for version tag prefix
 	fmt.Print("Version tag prefix [v]: ")
 	tagPrefix, _ := reader.ReadString('\n')
 	tagPrefix = strings.TrimSpace(tagPrefix)
-
-	// Update config with user input
-	if mainBranch != "main" {
-		// Create a new main branch config
-		mainConfig := cfg.Branches["main"]
-		delete(cfg.Branches, "main")
-		cfg.Branches[mainBranch] = mainConfig
-
-		// Update parent references
-		for name, branch := range cfg.Branches {
-			if branch.Parent == "main" {
-				branch.Parent = mainBranch
-				cfg.Branches[name] = branch
-			}
-			if branch.StartPoint == "main" {
-				branch.StartPoint = mainBranch
-				cfg.Branches[name] = branch
-			}
-		}
+	if tagPrefix != "" {
+		overrides.TagPrefix = tagPrefix
 	}
 
-	if developBranch != "develop" {
-		// Create a new develop branch config
-		developConfig := cfg.Branches["develop"]
-		developConfig.Parent = mainBranch
-		delete(cfg.Branches, "develop")
-		cfg.Branches[developBranch] = developConfig
-
-		// Update parent references
-		for name, branch := range cfg.Branches {
-			if branch.Parent == "develop" {
-				branch.Parent = developBranch
-				cfg.Branches[name] = branch
-			}
-			if branch.StartPoint == "develop" {
-				branch.StartPoint = developBranch
-				cfg.Branches[name] = branch
-			}
-		}
-	} else {
-		// Update develop parent to main branch
-		developConfig := cfg.Branches["develop"]
-		developConfig.Parent = mainBranch
-		cfg.Branches["develop"] = developConfig
-	}
-
-	// Update branch prefixes and tag settings
-	featureConfig := cfg.Branches["feature"]
-	featureConfig.Prefix = featurePrefix
-	cfg.Branches["feature"] = featureConfig
-
-	releaseConfig := cfg.Branches["release"]
-	releaseConfig.Prefix = releasePrefix
-	releaseConfig.TagPrefix = tagPrefix
-	cfg.Branches["release"] = releaseConfig
-
-	hotfixConfig := cfg.Branches["hotfix"]
-	hotfixConfig.Prefix = hotfixPrefix
-	hotfixConfig.TagPrefix = tagPrefix
-	cfg.Branches["hotfix"] = hotfixConfig
-
-	supportConfig := cfg.Branches["support"]
-	supportConfig.Prefix = supportPrefix
-	cfg.Branches["support"] = supportConfig
-
-	return cfg
+	return overrides
 }
 
 func init() {
@@ -301,4 +270,12 @@ func init() {
 	// Add flags specific to init command
 	initCmd.Flags().BoolP("defaults", "d", false, "Use default branch naming conventions")
 	initCmd.Flags().BoolP("create-branches", "c", false, "Create branches if they don't exist")
+	initCmd.Flags().StringP("main", "m", "", "Main branch name")
+	initCmd.Flags().StringP("develop", "e", "", "Develop branch name")
+	initCmd.Flags().StringP("feature", "p", "", "Feature branch prefix")
+	initCmd.Flags().StringP("bugfix", "b", "", "Bugfix branch prefix")
+	initCmd.Flags().StringP("release", "r", "", "Release branch prefix")
+	initCmd.Flags().StringP("hotfix", "x", "", "Hotfix branch prefix")
+	initCmd.Flags().StringP("support", "s", "", "Support branch prefix")
+	initCmd.Flags().StringP("tag", "t", "", "Version tag prefix")
 }

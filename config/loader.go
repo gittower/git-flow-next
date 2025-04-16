@@ -258,3 +258,102 @@ func ImportGitFlowAVHConfig() (*Config, error) {
 
 	return config, nil
 }
+
+// ApplyOverrides applies the given overrides to the configuration.
+// The overrides specify custom branch names and prefixes to use.
+func ApplyOverrides(cfg *Config, overrides ConfigOverrides) *Config {
+	// Handle main branch override
+	if overrides.MainBranch != "" {
+		mainConfig := cfg.Branches["main"]
+		delete(cfg.Branches, "main")
+		cfg.Branches[overrides.MainBranch] = mainConfig
+
+		// Update all branches that reference main
+		for name, branch := range cfg.Branches {
+			if branch.Parent == "main" {
+				branch.Parent = overrides.MainBranch
+				cfg.Branches[name] = branch
+			}
+			if branch.StartPoint == "main" {
+				branch.StartPoint = overrides.MainBranch
+				cfg.Branches[name] = branch
+			}
+		}
+	}
+
+	// Handle develop branch override
+	if overrides.DevelopBranch != "" {
+		developConfig := cfg.Branches["develop"]
+		delete(cfg.Branches, "develop")
+		cfg.Branches[overrides.DevelopBranch] = developConfig
+
+		// Update develop branch's parent reference
+		if overrides.MainBranch != "" {
+			developConfig.Parent = overrides.MainBranch
+		}
+		cfg.Branches[overrides.DevelopBranch] = developConfig
+
+		// Update all branches that reference develop
+		for name, branch := range cfg.Branches {
+			if branch.Parent == "develop" {
+				branch.Parent = overrides.DevelopBranch
+				cfg.Branches[name] = branch
+			}
+			if branch.StartPoint == "develop" {
+				branch.StartPoint = overrides.DevelopBranch
+				cfg.Branches[name] = branch
+			}
+		}
+	} else if overrides.MainBranch != "" {
+		// If only main was overridden, update develop's parent
+		developConfig := cfg.Branches["develop"]
+		developConfig.Parent = overrides.MainBranch
+		cfg.Branches["develop"] = developConfig
+	}
+
+	// Handle branch prefix overrides
+	if overrides.FeaturePrefix != "" {
+		featureConfig := cfg.Branches["feature"]
+		featureConfig.Prefix = overrides.FeaturePrefix
+		cfg.Branches["feature"] = featureConfig
+	}
+
+	if overrides.BugfixPrefix != "" {
+		bugfixConfig := cfg.Branches["bugfix"]
+		bugfixConfig.Prefix = overrides.BugfixPrefix
+		cfg.Branches["bugfix"] = bugfixConfig
+	}
+
+	if overrides.ReleasePrefix != "" {
+		releaseConfig := cfg.Branches["release"]
+		releaseConfig.Prefix = overrides.ReleasePrefix
+		cfg.Branches["release"] = releaseConfig
+	}
+
+	if overrides.HotfixPrefix != "" {
+		hotfixConfig := cfg.Branches["hotfix"]
+		hotfixConfig.Prefix = overrides.HotfixPrefix
+		cfg.Branches["hotfix"] = hotfixConfig
+	}
+
+	if overrides.SupportPrefix != "" {
+		supportConfig := cfg.Branches["support"]
+		supportConfig.Prefix = overrides.SupportPrefix
+		cfg.Branches["support"] = supportConfig
+	}
+
+	// Handle tag prefix override
+	if overrides.TagPrefix != "" {
+		releaseConfig := cfg.Branches["release"]
+		releaseConfig.TagPrefix = overrides.TagPrefix
+		releaseConfig.Tag = true
+		cfg.Branches["release"] = releaseConfig
+
+		hotfixConfig := cfg.Branches["hotfix"]
+		hotfixConfig.TagPrefix = overrides.TagPrefix
+		hotfixConfig.Tag = true
+		cfg.Branches["hotfix"] = hotfixConfig
+	}
+
+	return cfg
+}

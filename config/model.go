@@ -42,3 +42,15 @@ const (
 	// BranchTypeTopic represents a topic branch (feature, release, hotfix)
 	BranchTypeTopic BranchType = "topic"
 )
+
+// ConfigOverrides represents the overrides that can be applied to a Config
+type ConfigOverrides struct {
+	MainBranch    string // Name of the main branch
+	DevelopBranch string // Name of the develop branch
+	FeaturePrefix string // Prefix for feature branches
+	BugfixPrefix  string // Prefix for bugfix branches
+	ReleasePrefix string // Prefix for release branches
+	HotfixPrefix  string // Prefix for hotfix branches
+	SupportPrefix string // Prefix for support branches
+	TagPrefix     string // Prefix for tags
+}

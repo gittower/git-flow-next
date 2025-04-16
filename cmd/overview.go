@@ -90,10 +90,13 @@ func overview() error {
 		fmt.Printf("  %s -> %s\n", name, parent)
 
 		// Add merge strategy information
+		branch := cfg.Branches[name]
 		if parent == "(root)" {
 			fmt.Println("    Upstream: none, Downstream: none")
 		} else {
-			fmt.Println("    Upstream: merge, Downstream: merge")
+			fmt.Printf("    Upstream: %s, Downstream: %s\n",
+				branch.UpstreamStrategy,
+				branch.DownstreamStrategy)
 		}
 	}
 	fmt.Println()
@@ -123,12 +126,10 @@ func overview() error {
 			fmt.Printf("    Start Point: %s\n", startPoint)
 			fmt.Printf("    Prefix: %s\n", branch.Prefix)
 
-			// Add merge strategy information based on branch type
-			if name == "feature" {
-				fmt.Println("    Upstream: rebase, Downstream: none")
-			} else {
-				fmt.Println("    Upstream: merge, Downstream: none")
-			}
+			// Add merge strategy information based on configuration
+			fmt.Printf("    Upstream: %s, Downstream: %s\n",
+				branch.UpstreamStrategy,
+				branch.DownstreamStrategy)
 		}
 	}
 	fmt.Println()

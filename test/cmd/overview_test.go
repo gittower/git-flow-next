@@ -3,22 +3,24 @@ package cmd_test
 import (
 	"strings"
 	"testing"
+
+	"github.com/gittower/git-flow-next/test/testutil"
 )
 
 // TestOverviewWithDefaultConfig tests the overview command with default configuration
 func TestOverviewWithDefaultConfig(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := runGitFlow(t, dir, "init", "--defaults", "--create-branches")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
 	// Run git-flow overview
-	output, err = runGitFlow(t, dir, "overview")
+	output, err = testutil.RunGitFlow(t, dir, "overview")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow overview: %v\nOutput: %s", err, output)
 	}
@@ -45,7 +47,7 @@ func TestOverviewWithDefaultConfig(t *testing.T) {
 		t.Errorf("Expected output to contain 'main -> (root)', got: %s", output)
 	}
 
-	// Check if the output contains the merge strategy information
+	// Check if the output contains the merge strategy information for base branches
 	if !strings.Contains(output, "Upstream: merge, Downstream: merge") {
 		t.Errorf("Expected output to contain 'Upstream: merge, Downstream: merge', got: %s", output)
 	}
@@ -67,37 +69,38 @@ func TestOverviewWithDefaultConfig(t *testing.T) {
 		t.Errorf("Expected output to contain 'Prefix: feature/', got: %s", output)
 	}
 
-	if !strings.Contains(output, "Upstream: rebase, Downstream: none") {
-		t.Errorf("Expected output to contain 'Upstream: rebase, Downstream: none', got: %s", output)
+	// Check if the output contains the updated merge strategies for feature branches
+	if !strings.Contains(output, "Upstream: merge, Downstream: rebase") {
+		t.Errorf("Expected output to contain 'Upstream: merge, Downstream: rebase' for feature branches, got: %s", output)
 	}
 }
 
 // TestOverviewWithActiveBranches tests the overview command with active branches
 func TestOverviewWithActiveBranches(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := runGitFlow(t, dir, "init", "--defaults", "--create-branches")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
 	// Create a feature branch
-	output, err = runGitFlow(t, dir, "feature", "start", "my-feature")
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
 	if err != nil {
 		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
 	}
 
 	// Create a release branch
-	output, err = runGitFlow(t, dir, "release", "start", "1.0.0")
+	output, err = testutil.RunGitFlow(t, dir, "release", "start", "1.0.0")
 	if err != nil {
 		t.Fatalf("Failed to create release branch: %v\nOutput: %s", err, output)
 	}
 
 	// Run git-flow overview
-	output, err = runGitFlow(t, dir, "overview")
+	output, err = testutil.RunGitFlow(t, dir, "overview")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow overview: %v\nOutput: %s", err, output)
 	}
@@ -115,18 +118,26 @@ func TestOverviewWithActiveBranches(t *testing.T) {
 // TestOverviewWithCustomConfig tests the overview command with custom configuration
 func TestOverviewWithCustomConfig(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with custom configuration
-	input := "custom-main\ncustom-dev\nf/\nr/\nh/\ns/\n"
-	output, err := runGitFlowWithInput(t, dir, input, "init", "--create-branches")
+	output, err := testutil.RunGitFlow(t, dir, "init",
+		"-c",                    // create branches
+		"--main", "custom-main", // custom main branch name
+		"--develop", "custom-dev", // custom develop branch name
+		"--feature", "f/", // custom feature prefix
+		"--bugfix", "b/", // custom bugfix prefix
+		"--release", "r/", // custom release prefix
+		"--hotfix", "h/", // custom hotfix prefix
+		"--support", "s/", // custom support prefix
+		"--tag", "v") // custom tag prefix
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
 	// Run git-flow overview
-	output, err = runGitFlow(t, dir, "overview")
+	output, err = testutil.RunGitFlow(t, dir, "overview")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow overview: %v\nOutput: %s", err, output)
 	}
@@ -161,23 +172,23 @@ func TestOverviewWithCustomConfig(t *testing.T) {
 // TestOverviewWithCurrentBranch tests the overview command with the current branch highlighted
 func TestOverviewWithCurrentBranch(t *testing.T) {
 	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := runGitFlow(t, dir, "init", "--defaults", "--create-branches")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
 	// Create a feature branch and stay on it
-	output, err = runGitFlow(t, dir, "feature", "start", "my-feature")
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
 	if err != nil {
 		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
 	}
 
 	// Run git-flow overview
-	output, err = runGitFlow(t, dir, "overview")
+	output, err = testutil.RunGitFlow(t, dir, "overview")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow overview: %v\nOutput: %s", err, output)
 	}

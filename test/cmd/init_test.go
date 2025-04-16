@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gittower/git-flow-next/config"
 )
 
 // setupTestRepo creates a temporary Git repository for testing
@@ -455,5 +457,215 @@ func TestInitInteractiveWithBranchCreation(t *testing.T) {
 	developName := getGitConfig(t, dir, "gitflow.branch.custom-dev.parent")
 	if developName != "custom-main" {
 		t.Errorf("Expected gitflow.branch.custom-dev.parent to be 'custom-main', got: %s", developName)
+	}
+}
+
+// TestInitWithFlags tests the init command with custom branch prefixes
+func TestInitWithFlags(t *testing.T) {
+	// Setup
+	dir := setupTestRepo(t)
+	defer cleanupTestRepo(t, dir)
+
+	// Run git-flow init with custom prefixes and base branch names
+	output, err := runGitFlow(t, dir, "init",
+		"--main", "custom-main",
+		"--develop", "custom-dev",
+		"--feature", "feat/",
+		"--bugfix", "bug/",
+		"--release", "rel/",
+		"--hotfix", "fix/",
+		"--support", "sup/",
+		"--tag", "v")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow init with flags: %v\nOutput: %s", err, output)
+	}
+
+	// Check if the output contains the expected message
+	if !strings.Contains(output, "Initializing git-flow") {
+		t.Errorf("Expected output to contain 'Initializing git-flow', got: %s", output)
+	}
+
+	// Check if the configuration was saved correctly
+	version := getGitConfig(t, dir, "gitflow.version")
+	if version != "1.0" {
+		t.Errorf("Expected gitflow.version to be '1.0', got: %s", version)
+	}
+
+	// Check if the base branch configurations were saved correctly
+	mainType := getGitConfig(t, dir, "gitflow.branch.custom-main.type")
+	if mainType != "base" {
+		t.Errorf("Expected gitflow.branch.custom-main.type to be 'base', got: %s", mainType)
+	}
+
+	developParent := getGitConfig(t, dir, "gitflow.branch.custom-dev.parent")
+	if developParent != "custom-main" {
+		t.Errorf("Expected gitflow.branch.custom-dev.parent to be 'custom-main', got: %s", developParent)
+	}
+
+	// Check if the branch configurations were saved correctly
+	featurePrefix := getGitConfig(t, dir, "gitflow.branch.feature.prefix")
+	if featurePrefix != "feat/" {
+		t.Errorf("Expected gitflow.branch.feature.prefix to be 'feat/', got: %s", featurePrefix)
+	}
+
+	bugfixPrefix := getGitConfig(t, dir, "gitflow.branch.bugfix.prefix")
+	if bugfixPrefix != "bug/" {
+		t.Errorf("Expected gitflow.branch.bugfix.prefix to be 'bug/', got: %s", bugfixPrefix)
+	}
+
+	releasePrefix := getGitConfig(t, dir, "gitflow.branch.release.prefix")
+	if releasePrefix != "rel/" {
+		t.Errorf("Expected gitflow.branch.release.prefix to be 'rel/', got: %s", releasePrefix)
+	}
+
+	hotfixPrefix := getGitConfig(t, dir, "gitflow.branch.hotfix.prefix")
+	if hotfixPrefix != "fix/" {
+		t.Errorf("Expected gitflow.branch.hotfix.prefix to be 'fix/', got: %s", hotfixPrefix)
+	}
+
+	supportPrefix := getGitConfig(t, dir, "gitflow.branch.support.prefix")
+	if supportPrefix != "sup/" {
+		t.Errorf("Expected gitflow.branch.support.prefix to be 'sup/', got: %s", supportPrefix)
+	}
+
+	// Check if tag configuration was set correctly
+	releaseTagPrefix := getGitConfig(t, dir, "gitflow.branch.release.tagprefix")
+	if releaseTagPrefix != "v" {
+		t.Errorf("Expected gitflow.branch.release.tagprefix to be 'v', got: %s", releaseTagPrefix)
+	}
+
+	hotfixTagPrefix := getGitConfig(t, dir, "gitflow.branch.hotfix.tagprefix")
+	if hotfixTagPrefix != "v" {
+		t.Errorf("Expected gitflow.branch.hotfix.tagprefix to be 'v', got: %s", hotfixTagPrefix)
+	}
+}
+
+// TestInitWithFlagsAndBranches tests the init command with custom prefixes and branch creation
+func TestInitWithFlagsAndBranches(t *testing.T) {
+	// Setup
+	dir := setupTestRepo(t)
+	defer cleanupTestRepo(t, dir)
+
+	// Run git-flow init with custom prefixes and branch creation
+	output, err := runGitFlow(t, dir, "init",
+		"--feature", "feat/",
+		"--bugfix", "bug/",
+		"--release", "rel/",
+		"--hotfix", "fix/",
+		"--support", "sup/",
+		"--tag", "v",
+		"--create-branches")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow init with flags and branch creation: %v\nOutput: %s", err, output)
+	}
+
+	// Check if the output contains the expected messages
+	if !strings.Contains(output, "Initializing git-flow") {
+		t.Errorf("Expected output to contain 'Initializing git-flow', got: %s", output)
+	}
+
+	// Check if the branches were created
+	if !branchExists(t, dir, "main") {
+		t.Error("Expected main branch to exist")
+	}
+	if !branchExists(t, dir, "develop") {
+		t.Error("Expected develop branch to exist")
+	}
+
+	// Check if the configuration was saved correctly
+	featurePrefix := getGitConfig(t, dir, "gitflow.branch.feature.prefix")
+	if featurePrefix != "feat/" {
+		t.Errorf("Expected gitflow.branch.feature.prefix to be 'feat/', got: %s", featurePrefix)
+	}
+}
+
+// TestInitWithDefaultsAndOverrides tests initializing with defaults but overriding specific branch configs
+func TestInitWithDefaultsAndOverrides(t *testing.T) {
+	// Setup
+	dir := setupTestRepo(t)
+	defer cleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults but override specific configs
+	output, err := runGitFlow(t, dir, "init", "-d", "-c",
+		"--main", "custom-main",
+		"--develop", "custom-dev",
+		"--feature", "f/",
+		"--release", "r/",
+		"--hotfix", "h/",
+		"--support", "s/",
+		"--tag", "v")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Verify branches were created
+	if !branchExists(t, dir, "custom-main") {
+		t.Error("Expected 'custom-main' branch to exist")
+	}
+	if !branchExists(t, dir, "custom-dev") {
+		t.Error("Expected 'custom-dev' branch to exist")
+	}
+
+	// Change to the test directory before loading config
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	defer os.Chdir(oldDir)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Failed to change to test directory: %v", err)
+	}
+
+	// Verify configuration
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		t.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	// Check main branch config
+	if _, ok := cfg.Branches["custom-main"]; !ok {
+		t.Error("Expected 'custom-main' branch configuration to exist")
+	}
+
+	// Check develop branch config
+	if developCfg, ok := cfg.Branches["custom-dev"]; ok {
+		if developCfg.Parent != "custom-main" {
+			t.Errorf("Expected develop branch parent to be 'custom-main', got '%s'", developCfg.Parent)
+		}
+	} else {
+		t.Error("Expected 'custom-dev' branch configuration to exist")
+	}
+
+	// Check feature branch config
+	if featureCfg, ok := cfg.Branches["feature"]; ok {
+		if featureCfg.Prefix != "f/" {
+			t.Errorf("Expected feature branch prefix to be 'f/', got '%s'", featureCfg.Prefix)
+		}
+	} else {
+		t.Error("Expected 'feature' branch configuration to exist")
+	}
+
+	// Check release branch config
+	if releaseCfg, ok := cfg.Branches["release"]; ok {
+		if releaseCfg.Prefix != "r/" {
+			t.Errorf("Expected release branch prefix to be 'r/', got '%s'", releaseCfg.Prefix)
+		}
+		if releaseCfg.TagPrefix != "v" {
+			t.Errorf("Expected release tag prefix to be 'v', got '%s'", releaseCfg.TagPrefix)
+		}
+	} else {
+		t.Error("Expected 'release' branch configuration to exist")
+	}
+
+	// Check hotfix branch config
+	if hotfixCfg, ok := cfg.Branches["hotfix"]; ok {
+		if hotfixCfg.Prefix != "h/" {
+			t.Errorf("Expected hotfix branch prefix to be 'h/', got '%s'", hotfixCfg.Prefix)
+		}
+		if hotfixCfg.TagPrefix != "v" {
+			t.Errorf("Expected hotfix tag prefix to be 'v', got '%s'", hotfixCfg.TagPrefix)
+		}
+	} else {
+		t.Error("Expected 'hotfix' branch configuration to exist")
 	}
 }

@@ -267,9 +267,17 @@ func TestFinishWithCustomConfig(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	// Initialize git-flow with custom configuration and create branches
-	input := "custom-main\ncustom-dev\nf/\nr/\nh/\ns/\ny\n"
-	output, err := testutil.RunGitFlowWithInput(t, dir, input, "init", "-c")
+	// Initialize git-flow with custom configuration
+	output, err := testutil.RunGitFlow(t, dir, "init",
+		"--main", "custom-main", // custom main branch name
+		"--develop", "custom-dev", // custom develop branch name
+		"--feature", "f/", // custom feature prefix
+		"--bugfix", "b/", // custom bugfix prefix
+		"--release", "r/", // custom release prefix
+		"--hotfix", "h/", // custom hotfix prefix
+		"--support", "s/", // custom support prefix
+		"--tag", "v", // custom tag prefix
+		"-c") // create branches
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
