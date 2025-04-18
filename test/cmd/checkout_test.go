@@ -14,7 +14,7 @@ func TestCheckoutFeature(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -51,7 +51,7 @@ func TestCheckoutFeatureWithPrefix(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -99,7 +99,7 @@ func TestCheckoutNonExistentFeature(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -118,7 +118,7 @@ func TestCheckoutFeatureWithShowCommands(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -160,7 +160,7 @@ func TestCheckoutWithInvalidBranchType(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -179,7 +179,7 @@ func TestCheckoutFeatureNoArgs(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}

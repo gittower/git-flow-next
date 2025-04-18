@@ -13,7 +13,7 @@ func TestRenameFeature(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -73,7 +73,7 @@ func TestRenameCurrentFeature(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -104,7 +104,7 @@ func TestRenameNonExistentFeature(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -123,7 +123,7 @@ func TestRenameToExistingFeature(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -154,7 +154,7 @@ func TestRenameWithInvalidBranchType(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}

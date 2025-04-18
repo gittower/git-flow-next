@@ -20,7 +20,7 @@ This will set up the necessary configuration for git-flow to work.
 If git-flow-avh configuration exists, it will be imported.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		useDefaults, _ := cmd.Flags().GetBool("defaults")
-		createBranches, _ := cmd.Flags().GetBool("create-branches")
+		noCreateBranches, _ := cmd.Flags().GetBool("no-create-branches")
 		mainBranch, _ := cmd.Flags().GetString("main")
 		developBranch, _ := cmd.Flags().GetString("develop")
 		featurePrefix, _ := cmd.Flags().GetString("feature")
@@ -29,7 +29,7 @@ If git-flow-avh configuration exists, it will be imported.`,
 		hotfixPrefix, _ := cmd.Flags().GetString("hotfix")
 		supportPrefix, _ := cmd.Flags().GetString("support")
 		tagPrefix, _ := cmd.Flags().GetString("tag")
-		InitCommand(useDefaults, createBranches, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix)
+		InitCommand(useDefaults, !noCreateBranches, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix)
 	},
 }
 
@@ -269,7 +269,7 @@ func init() {
 
 	// Add flags specific to init command
 	initCmd.Flags().BoolP("defaults", "d", false, "Use default branch naming conventions")
-	initCmd.Flags().BoolP("create-branches", "c", false, "Create branches if they don't exist")
+	initCmd.Flags().Bool("no-create-branches", false, "Don't create branches even if they don't exist")
 	initCmd.Flags().StringP("main", "m", "", "Main branch name")
 	initCmd.Flags().StringP("develop", "e", "", "Develop branch name")
 	initCmd.Flags().StringP("feature", "p", "", "Feature branch prefix")

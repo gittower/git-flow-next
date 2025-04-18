@@ -13,7 +13,7 @@ func TestDeleteFeature(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -60,7 +60,7 @@ func TestDeleteCurrentFeature(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -96,7 +96,7 @@ func TestDeleteNonExistentFeature(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -115,7 +115,7 @@ func TestDeleteMergedFeature(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -157,7 +157,7 @@ func TestDeleteWithInvalidBranchType(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d", "-c")
+	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
