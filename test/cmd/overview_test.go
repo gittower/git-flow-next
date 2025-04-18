@@ -14,7 +14,7 @@ func TestOverviewWithDefaultConfig(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -64,7 +64,7 @@ func TestOverviewWithActiveBranches(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -157,7 +157,7 @@ func TestOverviewWithCurrentBranch(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}

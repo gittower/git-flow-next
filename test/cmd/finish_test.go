@@ -18,7 +18,7 @@ func TestFinishFeatureBranch(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults and create branches
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -80,7 +80,7 @@ func TestFinishReleaseBranch(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults and create branches
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -177,7 +177,7 @@ func TestFinishHotfixBranch(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults and create branches
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -334,7 +334,7 @@ func TestFinishNonExistentBranch(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults and create branches
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -358,7 +358,7 @@ func TestFinishWithMergeConflict(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults and create branches
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -443,7 +443,7 @@ func TestFinishWithMergeAbort(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults and create branches
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -528,7 +528,7 @@ func TestFinishWithRebaseConflict(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults and create branches
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -585,7 +585,7 @@ func TestFinishWithMergeContinue(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults and create branches
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -689,7 +689,7 @@ func TestFinishWithChildBranchConflict(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -846,7 +846,7 @@ func TestFinishReleaseWithMergeContinue(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults and create branches
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -959,7 +959,7 @@ func TestFinishNonStandardBranchWithForce(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -1015,7 +1015,7 @@ func TestFinishNonStandardBranchWithoutForce(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -1066,7 +1066,7 @@ func TestFinishNonStandardBranchWithTag(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults and tag configuration
-	output, err := testutil.RunGitFlow(t, dir, "init", "-d")
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}

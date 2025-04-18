@@ -551,7 +551,7 @@ func TestInitWithDefaultsAndOverrides(t *testing.T) {
 	defer cleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults but override specific configs
-	output, err := runGitFlow(t, dir, "init", "-d",
+	output, err := runGitFlow(t, dir, "init", "--defaults",
 		"--main", "custom-main",
 		"--develop", "custom-dev",
 		"--feature", "f/",

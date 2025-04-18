@@ -18,7 +18,7 @@ func TestUpdateFeatureBranch(t *testing.T) {
 	}
 
 	// Initialize git-flow with branch creation
-	if _, err := testutil.RunGitFlow(t, dir, "init", "-d"); err != nil {
+	if _, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -71,7 +71,7 @@ func TestUpdateWithMergeConflict(t *testing.T) {
 	}
 
 	// Initialize git-flow with branch creation
-	if _, err := testutil.RunGitFlow(t, dir, "init", "-d"); err != nil {
+	if _, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -130,7 +130,7 @@ func TestUpdateNonExistentBranch(t *testing.T) {
 	}
 
 	// Initialize git-flow with branch creation
-	if _, err := testutil.RunGitFlow(t, dir, "init", "-d"); err != nil {
+	if _, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -157,7 +157,7 @@ func TestUpdateCurrentBranch(t *testing.T) {
 	}
 
 	// Initialize git-flow with branch creation
-	if _, err := testutil.RunGitFlow(t, dir, "init", "-d"); err != nil {
+	if _, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -224,7 +224,7 @@ func TestUpdateBaseBranch(t *testing.T) {
 	}
 
 	// Initialize git-flow with default configuration and create branches
-	if _, err := testutil.RunGitFlow(t, dir, "init", "-d"); err != nil {
+	if _, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
 		t.Fatal(err)
 	}
 

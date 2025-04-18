@@ -12,7 +12,7 @@ func TestListFeatureBranches(t *testing.T) {
 	defer cleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := runGitFlow(t, dir, "init", "--defaults", )
+	output, err := runGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -56,7 +56,7 @@ func TestListReleaseAndHotfixBranches(t *testing.T) {
 	defer cleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := runGitFlow(t, dir, "init", "--defaults", )
+	output, err := runGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -146,7 +146,7 @@ func TestListEmptyBranches(t *testing.T) {
 	defer cleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := runGitFlow(t, dir, "init", "--defaults", )
+	output, err := runGitFlow(t, dir, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
