@@ -90,16 +90,10 @@ func setupGitFlowAVH(t *testing.T, dir string) {
 
 // runGitFlow runs the git-flow command with the given arguments
 func runGitFlow(t *testing.T, dir string, args ...string) (string, error) {
-	// Always build the git-flow binary before running tests
+	// Get path to the git-flow binary
 	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
 	if err != nil {
 		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
-
-	buildCmd := exec.Command("go", "build", "-o", gitFlowPath)
-	buildCmd.Dir = filepath.Join("..", "..")
-	if err := buildCmd.Run(); err != nil {
-		t.Fatalf("Failed to build git-flow: %v", err)
 	}
 
 	// Run the git-flow command
@@ -116,18 +110,10 @@ func runGitFlow(t *testing.T, dir string, args ...string) (string, error) {
 
 // runGitFlowWithInput runs the git-flow command with the given arguments and input
 func runGitFlowWithInput(t *testing.T, dir string, input string, args ...string) (string, error) {
-	// Build the git-flow binary if it doesn't exist
+	// Get path to the git-flow binary
 	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
 	if err != nil {
 		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
-
-	if _, err := os.Stat(gitFlowPath); os.IsNotExist(err) {
-		buildCmd := exec.Command("go", "build", "-o", gitFlowPath)
-		buildCmd.Dir = filepath.Join("..", "..")
-		if err := buildCmd.Run(); err != nil {
-			t.Fatalf("Failed to build git-flow: %v", err)
-		}
 	}
 
 	// Run the git-flow command

@@ -1139,16 +1139,10 @@ func TestFinishFeatureWithTag(t *testing.T) {
 		t.Fatalf("Failed to commit file: %v", err)
 	}
 
-	// Build git-flow before running with custom flags
-	// Make sure the latest git-flow binary is built
+	// Get path to the git-flow binary
 	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
 	if err != nil {
 		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
-	buildCmd := exec.Command("go", "build", "-o", gitFlowPath)
-	buildCmd.Dir = filepath.Join("..", "..")
-	if err := buildCmd.Run(); err != nil {
-		t.Fatalf("Failed to build git-flow: %v", err)
 	}
 
 	// Run git-flow directly with exec.Command to get full control over arguments
@@ -1202,15 +1196,10 @@ func TestFinishReleaseWithCustomTag(t *testing.T) {
 		t.Fatalf("Failed to commit file: %v", err)
 	}
 
-	// Build git-flow before running with custom flags
+	// Get path to the git-flow binary
 	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
 	if err != nil {
 		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
-	buildCmd := exec.Command("go", "build", "-o", gitFlowPath)
-	buildCmd.Dir = filepath.Join("..", "..")
-	if err := buildCmd.Run(); err != nil {
-		t.Fatalf("Failed to build git-flow: %v", err)
 	}
 
 	// Run git-flow directly
@@ -1276,15 +1265,10 @@ func TestFinishReleaseWithCustomMessage(t *testing.T) {
 	// Custom message for the tag
 	customMessage := "This is release 1.3.0"
 
-	// Build git-flow before running with custom flags
+	// Get path to the git-flow binary
 	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
 	if err != nil {
 		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
-	buildCmd := exec.Command("go", "build", "-o", gitFlowPath)
-	buildCmd.Dir = filepath.Join("..", "..")
-	if err := buildCmd.Run(); err != nil {
-		t.Fatalf("Failed to build git-flow: %v", err)
 	}
 
 	// Run git-flow directly
@@ -1338,15 +1322,10 @@ func TestFinishReleaseWithNoTag(t *testing.T) {
 		t.Fatalf("Failed to commit file: %v", err)
 	}
 
-	// Build git-flow before running with custom flags
+	// Get path to the git-flow binary
 	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
 	if err != nil {
 		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
-	buildCmd := exec.Command("go", "build", "-o", gitFlowPath)
-	buildCmd.Dir = filepath.Join("..", "..")
-	if err := buildCmd.Run(); err != nil {
-		t.Fatalf("Failed to build git-flow: %v", err)
 	}
 
 	// Run git-flow directly
@@ -1414,15 +1393,10 @@ func TestFinishReleaseWithMessageFile(t *testing.T) {
 		t.Fatalf("Failed to create tag message file: %v", err)
 	}
 
-	// Build git-flow before running with custom flags
+	// Get path to the git-flow binary
 	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
 	if err != nil {
 		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
-	buildCmd := exec.Command("go", "build", "-o", gitFlowPath)
-	buildCmd.Dir = filepath.Join("..", "..")
-	if err := buildCmd.Run(); err != nil {
-		t.Fatalf("Failed to build git-flow: %v", err)
 	}
 
 	// Run git-flow directly
@@ -1640,15 +1614,10 @@ func TestFinishNotagFromCLI(t *testing.T) {
 		t.Fatalf("Failed to commit file: %v", err)
 	}
 
-	// Build git-flow before running with custom flags
+	// Get path to the git-flow binary
 	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
 	if err != nil {
 		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
-	buildCmd := exec.Command("go", "build", "-o", gitFlowPath)
-	buildCmd.Dir = filepath.Join("..", "..")
-	if err := buildCmd.Run(); err != nil {
-		t.Fatalf("Failed to build git-flow: %v", err)
 	}
 
 	// Finish with --notag to override the config
