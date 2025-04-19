@@ -273,3 +273,13 @@ func RenameBranch(newBranch string, oldBranch ...string) error {
 	}
 	return nil
 }
+
+// Fetch performs a git fetch from the specified remote
+func Fetch(remote string) error {
+	cmd := exec.Command("git", "fetch", remote)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to fetch from remote '%s': %s", remote, string(output))
+	}
+	return nil
+}

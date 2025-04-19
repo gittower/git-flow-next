@@ -73,10 +73,29 @@ func registerBranchCommand(branchType string) {
 		Example: fmt.Sprintf("  git flow %s start my-new-feature", branchType),
 		Args:    cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			// Call the generic start command with the branch type and name
-			StartCommand(branchType, args[0])
+			// Get fetch flag values
+			fetch, _ := cmd.Flags().GetBool("fetch")
+			noFetch, _ := cmd.Flags().GetBool("no-fetch")
+
+			// Pass nil if no flags are set, otherwise create an appropriate bool pointer
+			var shouldFetch *bool
+			if fetch {
+				t := true
+				shouldFetch = &t
+			} else if noFetch {
+				f := false
+				shouldFetch = &f
+			}
+
+			// Call the generic start command with the branch type, name, and fetch flags
+			StartCommand(branchType, args[0], shouldFetch)
 		},
 	}
+
+	// Add fetch-related flags
+	startCmd.Flags().Bool("fetch", false, "Fetch from remote before creating branch")
+	startCmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before creating branch")
+
 	branchCmd.AddCommand(startCmd)
 
 	// Add finish subcommand

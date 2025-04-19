@@ -10,8 +10,9 @@ import (
 )
 
 // StartCommand is the implementation of the start command for topic branches
-func StartCommand(branchType string, name string) {
-	if err := start(branchType, name); err != nil {
+// If shouldFetch is nil, the function will check config for fetch preference
+func StartCommand(branchType string, name string, shouldFetch *bool) {
+	if err := start(branchType, name, shouldFetch); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -23,8 +24,8 @@ func StartCommand(branchType string, name string) {
 	}
 }
 
-// start performs the actual branch creation logic and returns any errors
-func start(branchType string, name string) error {
+// start performs the actual branch creation logic with optional fetch and returns any errors
+func start(branchType string, name string, shouldFetch *bool) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized()
 	if err != nil {
@@ -49,6 +50,27 @@ func start(branchType string, name string) error {
 	branchConfig, ok := cfg.Branches[branchType]
 	if !ok {
 		return &errors.InvalidBranchTypeError{BranchType: branchType}
+	}
+
+	// Determine if we should fetch
+	fetchFromConfig := false
+	if shouldFetch == nil {
+		// If not explicitly specified, check config
+		configKey := fmt.Sprintf("gitflow.%s.start.fetch", branchType)
+		fetchConfig, err := git.GetConfig(configKey)
+		if err == nil && fetchConfig == "true" {
+			fetchFromConfig = true
+		}
+	}
+
+	// Perform fetch if requested
+	remoteName := cfg.Remote
+	if shouldFetch != nil && *shouldFetch || shouldFetch == nil && fetchFromConfig {
+		// Fetch from remote
+		fmt.Printf("Fetching from %s...\n", remoteName)
+		if err := git.Fetch(remoteName); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		}
 	}
 
 	// Get full branch name

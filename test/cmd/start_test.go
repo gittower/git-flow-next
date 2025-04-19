@@ -1,6 +1,7 @@
 package cmd_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -96,7 +97,7 @@ func TestStartWithCustomConfig(t *testing.T) {
 
 	// Initialize git-flow with custom configuration
 	input := "custom-main\ncustom-dev\nf/\nr/\nh/\ns/\n"
-	output, err := testutil.RunGitFlowWithInput(t, dir, input, "init", )
+	output, err := testutil.RunGitFlowWithInput(t, dir, input, "init")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -216,7 +217,7 @@ func TestStartWithNoStartPoint(t *testing.T) {
 
 	// Initialize git-flow with custom configuration
 	input := "main\ndevelop\nf/\nr/\nh/\ns/\n"
-	output, err := testutil.RunGitFlowWithInput(t, dir, input, "init", )
+	output, err := testutil.RunGitFlowWithInput(t, dir, input, "init")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -393,5 +394,144 @@ func TestStartWithoutInitialization(t *testing.T) {
 	}
 	if strings.Contains(branches, "develop") {
 		t.Error("Found unexpected develop branch")
+	}
+}
+
+// TestStartWithoutFetch tests the default behavior (no fetch)
+func TestStartWithoutFetch(t *testing.T) {
+	// Setup test repo
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Run git-flow feature start without the fetch flag
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "no-fetch-test")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
+	}
+
+	// Verify that output does not contain fetching info
+	if strings.Contains(output, "Fetching from") {
+		t.Errorf("Expected no fetch operation, but output indicates fetching: %s", output)
+	}
+}
+
+// TestStartWithFetchFlag tests that the --fetch flag works
+func TestStartWithFetchFlag(t *testing.T) {
+	// Setup test repo
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Run git-flow feature start with the fetch flag
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "fetch-test", "--fetch")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
+	}
+
+	// Verify that output contains fetching info
+	if !strings.Contains(output, "Fetching from") {
+		t.Errorf("Expected fetch operation, but output doesn't indicate fetching: %s", output)
+	}
+}
+
+// TestStartWithFetchConfig tests that the gitflow.<topic>.start.fetch config works
+func TestStartWithFetchConfig(t *testing.T) {
+	// Setup test repo
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Set the config to enable fetch
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.feature.start.fetch", "true")
+	if err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
+	// Run git-flow feature start without explicit fetch flag
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "config-fetch-test")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
+	}
+
+	// Verify that output contains fetching info
+	if !strings.Contains(output, "Fetching from") {
+		t.Errorf("Expected fetch operation due to config, but output doesn't indicate fetching: %s", output)
+	}
+}
+
+// TestStartWithNoFetchOverridesConfig tests that --no-fetch overrides the config
+func TestStartWithNoFetchOverridesConfig(t *testing.T) {
+	// Setup test repo
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Set the config to enable fetch
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.feature.start.fetch", "true")
+	if err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
+	// Run git-flow feature start with --no-fetch to override config
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "no-fetch-override-test", "--no-fetch")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
+	}
+
+	// Verify that output does not contain fetching info
+	if strings.Contains(output, "Fetching from") {
+		t.Errorf("Expected no fetch operation due to --no-fetch flag, but output indicates fetching: %s", output)
+	}
+}
+
+// TestStartWithCustomRemote tests that the custom remote name is used for fetching
+func TestStartWithCustomRemote(t *testing.T) {
+	// Setup test repo
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Set custom remote name
+	customRemote := "custom-remote"
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.origin", customRemote)
+	if err != nil {
+		t.Fatalf("Failed to set custom remote: %v", err)
+	}
+
+	// Run git-flow feature start with the fetch flag
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "custom-remote-test", "--fetch")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
+	}
+
+	// Verify that output contains fetching from custom remote
+	if !strings.Contains(output, fmt.Sprintf("Fetching from %s", customRemote)) {
+		t.Errorf("Expected fetch operation from custom remote '%s', but output doesn't indicate it: %s", customRemote, output)
 	}
 }
