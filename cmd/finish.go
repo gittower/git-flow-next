@@ -14,9 +14,19 @@ import (
 	"github.com/gittower/git-flow-next/util"
 )
 
+// TagOptions contains options for tag creation when finishing a branch
+type TagOptions struct {
+	ShouldTag   *bool  // Whether to create a tag (nil means use config default)
+	ShouldSign  *bool  // Whether to sign the tag (nil means use config default)
+	SigningKey  string // Key to use for signing
+	Message     string // Custom message for the tag
+	MessageFile string // File containing the message
+	TagName     string // Custom tag name
+}
+
 // FinishCommand is the implementation of the finish command for topic branches
-func FinishCommand(branchType string, name string, continueOp bool, abortOp bool, force bool) {
-	if err := executeFinish(branchType, name, continueOp, abortOp, force); err != nil {
+func FinishCommand(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *TagOptions) {
+	if err := executeFinish(branchType, name, continueOp, abortOp, force, tagOptions); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -29,7 +39,7 @@ func FinishCommand(branchType string, name string, continueOp bool, abortOp bool
 }
 
 // executeFinish performs the actual branch finishing logic and returns any errors
-func executeFinish(branchType string, name string, continueOp bool, abortOp bool, force bool) error {
+func executeFinish(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *TagOptions) error {
 	// Get configuration early
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -60,7 +70,7 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 		}
 
 		if continueOp {
-			return handleContinue(state, stateBranchConfig)
+			return handleContinue(state, stateBranchConfig, tagOptions)
 		}
 
 		return &errors.MergeInProgressError{BranchName: state.FullBranchName}
@@ -103,9 +113,26 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 			fmt.Printf("Warning: Branch '%s' is not a standard %s branch (missing prefix '%s').\n", name, branchType, branchConfig.Prefix)
 			fmt.Printf("Finishing this branch will:\n")
 			fmt.Printf("1. Merge it into '%s' using the %s strategy\n", branchConfig.Parent, branchConfig.UpstreamStrategy)
-			if branchConfig.Tag {
-				fmt.Printf("2. Create a tag '%s%s'\n", branchConfig.TagPrefix, shortName)
+
+			// Adjust tag message based on tag options
+			showTagMessage := branchConfig.Tag
+
+			// Command-line flags override config
+			if tagOptions != nil && tagOptions.ShouldTag != nil {
+				showTagMessage = *tagOptions.ShouldTag
 			}
+
+			if showTagMessage {
+				// Show tag name based on options
+				displayTagName := shortName
+				if tagOptions != nil && tagOptions.TagName != "" {
+					displayTagName = tagOptions.TagName
+				} else if branchConfig.TagPrefix != "" {
+					displayTagName = branchConfig.TagPrefix + shortName
+				}
+				fmt.Printf("2. Create a tag '%s'\n", displayTagName)
+			}
+
 			fmt.Printf("3. Delete the branch after successful merge\n\n")
 			fmt.Printf("Do you want to continue? [y/N]: ")
 
@@ -118,10 +145,10 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	}
 
 	// Regular finish command flow
-	return finishBranch(branchType, name, branchConfig)
+	return finishBranch(branchType, name, branchConfig, tagOptions)
 }
 
-func finishBranch(branchType string, name string, branchConfig config.BranchConfig) error {
+func finishBranch(branchType string, name string, branchConfig config.BranchConfig, tagOptions *TagOptions) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized()
 	if err != nil {
@@ -189,10 +216,10 @@ func finishBranch(branchType string, name string, branchConfig config.BranchConf
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
-	return finish(state, branchConfig)
+	return finish(state, branchConfig, tagOptions)
 }
 
-func finish(state *model.MergeState, branchConfig config.BranchConfig) error {
+func finish(state *model.MergeState, branchConfig config.BranchConfig, tagOptions *TagOptions) error {
 	// Checkout target branch
 	err := git.Checkout(state.ParentBranch)
 	if err != nil {
@@ -252,10 +279,10 @@ func finish(state *model.MergeState, branchConfig config.BranchConfig) error {
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
-	return handleContinue(state, branchConfig)
+	return handleContinue(state, branchConfig, tagOptions)
 }
 
-func handleContinue(state *model.MergeState, branchConfig config.BranchConfig) error {
+func handleContinue(state *model.MergeState, branchConfig config.BranchConfig, tagOptions *TagOptions) error {
 	switch state.CurrentStep {
 	case "merge":
 		// Check if there are still conflicts
@@ -268,18 +295,96 @@ func handleContinue(state *model.MergeState, branchConfig config.BranchConfig) e
 		if err := util.SaveMergeState(state); err != nil {
 			return &errors.GitError{Operation: "save merge state", Err: err}
 		}
-		return handleContinue(state, branchConfig)
+		return handleContinue(state, branchConfig, tagOptions)
 
 	case "create_tag":
-		// Create tag if enabled for this branch type
-		if branchConfig.Tag {
-			// Use BranchName for tag creation - it's already the correct short name
+		// 1. Start with branch configuration default
+		shouldTag := branchConfig.Tag
+
+		// 2. Check for branch-specific config override
+		branchSpecificTagConfig, err := git.GetConfig(fmt.Sprintf("gitflow.%s.finish.notag", state.BranchType))
+		if err == nil && branchSpecificTagConfig == "true" {
+			// notag=true means don't create a tag
+			shouldTag = false
+		}
+
+		// 3. Command-line flags override config
+		if tagOptions != nil && tagOptions.ShouldTag != nil {
+			shouldTag = *tagOptions.ShouldTag
+		}
+
+		if shouldTag {
+			// Determine tag name
+			// 1. Start with branch name and apply prefix from branch config
 			tagName := state.BranchName
 			if branchConfig.TagPrefix != "" {
 				tagName = branchConfig.TagPrefix + state.BranchName
 			}
+
+			// 2. Command-line custom tag name overrides config
+			if tagOptions != nil && tagOptions.TagName != "" {
+				tagName = tagOptions.TagName
+			}
+
+			// Determine tag message
+			// Default message
 			message := fmt.Sprintf("Tagging version %s", tagName)
-			if err := createTag(tagName, state.ParentBranch, message); err != nil {
+
+			// Command-line message overrides default
+			if tagOptions != nil && tagOptions.Message != "" {
+				message = tagOptions.Message
+			}
+
+			// Handle message file
+			useMessageFile := false
+			messageFilePath := ""
+
+			// 1. Check for branch-specific message file config
+			configMessageFile, err := git.GetConfig(fmt.Sprintf("gitflow.%s.finish.messagefile", state.BranchType))
+			if err == nil && configMessageFile != "" {
+				useMessageFile = true
+				messageFilePath = configMessageFile
+			}
+
+			// 2. Command-line message file overrides config
+			if tagOptions != nil && tagOptions.MessageFile != "" {
+				useMessageFile = true
+				messageFilePath = tagOptions.MessageFile
+			}
+
+			// Determine signing options
+			// 1. Start with not signing
+			shouldSign := false
+
+			// 2. Check branch-specific signing config
+			signConfig, err := git.GetConfig(fmt.Sprintf("gitflow.%s.finish.sign", state.BranchType))
+			if err == nil && signConfig == "true" {
+				shouldSign = true
+			}
+
+			// 3. Command-line signing flags override config
+			if tagOptions != nil && tagOptions.ShouldSign != nil {
+				shouldSign = *tagOptions.ShouldSign
+			}
+
+			// Determine signing key
+			signingKey := ""
+
+			// 1. Check branch-specific signing key
+			configSigningKey, err := git.GetConfig(fmt.Sprintf("gitflow.%s.finish.signingkey", state.BranchType))
+			if err == nil && configSigningKey != "" {
+				signingKey = configSigningKey
+				shouldSign = true // Specifying a key implies signing
+			}
+
+			// 2. Command-line signing key overrides config
+			if tagOptions != nil && tagOptions.SigningKey != "" {
+				signingKey = tagOptions.SigningKey
+				shouldSign = true // Specifying a key implies signing
+			}
+
+			// Now create the tag with all the options
+			if err := createTagWithOptions(tagName, state.ParentBranch, message, shouldSign, signingKey, useMessageFile, messageFilePath); err != nil {
 				return &errors.GitError{Operation: fmt.Sprintf("create tag '%s'", tagName), Err: err}
 			}
 			fmt.Printf("Created tag '%s'\n", tagName)
@@ -290,7 +395,7 @@ func handleContinue(state *model.MergeState, branchConfig config.BranchConfig) e
 		if err := util.SaveMergeState(state); err != nil {
 			return &errors.GitError{Operation: "save merge state", Err: err}
 		}
-		return handleContinue(state, branchConfig)
+		return handleContinue(state, branchConfig, tagOptions)
 
 	case "update_children":
 		// Find next child branch to update
@@ -315,7 +420,7 @@ func handleContinue(state *model.MergeState, branchConfig config.BranchConfig) e
 			if err := util.SaveMergeState(state); err != nil {
 				return &errors.GitError{Operation: "save merge state", Err: err}
 			}
-			return handleContinue(state, branchConfig)
+			return handleContinue(state, branchConfig, tagOptions)
 		}
 
 		// Update the next child branch
@@ -351,7 +456,7 @@ func handleContinue(state *model.MergeState, branchConfig config.BranchConfig) e
 		}
 
 		// Continue with next branch
-		return handleContinue(state, branchConfig)
+		return handleContinue(state, branchConfig, tagOptions)
 
 	case "delete_branch":
 		// Ensure we're on the parent branch before deletion
@@ -407,8 +512,8 @@ func handleAbort(state *model.MergeState) error {
 	return nil
 }
 
-// createTag creates a new Git tag with the given name and message
-func createTag(tagName, targetBranch, message string) error {
+// createTagWithOptions creates a new Git tag with the given name and message, and handles signing and message file
+func createTagWithOptions(tagName, targetBranch, message string, shouldSign bool, signingKey string, useMessageFile bool, messageFilePath string) error {
 	// Check if tag already exists
 	cmd := exec.Command("git", "show-ref", "--tags", tagName)
 	if err := cmd.Run(); err == nil {
@@ -416,11 +521,58 @@ func createTag(tagName, targetBranch, message string) error {
 		return nil
 	}
 
-	// Create annotated tag
-	cmd = exec.Command("git", "tag", "-a", tagName, "-m", message)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create tag: %w", err)
+	// Build command arguments
+	args := []string{"tag"}
+
+	// Use annotated tag
+	args = append(args, "-a")
+
+	// Apply signing if requested
+	if shouldSign {
+		args = append(args, "-s")
+
+		// Apply signing key if specified
+		if signingKey != "" {
+			args = append(args, "-u", signingKey)
+		}
 	}
 
+	// Apply tag name
+	args = append(args, tagName)
+
+	// Apply message
+	if useMessageFile {
+		args = append(args, "-F", messageFilePath)
+	} else {
+		args = append(args, "-m", message)
+	}
+
+	// Execute tag command
+	cmd = exec.Command("git", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create tag: %w (output: %s)", err, string(output))
+	}
+
+	return nil
+}
+
+// Old createTag function can now delegate to createTagWithOptions
+func createTag(tagName, targetBranch, message string) error {
+	return createTagWithOptions(tagName, targetBranch, message, false, "", false, "")
+}
+
+// getBoolFlag converts two opposite boolean flags into a single *bool value
+// If positive is true, returns &true
+// If negative is true, returns &false
+// If neither is set, returns nil
+func getBoolFlag(positive, negative bool) *bool {
+	if positive {
+		return &positive
+	}
+	if negative {
+		falseBool := false
+		return &falseBool
+	}
 	return nil
 }

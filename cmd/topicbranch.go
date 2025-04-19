@@ -92,8 +92,28 @@ func registerBranchCommand(branchType string) {
 			abortOp, _ := cmd.Flags().GetBool("abort")
 			force, _ := cmd.Flags().GetBool("force")
 
+			// Get tag-related flags
+			tag, _ := cmd.Flags().GetBool("tag")
+			noTag, _ := cmd.Flags().GetBool("notag")
+			sign, _ := cmd.Flags().GetBool("sign")
+			noSign, _ := cmd.Flags().GetBool("no-sign")
+			signingKey, _ := cmd.Flags().GetString("signingkey")
+			message, _ := cmd.Flags().GetString("message")
+			messageFile, _ := cmd.Flags().GetString("messagefile")
+			tagName, _ := cmd.Flags().GetString("tagname")
+
+			// Create tag options
+			tagOptions := &TagOptions{
+				ShouldTag:   getBoolFlag(tag, noTag),
+				ShouldSign:  getBoolFlag(sign, noSign),
+				SigningKey:  signingKey,
+				Message:     message,
+				MessageFile: messageFile,
+				TagName:     tagName,
+			}
+
 			// Call the generic finish command with the branch type and name
-			FinishCommand(branchType, args[0], continueOp, abortOp, force)
+			FinishCommand(branchType, args[0], continueOp, abortOp, force, tagOptions)
 		},
 	}
 
@@ -101,6 +121,16 @@ func registerBranchCommand(branchType string) {
 	finishCmd.Flags().BoolP("continue", "c", false, "Continue the finish operation after resolving conflicts")
 	finishCmd.Flags().BoolP("abort", "a", false, "Abort the finish operation and return to the original state")
 	finishCmd.Flags().BoolP("force", "f", false, "Force finish a non-standard branch using this branch type's strategy")
+
+	// Add tag-related flags
+	finishCmd.Flags().Bool("tag", false, "Create a tag for the finished branch")
+	finishCmd.Flags().Bool("notag", false, "Don't create a tag for the finished branch")
+	finishCmd.Flags().Bool("sign", false, "Sign the tag cryptographically")
+	finishCmd.Flags().Bool("no-sign", false, "Don't sign the tag cryptographically")
+	finishCmd.Flags().String("signingkey", "", "Use the given GPG key for the digital signature")
+	finishCmd.Flags().StringP("message", "m", "", "Use the given message for the tag")
+	finishCmd.Flags().String("messagefile", "", "Use contents of the given file as tag message")
+	finishCmd.Flags().String("tagname", "", "Use the given tag name instead of the default")
 
 	branchCmd.AddCommand(finishCmd)
 
