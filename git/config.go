@@ -16,6 +16,17 @@ func GetConfig(key string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// GetConfigInDir gets a Git config value in the specified directory
+func GetConfigInDir(dir, key string) (string, error) {
+	cmd := exec.Command("git", "config", "--get", key)
+	cmd.Dir = dir
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get git config %s in dir %s: %w", key, dir, err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 // SetConfig sets a Git config value
 func SetConfig(key string, value string) error {
 	cmd := exec.Command("git", "config", key, value)

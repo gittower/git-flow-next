@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/gittower/git-flow-next/git"
@@ -11,6 +13,7 @@ import (
 func DefaultConfig() *Config {
 	return &Config{
 		Version: "1.0",
+		Remote:  "origin", // Default remote name
 		Branches: map[string]BranchConfig{
 			"main": {
 				Type:               string(BranchTypeBase),
@@ -68,6 +71,12 @@ func DefaultConfig() *Config {
 
 // LoadConfig loads the git-flow configuration from Git config
 func LoadConfig() (*Config, error) {
+	// Get current directory for git operations
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current directory: %w", err)
+	}
+
 	// Check if git-flow is initialized
 	initialized, err := IsInitialized()
 	if err != nil {
@@ -80,7 +89,7 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// Get git-flow version
-	version, err := git.GetConfig("gitflow.version")
+	version, err := git.GetConfigInDir(currentDir, "gitflow.version")
 	if err != nil {
 		// If no version is set, assume it's not initialized properly
 		return DefaultConfig(), nil
@@ -89,34 +98,57 @@ func LoadConfig() (*Config, error) {
 	// Create config with version
 	config := &Config{
 		Version:  version,
+		Remote:   "origin", // Default remote
 		Branches: make(map[string]BranchConfig),
 	}
 
-	// Get all gitflow.branch.* config entries
-	branchConfigs, err := git.GetAllConfig("gitflow\\.branch\\.")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get branch configurations: %w", err)
+	// Get custom remote name if set
+	remote, err := git.GetConfigInDir(currentDir, "gitflow.origin")
+	if err == nil && remote != "" {
+		config.Remote = remote
 	}
 
-	// Process branch configurations
+	// Get all gitflow.branch.* config entries
+	// We need to adapt GetAllConfig to work with directory
+	cmd := exec.Command("git", "config", "--get-regexp", "gitflow\\.branch\\.")
+	cmd.Dir = currentDir
+	output, err := cmd.Output()
+
+	// Process branch configurations from command output
 	branchMap := make(map[string]map[string]string)
-	for key, value := range branchConfigs {
-		// Parse key: gitflow.branch.<branchname>.<property>
-		parts := strings.Split(key, ".")
-		if len(parts) < 4 {
-			continue
+
+	if err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if line == "" {
+				continue
+			}
+
+			parts := strings.SplitN(line, " ", 2)
+			if len(parts) != 2 {
+				continue
+			}
+
+			key := parts[0]
+			value := parts[1]
+
+			// Parse key: gitflow.branch.<branchname>.<property>
+			keyParts := strings.Split(key, ".")
+			if len(keyParts) < 4 {
+				continue
+			}
+
+			branchName := strings.ToLower(keyParts[2])
+			property := strings.ToLower(keyParts[3])
+
+			// Initialize branch map if needed
+			if _, ok := branchMap[branchName]; !ok {
+				branchMap[branchName] = make(map[string]string)
+			}
+
+			// Add property to branch map
+			branchMap[branchName][property] = value
 		}
-
-		branchName := strings.ToLower(parts[2])
-		property := strings.ToLower(parts[3])
-
-		// Initialize branch map if needed
-		if _, ok := branchMap[branchName]; !ok {
-			branchMap[branchName] = make(map[string]string)
-		}
-
-		// Add property to branch map
-		branchMap[branchName][property] = value
 	}
 
 	// Convert branch map to BranchConfig objects
@@ -157,7 +189,13 @@ func LoadConfig() (*Config, error) {
 
 // IsInitialized checks if git-flow is initialized in the repository
 func IsInitialized() (bool, error) {
-	version, err := git.GetConfig("gitflow.version")
+	// Get current directory for git operations
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return false, fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	version, err := git.GetConfigInDir(currentDir, "gitflow.version")
 	if err != nil {
 		// If error is because the key doesn't exist, it's not initialized
 		return false, nil
@@ -167,14 +205,20 @@ func IsInitialized() (bool, error) {
 
 // CheckGitFlowAVHConfig checks if git-flow-avh configuration exists
 func CheckGitFlowAVHConfig() bool {
+	// Get current directory for git operations
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return false
+	}
+
 	// Check for gitflow.branch.master (used in git-flow-avh)
-	master, err := git.GetConfig("gitflow.branch.master")
+	master, err := git.GetConfigInDir(currentDir, "gitflow.branch.master")
 	if err == nil && master != "" {
 		return true
 	}
 
 	// Check for gitflow.prefix.feature (used in git-flow-avh)
-	featurePrefix, err := git.GetConfig("gitflow.prefix.feature")
+	featurePrefix, err := git.GetConfigInDir(currentDir, "gitflow.prefix.feature")
 	if err == nil && featurePrefix != "" {
 		return true
 	}
@@ -186,6 +230,18 @@ func CheckGitFlowAVHConfig() bool {
 func ImportGitFlowAVHConfig() (*Config, error) {
 	config := DefaultConfig()
 
+	// Get current directory for git operations
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Check for custom remote in git-flow-avh config
+	remote, err := git.GetConfigInDir(currentDir, "gitflow.origin")
+	if err == nil && remote != "" {
+		config.Remote = remote
+	}
+
 	// Map of git-flow-avh config keys to our branch names
 	branchMap := map[string]string{
 		"master":  "main",
@@ -194,7 +250,7 @@ func ImportGitFlowAVHConfig() (*Config, error) {
 
 	// Get branch names from git-flow-avh config
 	for avhName, ourName := range branchMap {
-		branchName, err := git.GetConfig("gitflow.branch." + avhName)
+		branchName, err := git.GetConfigInDir(currentDir, "gitflow.branch."+avhName)
 		if err == nil && branchName != "" {
 			// Update branch name in our config
 			branchConfig := config.Branches[ourName]
@@ -227,7 +283,7 @@ func ImportGitFlowAVHConfig() (*Config, error) {
 	for avhName, ourName := range prefixMap {
 		if avhName == "versiontag" {
 			// Special handling for version tag prefix
-			prefix, err := git.GetConfig("gitflow.prefix." + avhName)
+			prefix, err := git.GetConfigInDir(currentDir, "gitflow.prefix."+avhName)
 			if err == nil && prefix != "" {
 				// Set the tag prefix for release and hotfix branches
 				releaseConfig := config.Branches["release"]
@@ -247,7 +303,7 @@ func ImportGitFlowAVHConfig() (*Config, error) {
 			continue
 		}
 
-		prefix, err := git.GetConfig("gitflow.prefix." + avhName)
+		prefix, err := git.GetConfigInDir(currentDir, "gitflow.prefix."+avhName)
 		if err == nil && prefix != "" {
 			// Update prefix in our config
 			branchConfig := config.Branches[ourName]

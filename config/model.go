@@ -4,6 +4,7 @@ package config
 type Config struct {
 	Version  string
 	Branches map[string]BranchConfig
+	Remote   string // Name of the remote to use for all operations
 }
 
 // BranchConfig represents the configuration for a branch type
