@@ -145,3 +145,43 @@ func GetCurrentBranch(t *testing.T, dir string) string {
 	}
 	return strings.TrimSpace(output)
 }
+
+// AddRemote creates a bare repository and adds it as a remote to the test repository
+// remoteName defaults to "origin" if empty
+// pushAll determines whether to push all branches to the remote
+func AddRemote(t *testing.T, dir string, remoteName string, pushAll bool) (string, error) {
+	if remoteName == "" {
+		remoteName = "origin"
+	}
+
+	// Create a temporary directory for the bare repository
+	bareDir, err := os.MkdirTemp("", "git-flow-test-remote-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary directory for remote: %w", err)
+	}
+
+	// Initialize bare repository
+	_, err = RunGit(t, bareDir, "init", "--bare")
+	if err != nil {
+		os.RemoveAll(bareDir)
+		return "", fmt.Errorf("failed to initialize bare repository: %w", err)
+	}
+
+	// Add the bare repository as a remote
+	_, err = RunGit(t, dir, "remote", "add", remoteName, bareDir)
+	if err != nil {
+		os.RemoveAll(bareDir)
+		return "", fmt.Errorf("failed to add remote: %w", err)
+	}
+
+	// If pushAll is true, push all branches to the remote
+	if pushAll {
+		_, err = RunGit(t, dir, "push", "--all", remoteName)
+		if err != nil {
+			os.RemoveAll(bareDir)
+			return "", fmt.Errorf("failed to push all branches to remote: %w", err)
+		}
+	}
+
+	return bareDir, nil
+}

@@ -283,3 +283,13 @@ func Fetch(remote string) error {
 	}
 	return nil
 }
+
+// DeleteRemoteBranch deletes a branch from a remote repository
+func DeleteRemoteBranch(remote, branch string) error {
+	cmd := exec.Command("git", "push", remote, ":"+branch)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to delete remote branch: %s", string(output))
+	}
+	return nil
+}

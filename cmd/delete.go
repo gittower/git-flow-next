@@ -9,7 +9,7 @@ import (
 )
 
 // DeleteCommand handles the deletion of a topic branch
-func DeleteCommand(branchType string, name string, force bool) error {
+func DeleteCommand(branchType string, name string, force bool, remote *bool) error {
 	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -51,12 +51,42 @@ func DeleteCommand(branchType string, name string, force bool) error {
 		}
 	}
 
+	// Determine if we should delete remote branch
+	deleteRemote := false
+	if remote != nil {
+		// Command line flag takes precedence
+		deleteRemote = *remote
+	} else {
+		// Check config if not specified
+		configKey := fmt.Sprintf("gitflow.branch.%s.deleteRemote", branchType)
+		remoteConfig, err := git.GetConfig(configKey)
+		if err == nil && remoteConfig == "true" {
+			deleteRemote = true
+		}
+	}
+
 	// Delete the branch with appropriate flag
 	deleteErr := git.DeleteBranch(fullBranchName, force)
 	if deleteErr != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", fullBranchName), Err: deleteErr}
 	}
 
-	fmt.Printf("Deleted branch %s\n", fullBranchName)
+	// Delete remote branch if requested
+	if deleteRemote {
+		// Get remote name from config
+		remoteName, err := git.GetConfig("gitflow.remote")
+		if err != nil {
+			remoteName = "origin" // Default to origin if not configured
+		}
+
+		// Delete remote branch
+		if err := git.DeleteRemoteBranch(remoteName, fullBranchName); err != nil {
+			return &errors.GitError{Operation: fmt.Sprintf("delete remote branch '%s'", fullBranchName), Err: err}
+		}
+		fmt.Printf("Deleted branch %s and its remote tracking branch\n", fullBranchName)
+	} else {
+		fmt.Printf("Deleted branch %s\n", fullBranchName)
+	}
+
 	return nil
 }
