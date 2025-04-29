@@ -1,4 +1,4 @@
-package model
+package mergestate
 
 import (
 	"encoding/json"

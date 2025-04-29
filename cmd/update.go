@@ -9,7 +9,7 @@ import (
 	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/internal/git"
 	"github.com/gittower/git-flow-next/internal/update"
-	"github.com/gittower/git-flow-next/model"
+	"github.com/gittower/git-flow-next/internal/mergestate"
 	"github.com/spf13/cobra"
 )
 
@@ -167,7 +167,7 @@ func executeUpdate(branchType string, name string) error {
 	}
 
 	// Create merge state
-	state := &model.MergeState{
+	state := &mergestate.MergeState{
 		Action:         "update",
 		BranchName:     branchName,
 		ParentBranch:   parentBranch,

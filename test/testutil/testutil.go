@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gittower/git-flow-next/model"
+	"github.com/gittower/git-flow-next/internal/mergestate"
 )
 
 // ExitError represents an error with an exit code
@@ -21,14 +21,14 @@ func (e *ExitError) Error() string {
 }
 
 // LoadMergeState loads the merge state from the test repository
-func LoadMergeState(t *testing.T, dir string) (*model.MergeState, error) {
+func LoadMergeState(t *testing.T, dir string) (*mergestate.MergeState, error) {
 	stateFile := filepath.Join(dir, ".git", "gitflow", "state", "merge.json")
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read merge state file: %w", err)
 	}
 
-	var state model.MergeState
+	var state mergestate.MergeState
 	if err := json.Unmarshal(data, &state); err != nil {
 		return nil, fmt.Errorf("failed to parse merge state file: %w", err)
 	}
