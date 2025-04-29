@@ -13,7 +13,14 @@ import (
 
 // Test functions
 
-// TestFinishFeatureBranch tests the finish command for feature branches
+// TestFinishFeatureBranch tests the basic feature branch finishing functionality.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch
+// 3. Adds changes to the feature branch
+// 4. Finishes the feature branch
+// 5. Verifies the branch is merged into develop
+// 6. Verifies the feature branch is deleted
 func TestFinishFeatureBranch(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -75,7 +82,15 @@ func TestFinishFeatureBranch(t *testing.T) {
 	}
 }
 
-// TestFinishReleaseBranch tests the finish command for release branches
+// TestFinishReleaseBranch tests the basic release branch finishing functionality.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a release branch
+// 3. Adds changes to the release branch
+// 4. Finishes the release branch
+// 5. Verifies the branch is merged into main and develop
+// 6. Verifies a tag is created
+// 7. Verifies the release branch is deleted
 func TestFinishReleaseBranch(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -172,7 +187,15 @@ func TestFinishReleaseBranch(t *testing.T) {
 	}
 }
 
-// TestFinishHotfixBranch tests the finish command for hotfix branches
+// TestFinishHotfixBranch tests the basic hotfix branch finishing functionality.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a hotfix branch
+// 3. Adds changes to the hotfix branch
+// 4. Finishes the hotfix branch
+// 5. Verifies the branch is merged into main and develop
+// 6. Verifies a tag is created
+// 7. Verifies the hotfix branch is deleted
 func TestFinishHotfixBranch(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -263,7 +286,14 @@ func TestFinishHotfixBranch(t *testing.T) {
 	}
 }
 
-// TestFinishWithCustomConfig tests the finish command with custom configuration
+// TestFinishWithCustomConfig tests finishing branches with custom configuration.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with custom config
+// 2. Creates a feature branch
+// 3. Adds changes to the feature branch
+// 4. Finishes the feature branch
+// 5. Verifies the branch is merged into the custom develop branch
+// 6. Verifies the feature branch is deleted
 func TestFinishWithCustomConfig(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -329,7 +359,11 @@ func TestFinishWithCustomConfig(t *testing.T) {
 	}
 }
 
-// TestFinishNonExistentBranch tests the finish command with a non-existent branch
+// TestFinishNonExistentBranch tests the behavior when attempting to finish a non-existent branch.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Attempts to finish a non-existent branch
+// 3. Verifies the operation fails with appropriate error
 func TestFinishNonExistentBranch(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -353,7 +387,13 @@ func TestFinishNonExistentBranch(t *testing.T) {
 	}
 }
 
-// TestFinishWithMergeConflict tests that the finish command properly handles merge conflicts
+// TestFinishWithMergeConflict tests the behavior when finishing a branch with merge conflicts.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch
+// 3. Adds conflicting changes to both feature and develop branches
+// 4. Attempts to finish the feature branch
+// 5. Verifies the operation fails with merge conflict
 func TestFinishWithMergeConflict(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -439,6 +479,14 @@ func TestFinishWithMergeConflict(t *testing.T) {
 	}
 }
 
+// TestFinishWithMergeAbort tests aborting a merge during branch finishing.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch
+// 3. Adds conflicting changes to both feature and develop branches
+// 4. Attempts to finish the feature branch
+// 5. Aborts the merge when conflict occurs
+// 6. Verifies the branches are in their original state
 func TestFinishWithMergeAbort(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -524,6 +572,14 @@ func TestFinishWithMergeAbort(t *testing.T) {
 	}
 }
 
+// TestFinishWithRebaseConflict tests the behavior when finishing a branch with rebase conflicts.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch
+// 3. Adds changes to develop branch
+// 4. Adds conflicting changes to feature branch
+// 5. Attempts to finish the feature branch with rebase
+// 6. Verifies the operation fails with rebase conflict
 func TestFinishWithRebaseConflict(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -580,7 +636,14 @@ func TestFinishWithRebaseConflict(t *testing.T) {
 	}
 }
 
-// TestFinishWithMergeContinue tests the continue functionality after resolving a merge conflict
+// TestFinishWithMergeContinue tests continuing a merge after resolving conflicts.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch
+// 3. Adds conflicting changes to both feature and develop branches
+// 4. Attempts to finish the feature branch
+// 5. Resolves conflicts and continues the merge
+// 6. Verifies the branch is successfully finished
 func TestFinishWithMergeContinue(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -684,7 +747,13 @@ func TestFinishWithMergeContinue(t *testing.T) {
 	}
 }
 
-// TestFinishWithChildBranchConflict tests that conflicts in child base branches are handled properly
+// TestFinishWithChildBranchConflict tests the behavior when finishing a branch with child branches.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch
+// 3. Creates a child branch from the feature branch
+// 4. Attempts to finish the feature branch
+// 5. Verifies the operation fails due to child branch
 func TestFinishWithChildBranchConflict(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -841,7 +910,14 @@ func TestFinishWithChildBranchConflict(t *testing.T) {
 	}
 }
 
-// TestFinishReleaseWithMergeContinue tests the continue functionality after resolving a merge conflict for release branches
+// TestFinishReleaseWithMergeContinue tests continuing a merge after resolving conflicts in a release branch.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a release branch
+// 3. Adds conflicting changes to both release and develop branches
+// 4. Attempts to finish the release branch
+// 5. Resolves conflicts and continues the merge
+// 6. Verifies the release is successfully finished
 func TestFinishReleaseWithMergeContinue(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -954,7 +1030,14 @@ func TestFinishReleaseWithMergeContinue(t *testing.T) {
 	}
 }
 
-// TestFinishNonStandardBranchWithForce tests finishing a non-standard branch with force flag
+// TestFinishNonStandardBranchWithForce tests finishing a non-standard branch with force flag.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a non-standard branch
+// 3. Adds changes to the branch
+// 4. Finishes the branch with force flag
+// 5. Verifies the branch is merged into develop
+// 6. Verifies the branch is deleted
 func TestFinishNonStandardBranchWithForce(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -1010,7 +1093,12 @@ func TestFinishNonStandardBranchWithForce(t *testing.T) {
 	}
 }
 
-// TestFinishNonStandardBranchWithoutForce tests finishing a non-standard branch without force flag
+// TestFinishNonStandardBranchWithoutForce tests the behavior when finishing a non-standard branch without force flag.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a non-standard branch
+// 3. Attempts to finish the branch without force flag
+// 4. Verifies the operation fails with appropriate error
 func TestFinishNonStandardBranchWithoutForce(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -1061,7 +1149,15 @@ func TestFinishNonStandardBranchWithoutForce(t *testing.T) {
 	}
 }
 
-// TestFinishNonStandardBranchWithTag tests finishing a non-standard branch with tag creation
+// TestFinishNonStandardBranchWithTag tests finishing a non-standard branch with tag creation.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a non-standard branch
+// 3. Adds changes to the branch
+// 4. Finishes the branch with tag flag
+// 5. Verifies the branch is merged into develop
+// 6. Verifies a tag is created
+// 7. Verifies the branch is deleted
 func TestFinishNonStandardBranchWithTag(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -1110,7 +1206,15 @@ func TestFinishNonStandardBranchWithTag(t *testing.T) {
 	}
 }
 
-// TestFinishFeatureWithTag tests finishing a feature branch with the --tag flag
+// TestFinishFeatureWithTag tests finishing a feature branch with tag creation.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch
+// 3. Adds changes to the feature branch
+// 4. Finishes the feature branch with tag flag
+// 5. Verifies the branch is merged into develop
+// 6. Verifies a tag is created
+// 7. Verifies the feature branch is deleted
 func TestFinishFeatureWithTag(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -1167,7 +1271,15 @@ func TestFinishFeatureWithTag(t *testing.T) {
 	}
 }
 
-// TestFinishReleaseWithCustomTag tests finishing a release branch with a custom tag name
+// TestFinishReleaseWithCustomTag tests finishing a release branch with custom tag prefix.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with custom tag prefix
+// 2. Creates a release branch
+// 3. Adds changes to the release branch
+// 4. Finishes the release branch
+// 5. Verifies the branch is merged into main and develop
+// 6. Verifies a tag is created with custom prefix
+// 7. Verifies the release branch is deleted
 func TestFinishReleaseWithCustomTag(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -1227,7 +1339,15 @@ func TestFinishReleaseWithCustomTag(t *testing.T) {
 	}
 }
 
-// TestFinishReleaseWithCustomMessage tests finishing a release branch with a custom tag message
+// TestFinishReleaseWithCustomMessage tests finishing a release branch with custom commit message.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a release branch
+// 3. Adds changes to the release branch
+// 4. Finishes the release branch with custom message
+// 5. Verifies the branch is merged into main and develop
+// 6. Verifies the commit message matches the custom message
+// 7. Verifies the release branch is deleted
 func TestFinishReleaseWithCustomMessage(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -1293,7 +1413,15 @@ func TestFinishReleaseWithCustomMessage(t *testing.T) {
 	}
 }
 
-// TestFinishReleaseWithNoTag tests finishing a release branch with the --notag flag
+// TestFinishReleaseWithNoTag tests finishing a release branch without creating a tag.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a release branch
+// 3. Adds changes to the release branch
+// 4. Finishes the release branch with no-tag flag
+// 5. Verifies the branch is merged into main and develop
+// 6. Verifies no tag is created
+// 7. Verifies the release branch is deleted
 func TestFinishReleaseWithNoTag(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -1350,7 +1478,16 @@ func TestFinishReleaseWithNoTag(t *testing.T) {
 	}
 }
 
-// TestFinishReleaseWithMessageFile tests finishing a release branch with a message file for the tag
+// TestFinishReleaseWithMessageFile tests finishing a release branch using a message file.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a release branch
+// 3. Adds changes to the release branch
+// 4. Creates a message file
+// 5. Finishes the release branch using the message file
+// 6. Verifies the branch is merged into main and develop
+// 7. Verifies the commit message matches the file content
+// 8. Verifies the release branch is deleted
 func TestFinishReleaseWithMessageFile(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -1440,7 +1577,16 @@ func TestFinishReleaseWithMessageFile(t *testing.T) {
 	}
 }
 
-// TestFinishReleaseWithConfigMessageFile tests finishing a release branch with a message file configured via git config
+// TestFinishReleaseWithConfigMessageFile tests finishing a release branch using a message file from config.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Configures a default message file
+// 3. Creates a release branch
+// 4. Adds changes to the release branch
+// 5. Finishes the release branch
+// 6. Verifies the branch is merged into main and develop
+// 7. Verifies the commit message matches the config file content
+// 8. Verifies the release branch is deleted
 func TestFinishReleaseWithConfigMessageFile(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -1515,7 +1661,16 @@ func TestFinishReleaseWithConfigMessageFile(t *testing.T) {
 	}
 }
 
-// TestFinishTagFromBranchConfig tests that branch-specific git config for tags works correctly
+// TestFinishTagFromBranchConfig tests finishing a branch with tag configuration from branch config.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Configures tag settings for a branch type
+// 3. Creates a branch of that type
+// 4. Adds changes to the branch
+// 5. Finishes the branch
+// 6. Verifies the branch is merged
+// 7. Verifies a tag is created according to config
+// 8. Verifies the branch is deleted
 func TestFinishTagFromBranchConfig(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -1573,7 +1728,16 @@ func TestFinishTagFromBranchConfig(t *testing.T) {
 	}
 }
 
-// TestFinishNotagFromCLI tests that command-line --notag option overrides branch config settings
+// TestFinishNotagFromCLI tests that the --no-tag flag overrides configuration.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Configures tag creation for a branch type
+// 3. Creates a branch of that type
+// 4. Adds changes to the branch
+// 5. Finishes the branch with --no-tag flag
+// 6. Verifies the branch is merged
+// 7. Verifies no tag is created despite config
+// 8. Verifies the branch is deleted
 func TestFinishNotagFromCLI(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -1644,7 +1808,16 @@ func TestFinishNotagFromCLI(t *testing.T) {
 	}
 }
 
-// TestFinishNotagFromConfig tests that gitflow.<topic>.finish.notag config overrides branch tag setting
+// TestFinishNotagFromConfig tests that tag configuration can be disabled.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Configures tag creation to be disabled for a branch type
+// 3. Creates a branch of that type
+// 4. Adds changes to the branch
+// 5. Finishes the branch
+// 6. Verifies the branch is merged
+// 7. Verifies no tag is created
+// 8. Verifies the branch is deleted
 func TestFinishNotagFromConfig(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)

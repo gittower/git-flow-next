@@ -5,7 +5,12 @@ import (
 	"testing"
 )
 
-// TestListFeatureBranches tests the list command for feature branches
+// TestListFeatureBranches tests the listing of feature branches.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates multiple feature branches
+// 3. Lists feature branches
+// 4. Verifies the output contains all created feature branches
 func TestListFeatureBranches(t *testing.T) {
 	// Setup
 	dir := setupTestRepo(t)
@@ -49,7 +54,12 @@ func TestListFeatureBranches(t *testing.T) {
 	}
 }
 
-// TestListReleaseAndHotfixBranches tests the list command for release and hotfix branches
+// TestListReleaseAndHotfixBranches tests the listing of release and hotfix branches.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates release and hotfix branches
+// 3. Lists release and hotfix branches separately
+// 4. Verifies the output contains the created branches
 func TestListReleaseAndHotfixBranches(t *testing.T) {
 	// Setup
 	dir := setupTestRepo(t)
@@ -104,7 +114,12 @@ func TestListReleaseAndHotfixBranches(t *testing.T) {
 	}
 }
 
-// TestListWithCustomConfig tests the list command with custom configuration
+// TestListWithCustomConfig tests the listing of branches with custom configuration.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with custom config
+// 2. Creates a feature branch with custom prefix
+// 3. Lists feature branches
+// 4. Verifies the output contains the branch with custom prefix
 func TestListWithCustomConfig(t *testing.T) {
 	// Setup
 	dir := setupTestRepo(t)
@@ -112,7 +127,7 @@ func TestListWithCustomConfig(t *testing.T) {
 
 	// Initialize git-flow with custom configuration
 	input := "custom-main\ncustom-dev\nf/\nr/\nh/\ns/\n"
-	output, err := runGitFlowWithInput(t, dir, input, "init", )
+	output, err := runGitFlowWithInput(t, dir, input, "init")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
@@ -139,7 +154,11 @@ func TestListWithCustomConfig(t *testing.T) {
 	}
 }
 
-// TestListEmptyBranches tests the list command when there are no branches of a type
+// TestListEmptyBranches tests the listing of branches when no branches of a type exist.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Lists feature branches without creating any
+// 3. Verifies the output indicates no branches found
 func TestListEmptyBranches(t *testing.T) {
 	// Setup
 	dir := setupTestRepo(t)

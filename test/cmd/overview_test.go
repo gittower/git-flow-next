@@ -7,7 +7,17 @@ import (
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
-// TestOverviewWithDefaultConfig tests the overview command with default configuration
+// TestOverviewWithDefaultConfig tests the overview command with default configuration.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Runs the overview command
+// 3. Verifies the output contains all expected sections:
+//   - Base branches section
+//   - Topic branch configurations
+//   - Active topic branches
+//
+// 4. Verifies the base branch relationships (develop -> main -> root)
+// 5. Verifies the merge strategy information for base branches
 func TestOverviewWithDefaultConfig(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -57,7 +67,16 @@ func TestOverviewWithDefaultConfig(t *testing.T) {
 	}
 }
 
-// TestOverviewWithActiveBranches tests the overview command with active branches
+// TestOverviewWithActiveBranches tests the overview command with active branches.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch and a release branch
+// 3. Runs the overview command
+// 4. Verifies the output contains both active branches:
+//   - feature/my-feature
+//   - release/1.0.0
+//
+// 5. Verifies the branch types and names are correctly displayed
 func TestOverviewWithActiveBranches(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -97,7 +116,17 @@ func TestOverviewWithActiveBranches(t *testing.T) {
 	}
 }
 
-// TestOverviewWithCustomConfig tests the overview command with custom configuration
+// TestOverviewWithCustomConfig tests the overview command with custom configuration.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with custom config:
+//   - Custom main and develop branch names
+//   - Custom prefixes for all branch types
+//   - Custom tag prefix
+//
+// 2. Runs the overview command
+// 3. Verifies the output contains custom base branch names and relationships
+// 4. Verifies the output contains all custom topic branch prefixes
+// 5. Verifies the branch relationships reflect the custom configuration
 func TestOverviewWithCustomConfig(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -150,7 +179,13 @@ func TestOverviewWithCustomConfig(t *testing.T) {
 	}
 }
 
-// TestOverviewWithCurrentBranch tests the overview command with the current branch highlighted
+// TestOverviewWithCurrentBranch tests the overview command with the current branch highlighted.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates and checks out a feature branch
+// 3. Runs the overview command
+// 4. Verifies the current branch is marked with an asterisk (*)
+// 5. Verifies the branch information is correct and complete
 func TestOverviewWithCurrentBranch(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)

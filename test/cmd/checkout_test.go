@@ -7,7 +7,13 @@ import (
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
-// TestCheckoutFeature tests checking out a feature branch
+// TestCheckoutFeature tests the basic branch checkout functionality for feature branches.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch
+// 3. Switches back to develop branch
+// 4. Checks out the feature branch using git-flow
+// 5. Verifies we're on the correct branch
 func TestCheckoutFeature(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -44,7 +50,14 @@ func TestCheckoutFeature(t *testing.T) {
 	}
 }
 
-// TestCheckoutFeatureWithPrefix tests checking out a feature branch using a prefix
+// TestCheckoutFeatureWithPrefix tests checking out a feature branch using a unique prefix.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates multiple feature branches
+// 3. Switches back to develop branch
+// 4. Checks out a feature branch using a unique prefix
+// 5. Verifies we're on the correct branch
+// 6. Attempts to checkout with ambiguous prefix (should fail)
 func TestCheckoutFeatureWithPrefix(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -92,7 +105,11 @@ func TestCheckoutFeatureWithPrefix(t *testing.T) {
 	}
 }
 
-// TestCheckoutNonExistentFeature tests checking out a non-existent feature branch
+// TestCheckoutNonExistentFeature tests the behavior when attempting to checkout a non-existent branch.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Attempts to checkout a non-existent branch
+// 3. Verifies the operation fails with appropriate error
 func TestCheckoutNonExistentFeature(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -111,7 +128,14 @@ func TestCheckoutNonExistentFeature(t *testing.T) {
 	}
 }
 
-// TestCheckoutFeatureWithShowCommands tests checking out a feature branch with --showcommands flag
+// TestCheckoutFeatureWithShowCommands tests checking out a feature branch with the --showcommands flag.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch
+// 3. Switches back to develop branch
+// 4. Checks out the feature branch with --showcommands flag
+// 5. Verifies the output contains the git command
+// 6. Verifies we're on the correct branch
 func TestCheckoutFeatureWithShowCommands(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -153,7 +177,11 @@ func TestCheckoutFeatureWithShowCommands(t *testing.T) {
 	}
 }
 
-// TestCheckoutWithInvalidBranchType tests checking out with an invalid branch type
+// TestCheckoutWithInvalidBranchType tests the behavior when attempting to checkout with an invalid branch type.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Attempts to checkout using an invalid branch type
+// 3. Verifies the operation fails with appropriate error
 func TestCheckoutWithInvalidBranchType(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -172,7 +200,12 @@ func TestCheckoutWithInvalidBranchType(t *testing.T) {
 	}
 }
 
-// TestCheckoutFeatureNoArgs tests checking out without providing a branch name
+// TestCheckoutFeatureNoArgs tests the behavior when running checkout without providing a branch name.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates multiple feature branches
+// 3. Runs checkout without args to list branches
+// 4. Verifies the output contains all feature branches
 func TestCheckoutFeatureNoArgs(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)

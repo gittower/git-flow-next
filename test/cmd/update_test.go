@@ -10,6 +10,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestUpdateFeatureBranch tests the basic feature branch update functionality.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch
+// 3. Makes changes in the develop branch
+// 4. Updates the feature branch
+// 5. Verifies the changes from develop are in the feature branch
 func TestUpdateFeatureBranch(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -63,6 +70,13 @@ func TestUpdateFeatureBranch(t *testing.T) {
 	assert.NoError(t, err, "develop changes should be in feature branch")
 }
 
+// TestUpdateWithMergeConflict tests the behavior when updating a branch with merge conflicts.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch
+// 3. Makes conflicting changes in both feature and develop branches
+// 4. Attempts to update the feature branch
+// 5. Verifies the operation fails with merge conflict
 func TestUpdateWithMergeConflict(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -122,6 +136,11 @@ func TestUpdateWithMergeConflict(t *testing.T) {
 	assert.Contains(t, output, "unresolved conflicts")
 }
 
+// TestUpdateNonExistentBranch tests the behavior when attempting to update a non-existent branch.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Attempts to update a non-existent branch
+// 3. Verifies the operation fails with appropriate error
 func TestUpdateNonExistentBranch(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -149,6 +168,14 @@ func TestUpdateNonExistentBranch(t *testing.T) {
 	assert.Contains(t, output, "does not exist")
 }
 
+// TestUpdateCurrentBranch tests updating the current branch without specifying its name.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch
+// 3. Makes changes in the develop branch
+// 4. Switches to the feature branch
+// 5. Updates the branch without specifying its name
+// 6. Verifies the changes from develop are in the feature branch
 func TestUpdateCurrentBranch(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -202,6 +229,13 @@ func TestUpdateCurrentBranch(t *testing.T) {
 	assert.NoError(t, err, "develop changes should be in feature branch")
 }
 
+// TestUpdateBaseBranch tests updating a base branch (develop) with changes from main.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Makes changes in the main branch
+// 3. Updates the develop branch with changes from main
+// 4. Verifies the changes from main are in develop
+// 5. Verifies we're still on the develop branch
 func TestUpdateBaseBranch(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

@@ -6,7 +6,13 @@ import (
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
-// TestRenameFeature tests renaming a feature branch
+// TestRenameFeature tests the basic functionality of renaming a feature branch.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch and adds some changes
+// 3. Renames the feature branch
+// 4. Verifies the old branch is deleted
+// 5. Verifies the new branch exists with the same content
 func TestRenameFeature(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -66,7 +72,12 @@ func TestRenameFeature(t *testing.T) {
 	}
 }
 
-// TestRenameCurrentFeature tests renaming the current feature branch
+// TestRenameCurrentFeature tests renaming the currently checked out feature branch.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates and checks out a feature branch
+// 3. Renames the current feature branch
+// 4. Verifies we're still on the renamed branch
 func TestRenameCurrentFeature(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -97,7 +108,11 @@ func TestRenameCurrentFeature(t *testing.T) {
 	}
 }
 
-// TestRenameNonExistentFeature tests renaming a non-existent feature branch
+// TestRenameNonExistentFeature tests the behavior when attempting to rename a non-existent feature branch.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Attempts to rename a non-existent feature branch
+// 3. Verifies the operation fails with appropriate error
 func TestRenameNonExistentFeature(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -116,7 +131,12 @@ func TestRenameNonExistentFeature(t *testing.T) {
 	}
 }
 
-// TestRenameToExistingFeature tests renaming a feature branch to a name that already exists
+// TestRenameToExistingFeature tests the behavior when attempting to rename a feature branch to a name that already exists.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates two feature branches
+// 3. Attempts to rename the first branch to the name of the second branch
+// 4. Verifies the operation fails with appropriate error
 func TestRenameToExistingFeature(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -147,7 +167,11 @@ func TestRenameToExistingFeature(t *testing.T) {
 	}
 }
 
-// TestRenameWithInvalidBranchType tests renaming with an invalid branch type
+// TestRenameWithInvalidBranchType tests the behavior when attempting to rename a branch with an invalid type.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Attempts to rename a branch with an invalid type
+// 3. Verifies the operation fails with appropriate error
 func TestRenameWithInvalidBranchType(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
