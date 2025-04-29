@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/gittower/git-flow-next/config"
-	"github.com/gittower/git-flow-next/errors"
+	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/internal/git"
 )
 

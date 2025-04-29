@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gittower/git-flow-next/errors"
+	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
