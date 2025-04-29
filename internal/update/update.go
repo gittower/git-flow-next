@@ -8,7 +8,6 @@ import (
 	"github.com/gittower/git-flow-next/errors"
 	"github.com/gittower/git-flow-next/git"
 	"github.com/gittower/git-flow-next/model"
-	"github.com/gittower/git-flow-next/util"
 )
 
 // UpdateBranchFromParent updates a branch with changes from its parent branch using the configured strategy
@@ -42,7 +41,7 @@ func UpdateBranchFromParent(branchName string, parentBranch string, strategy str
 		if strings.Contains(mergeErr.Error(), "conflict") {
 			if saveState && state != nil {
 				// Save merge state if requested
-				if err := util.SaveMergeState(state); err != nil {
+				if err := model.SaveMergeState(state); err != nil {
 					return &errors.GitError{Operation: "save merge state", Err: err}
 				}
 			}

@@ -11,7 +11,6 @@ import (
 	"github.com/gittower/git-flow-next/git"
 	"github.com/gittower/git-flow-next/internal/update"
 	"github.com/gittower/git-flow-next/model"
-	"github.com/gittower/git-flow-next/util"
 )
 
 // TagOptions contains options for tag creation when finishing a branch
@@ -53,8 +52,8 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	}
 
 	// Check if there's a merge in progress
-	if util.IsMergeInProgress() {
-		state, err := util.LoadMergeState()
+	if model.IsMergeInProgress() {
+		state, err := model.LoadMergeState()
 		if err != nil {
 			return &errors.GitError{Operation: "load merge state", Err: err}
 		}
@@ -212,7 +211,7 @@ func finishBranch(branchType string, name string, branchConfig config.BranchConf
 		ChildBranches:   childBranches,
 		UpdatedBranches: []string{},
 	}
-	if err := util.SaveMergeState(state); err != nil {
+	if err := model.SaveMergeState(state); err != nil {
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
@@ -261,7 +260,7 @@ func finish(state *model.MergeState, branchConfig config.BranchConfig, tagOption
 		if strings.Contains(mergeErr.Error(), "conflict") {
 			// Save state before returning conflict error
 			state.CurrentStep = "merge"
-			if err := util.SaveMergeState(state); err != nil {
+			if err := model.SaveMergeState(state); err != nil {
 				return &errors.GitError{Operation: "save merge state", Err: err}
 			}
 
@@ -275,7 +274,7 @@ func finish(state *model.MergeState, branchConfig config.BranchConfig, tagOption
 
 	// Move to next step (tag creation)
 	state.CurrentStep = "create_tag"
-	if err := util.SaveMergeState(state); err != nil {
+	if err := model.SaveMergeState(state); err != nil {
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
@@ -292,7 +291,7 @@ func handleContinue(state *model.MergeState, branchConfig config.BranchConfig, t
 
 		// Move to next step
 		state.CurrentStep = "create_tag"
-		if err := util.SaveMergeState(state); err != nil {
+		if err := model.SaveMergeState(state); err != nil {
 			return &errors.GitError{Operation: "save merge state", Err: err}
 		}
 		return handleContinue(state, branchConfig, tagOptions)
@@ -392,7 +391,7 @@ func handleContinue(state *model.MergeState, branchConfig config.BranchConfig, t
 
 		// Move to next step
 		state.CurrentStep = "update_children"
-		if err := util.SaveMergeState(state); err != nil {
+		if err := model.SaveMergeState(state); err != nil {
 			return &errors.GitError{Operation: "save merge state", Err: err}
 		}
 		return handleContinue(state, branchConfig, tagOptions)
@@ -417,7 +416,7 @@ func handleContinue(state *model.MergeState, branchConfig config.BranchConfig, t
 		// If no more branches to update, move to final step
 		if nextBranch == "" {
 			state.CurrentStep = "delete_branch"
-			if err := util.SaveMergeState(state); err != nil {
+			if err := model.SaveMergeState(state); err != nil {
 				return &errors.GitError{Operation: "save merge state", Err: err}
 			}
 			return handleContinue(state, branchConfig, tagOptions)
@@ -451,7 +450,7 @@ func handleContinue(state *model.MergeState, branchConfig config.BranchConfig, t
 
 		// Mark this branch as updated
 		state.UpdatedBranches = append(state.UpdatedBranches, nextBranch)
-		if err := util.SaveMergeState(state); err != nil {
+		if err := model.SaveMergeState(state); err != nil {
 			return &errors.GitError{Operation: "save merge state", Err: err}
 		}
 
@@ -471,7 +470,7 @@ func handleContinue(state *model.MergeState, branchConfig config.BranchConfig, t
 		}
 
 		// Clear the merge state
-		if err := util.ClearMergeState(); err != nil {
+		if err := model.ClearMergeState(); err != nil {
 			return &errors.GitError{Operation: "clear merge state", Err: err}
 		}
 
@@ -505,7 +504,7 @@ func handleAbort(state *model.MergeState) error {
 	}
 
 	// Clear the merge state
-	if err := util.ClearMergeState(); err != nil {
+	if err := model.ClearMergeState(); err != nil {
 		return &errors.GitError{Operation: "clear merge state", Err: err}
 	}
 
