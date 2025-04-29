@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gittower/git-flow-next/config"
+	"github.com/gittower/git-flow-next/internal/config"
 )
 
 // setupTestRepo creates a temporary Git repository for testing
