@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/gittower/git-flow-next/git"
+	"github.com/gittower/git-flow-next/internal/git"
 )
 
 // DefaultConfig returns a default git-flow configuration

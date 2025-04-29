@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/gittower/git-flow-next/git"
+	"github.com/gittower/git-flow-next/internal/git"
 )
 
 // SaveConfig saves the git-flow configuration to Git config

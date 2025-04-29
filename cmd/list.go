@@ -7,7 +7,7 @@ import (
 
 	"github.com/gittower/git-flow-next/config"
 	"github.com/gittower/git-flow-next/errors"
-	"github.com/gittower/git-flow-next/git"
+	"github.com/gittower/git-flow-next/internal/git"
 )
 
 // ListCommand is the implementation of the list command for topic branches

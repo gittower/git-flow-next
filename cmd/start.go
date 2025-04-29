@@ -6,7 +6,7 @@ import (
 
 	"github.com/gittower/git-flow-next/config"
 	"github.com/gittower/git-flow-next/errors"
-	"github.com/gittower/git-flow-next/git"
+	"github.com/gittower/git-flow-next/internal/git"
 )
 
 // StartCommand is the implementation of the start command for topic branches

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/gittower/git-flow-next/config"
-	"github.com/gittower/git-flow-next/git"
+	"github.com/gittower/git-flow-next/internal/git"
 	"github.com/gittower/git-flow-next/test/testutil"
 	"github.com/stretchr/testify/assert"
 )
