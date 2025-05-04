@@ -9,8 +9,8 @@ import (
 	"github.com/gittower/git-flow-next/internal/config"
 	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/internal/git"
-	"github.com/gittower/git-flow-next/internal/update"
 	"github.com/gittower/git-flow-next/internal/mergestate"
+	"github.com/gittower/git-flow-next/internal/update"
 )
 
 // TagOptions contains options for tag creation when finishing a branch
@@ -23,9 +23,17 @@ type TagOptions struct {
 	TagName     string // Custom tag name
 }
 
+// BranchRetentionOptions contains options for branch retention when finishing a branch
+type BranchRetentionOptions struct {
+	Keep        *bool // Whether to keep the branch (nil means use config default)
+	KeepRemote  *bool // Whether to keep the remote branch (nil means use config default)
+	KeepLocal   *bool // Whether to keep the local branch (nil means use config default)
+	ForceDelete *bool // Whether to force delete the branch (nil means use config default)
+}
+
 // FinishCommand is the implementation of the finish command for topic branches
-func FinishCommand(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *TagOptions) {
-	if err := executeFinish(branchType, name, continueOp, abortOp, force, tagOptions); err != nil {
+func FinishCommand(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *TagOptions, retentionOptions *BranchRetentionOptions) {
+	if err := executeFinish(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -38,7 +46,7 @@ func FinishCommand(branchType string, name string, continueOp bool, abortOp bool
 }
 
 // executeFinish performs the actual branch finishing logic and returns any errors
-func executeFinish(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *TagOptions) error {
+func executeFinish(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *TagOptions, retentionOptions *BranchRetentionOptions) error {
 	// Get configuration early
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -69,7 +77,7 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 		}
 
 		if continueOp {
-			return handleContinue(state, stateBranchConfig, tagOptions)
+			return handleContinue(state, stateBranchConfig, tagOptions, retentionOptions)
 		}
 
 		return &errors.MergeInProgressError{BranchName: state.FullBranchName}
@@ -144,10 +152,10 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	}
 
 	// Regular finish command flow
-	return finishBranch(branchType, name, branchConfig, tagOptions)
+	return finishBranch(branchType, name, branchConfig, tagOptions, retentionOptions)
 }
 
-func finishBranch(branchType string, name string, branchConfig config.BranchConfig, tagOptions *TagOptions) error {
+func finishBranch(branchType string, name string, branchConfig config.BranchConfig, tagOptions *TagOptions, retentionOptions *BranchRetentionOptions) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized()
 	if err != nil {
@@ -215,10 +223,10 @@ func finishBranch(branchType string, name string, branchConfig config.BranchConf
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
-	return finish(state, branchConfig, tagOptions)
+	return finish(state, branchConfig, tagOptions, retentionOptions)
 }
 
-func finish(state *mergestate.MergeState, branchConfig config.BranchConfig, tagOptions *TagOptions) error {
+func finish(state *mergestate.MergeState, branchConfig config.BranchConfig, tagOptions *TagOptions, retentionOptions *BranchRetentionOptions) error {
 	// Checkout target branch
 	err := git.Checkout(state.ParentBranch)
 	if err != nil {
@@ -278,10 +286,10 @@ func finish(state *mergestate.MergeState, branchConfig config.BranchConfig, tagO
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
-	return handleContinue(state, branchConfig, tagOptions)
+	return handleContinue(state, branchConfig, tagOptions, retentionOptions)
 }
 
-func handleContinue(state *mergestate.MergeState, branchConfig config.BranchConfig, tagOptions *TagOptions) error {
+func handleContinue(state *mergestate.MergeState, branchConfig config.BranchConfig, tagOptions *TagOptions, retentionOptions *BranchRetentionOptions) error {
 	switch state.CurrentStep {
 	case "merge":
 		// Check if there are still conflicts
@@ -294,7 +302,7 @@ func handleContinue(state *mergestate.MergeState, branchConfig config.BranchConf
 		if err := mergestate.SaveMergeState(state); err != nil {
 			return &errors.GitError{Operation: "save merge state", Err: err}
 		}
-		return handleContinue(state, branchConfig, tagOptions)
+		return handleContinue(state, branchConfig, tagOptions, retentionOptions)
 
 	case "create_tag":
 		// 1. Start with branch configuration default
@@ -394,7 +402,7 @@ func handleContinue(state *mergestate.MergeState, branchConfig config.BranchConf
 		if err := mergestate.SaveMergeState(state); err != nil {
 			return &errors.GitError{Operation: "save merge state", Err: err}
 		}
-		return handleContinue(state, branchConfig, tagOptions)
+		return handleContinue(state, branchConfig, tagOptions, retentionOptions)
 
 	case "update_children":
 		// Find next child branch to update
@@ -419,7 +427,7 @@ func handleContinue(state *mergestate.MergeState, branchConfig config.BranchConf
 			if err := mergestate.SaveMergeState(state); err != nil {
 				return &errors.GitError{Operation: "save merge state", Err: err}
 			}
-			return handleContinue(state, branchConfig, tagOptions)
+			return handleContinue(state, branchConfig, tagOptions, retentionOptions)
 		}
 
 		// Update the next child branch
@@ -455,7 +463,7 @@ func handleContinue(state *mergestate.MergeState, branchConfig config.BranchConf
 		}
 
 		// Continue with next branch
-		return handleContinue(state, branchConfig, tagOptions)
+		return handleContinue(state, branchConfig, tagOptions, retentionOptions)
 
 	case "delete_branch":
 		// Ensure we're on the parent branch before deletion
@@ -463,10 +471,69 @@ func handleContinue(state *mergestate.MergeState, branchConfig config.BranchConf
 			return &errors.GitError{Operation: fmt.Sprintf("checkout parent branch '%s'", state.ParentBranch), Err: err}
 		}
 
-		// Delete the original branch with force since it should be merged
-		err := git.DeleteBranch(state.FullBranchName, true)
-		if err != nil {
-			return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", state.FullBranchName), Err: err}
+		// Determine branch retention settings
+		// 1. Start with defaults (delete both local and remote)
+		keep := false
+		keepRemote := false
+		keepLocal := false
+		forceDelete := false
+
+		// 2. Check branch-specific config
+		configKeep, err := git.GetConfig(fmt.Sprintf("gitflow.%s.finish.keep", state.BranchType))
+		if err == nil && configKeep == "true" {
+			keep = true
+		}
+		configKeepRemote, err := git.GetConfig(fmt.Sprintf("gitflow.%s.finish.keepremote", state.BranchType))
+		if err == nil && configKeepRemote == "true" {
+			keepRemote = true
+		}
+		configKeepLocal, err := git.GetConfig(fmt.Sprintf("gitflow.%s.finish.keeplocal", state.BranchType))
+		if err == nil && configKeepLocal == "true" {
+			keepLocal = true
+		}
+		configForceDelete, err := git.GetConfig(fmt.Sprintf("gitflow.%s.finish.force-delete", state.BranchType))
+		if err == nil && configForceDelete == "true" {
+			forceDelete = true
+		}
+
+		// 3. Command-line flags override config
+		if retentionOptions != nil {
+			if retentionOptions.Keep != nil {
+				keep = *retentionOptions.Keep
+			}
+			if retentionOptions.KeepRemote != nil {
+				keepRemote = *retentionOptions.KeepRemote
+			}
+			if retentionOptions.KeepLocal != nil {
+				keepLocal = *retentionOptions.KeepLocal
+			}
+			if retentionOptions.ForceDelete != nil {
+				forceDelete = *retentionOptions.ForceDelete
+			}
+		}
+
+		// If keep is set, it overrides individual settings
+		if keep {
+			keepRemote = true
+			keepLocal = true
+		}
+
+		// Delete remote branch if not keeping it and if remote branch exists
+		if !keepRemote {
+			// Only attempt to delete if the remote branch actually exists
+			if git.RemoteBranchExists("origin", state.FullBranchName) {
+				remoteBranch := fmt.Sprintf("origin/%s", state.FullBranchName)
+				if err := git.DeleteRemoteBranch("origin", state.FullBranchName); err != nil {
+					return &errors.GitError{Operation: fmt.Sprintf("delete remote branch '%s'", remoteBranch), Err: err}
+				}
+			}
+		}
+
+		// Delete local branch if not keeping it
+		if !keepLocal {
+			if err := git.DeleteBranch(state.FullBranchName, forceDelete); err != nil {
+				return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", state.FullBranchName), Err: err}
+			}
 		}
 
 		// Clear the merge state

@@ -121,6 +121,16 @@ func registerBranchCommand(branchType string) {
 			messageFile, _ := cmd.Flags().GetString("messagefile")
 			tagName, _ := cmd.Flags().GetString("tagname")
 
+			// Get branch retention flags
+			keep, _ := cmd.Flags().GetBool("keep")
+			noKeep, _ := cmd.Flags().GetBool("no-keep")
+			keepRemote, _ := cmd.Flags().GetBool("keepremote")
+			noKeepRemote, _ := cmd.Flags().GetBool("no-keepremote")
+			keepLocal, _ := cmd.Flags().GetBool("keeplocal")
+			noKeepLocal, _ := cmd.Flags().GetBool("no-keeplocal")
+			forceDelete, _ := cmd.Flags().GetBool("force-delete")
+			noForceDelete, _ := cmd.Flags().GetBool("no-force-delete")
+
 			// Create tag options
 			tagOptions := &TagOptions{
 				ShouldTag:   getBoolFlag(tag, noTag),
@@ -131,8 +141,16 @@ func registerBranchCommand(branchType string) {
 				TagName:     tagName,
 			}
 
+			// Create branch retention options
+			retentionOptions := &BranchRetentionOptions{
+				Keep:        getBoolFlag(keep, noKeep),
+				KeepRemote:  getBoolFlag(keepRemote, noKeepRemote),
+				KeepLocal:   getBoolFlag(keepLocal, noKeepLocal),
+				ForceDelete: getBoolFlag(forceDelete, noForceDelete),
+			}
+
 			// Call the generic finish command with the branch type and name
-			FinishCommand(branchType, args[0], continueOp, abortOp, force, tagOptions)
+			FinishCommand(branchType, args[0], continueOp, abortOp, force, tagOptions, retentionOptions)
 		},
 	}
 
@@ -150,6 +168,16 @@ func registerBranchCommand(branchType string) {
 	finishCmd.Flags().StringP("message", "m", "", "Use the given message for the tag")
 	finishCmd.Flags().String("messagefile", "", "Use contents of the given file as tag message")
 	finishCmd.Flags().String("tagname", "", "Use the given tag name instead of the default")
+
+	// Add branch retention flags
+	finishCmd.Flags().Bool("keep", false, "Keep the branch after finishing")
+	finishCmd.Flags().Bool("no-keep", false, "Delete the branch after finishing")
+	finishCmd.Flags().Bool("keepremote", false, "Keep the remote branch after finishing")
+	finishCmd.Flags().Bool("no-keepremote", false, "Delete the remote branch after finishing")
+	finishCmd.Flags().Bool("keeplocal", false, "Keep the local branch after finishing")
+	finishCmd.Flags().Bool("no-keeplocal", false, "Delete the local branch after finishing")
+	finishCmd.Flags().Bool("force-delete", false, "Force delete the branch")
+	finishCmd.Flags().Bool("no-force-delete", false, "Don't force delete the branch")
 
 	branchCmd.AddCommand(finishCmd)
 

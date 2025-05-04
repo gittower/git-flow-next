@@ -185,3 +185,10 @@ func AddRemote(t *testing.T, dir string, remoteName string, pushAll bool) (strin
 
 	return bareDir, nil
 }
+
+// RemoteBranchExists checks if a remote branch exists in the repository
+func RemoteBranchExists(t *testing.T, dir string, remote string, branch string) bool {
+	ref := fmt.Sprintf("refs/remotes/%s/%s", remote, branch)
+	_, err := RunGit(t, dir, "rev-parse", "--verify", "--quiet", ref)
+	return err == nil
+}

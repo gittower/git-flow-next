@@ -293,3 +293,11 @@ func DeleteRemoteBranch(remote, branch string) error {
 	}
 	return nil
 }
+
+// RemoteBranchExists checks if a remote branch exists
+func RemoteBranchExists(remote, branch string) bool {
+	// Check if the remote tracking branch exists
+	ref := fmt.Sprintf("refs/remotes/%s/%s", remote, branch)
+	cmd := exec.Command("git", "rev-parse", "--verify", "--quiet", ref)
+	return cmd.Run() == nil
+}
