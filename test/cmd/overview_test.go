@@ -214,3 +214,116 @@ func TestOverviewWithCurrentBranch(t *testing.T) {
 		t.Errorf("Expected output to contain '* feature/my-feature (feature)', got: %s", output)
 	}
 }
+
+// TestOverviewWithAVHConfig tests the overview command with existing git-flow-avh configuration.
+// Steps:
+// 1. Sets up a test repository
+// 2. Configures the repository with git-flow-avh configuration values without running init
+// 3. Runs the overview command
+// 4. Verifies the output correctly interprets the git-flow-avh config
+// 5. Verifies all branch types and prefixes are correctly displayed
+func TestOverviewWithAVHConfig(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Set git-flow-avh config values directly instead of running init
+	// Set branch structure
+	_, err := testutil.RunGit(t, dir, "config", "gitflow.branch.master", "main")
+	if err != nil {
+		t.Fatalf("Failed to set gitflow.branch.master config: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.branch.develop", "develop")
+	if err != nil {
+		t.Fatalf("Failed to set gitflow.branch.develop config: %v", err)
+	}
+
+	// Set branch prefixes
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.prefix.feature", "feature/")
+	if err != nil {
+		t.Fatalf("Failed to set gitflow.prefix.feature config: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.prefix.bugfix", "bugfix/")
+	if err != nil {
+		t.Fatalf("Failed to set gitflow.prefix.bugfix config: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.prefix.release", "release/")
+	if err != nil {
+		t.Fatalf("Failed to set gitflow.prefix.release config: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.prefix.hotfix", "hotfix/")
+	if err != nil {
+		t.Fatalf("Failed to set gitflow.prefix.hotfix config: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.prefix.support", "support/")
+	if err != nil {
+		t.Fatalf("Failed to set gitflow.prefix.support config: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.prefix.versiontag", "v")
+	if err != nil {
+		t.Fatalf("Failed to set gitflow.prefix.versiontag config: %v", err)
+	}
+
+	// Create the develop branch
+	_, err = testutil.RunGit(t, dir, "checkout", "-b", "develop")
+	if err != nil {
+		t.Fatalf("Failed to create develop branch: %v", err)
+	}
+
+	// Create a feature branch to test active branch detection
+	_, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test-feature", "develop")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+
+	// Run git-flow overview
+	output, err := testutil.RunGitFlow(t, dir, "overview")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow overview: %v\nOutput: %s", err, output)
+	}
+
+	// Check if the output contains the expected sections
+	if !strings.Contains(output, "Base branches:") {
+		t.Errorf("Expected output to contain 'Base branches:', got: %s", output)
+	}
+
+	if !strings.Contains(output, "Topic branch configurations:") {
+		t.Errorf("Expected output to contain 'Topic branch configurations:', got: %s", output)
+	}
+
+	// Check if the output contains the base branches with correct relationship
+	if !strings.Contains(output, "develop -> main") {
+		t.Errorf("Expected output to contain 'develop -> main', got: %s", output)
+	}
+
+	// Check if the output contains all the branch types with correct prefixes
+	if !strings.Contains(output, "feature") || !strings.Contains(output, "Prefix: feature/") {
+		t.Errorf("Expected output to contain feature branch type with prefix 'feature/', got: %s", output)
+	}
+
+	if !strings.Contains(output, "bugfix") || !strings.Contains(output, "Prefix: bugfix/") {
+		t.Errorf("Expected output to contain bugfix branch type with prefix 'bugfix/', got: %s", output)
+	}
+
+	if !strings.Contains(output, "release") || !strings.Contains(output, "Prefix: release/") {
+		t.Errorf("Expected output to contain release branch type with prefix 'release/', got: %s", output)
+	}
+
+	if !strings.Contains(output, "hotfix") || !strings.Contains(output, "Prefix: hotfix/") {
+		t.Errorf("Expected output to contain hotfix branch type with prefix 'hotfix/', got: %s", output)
+	}
+
+	if !strings.Contains(output, "support") || !strings.Contains(output, "Prefix: support/") {
+		t.Errorf("Expected output to contain support branch type with prefix 'support/', got: %s", output)
+	}
+
+	// Check if tag prefix is correctly displayed
+	if !strings.Contains(output, "Tag prefix: v") {
+		t.Errorf("Expected output to contain 'Tag prefix: v', got: %s", output)
+	}
+
+	// Check if active feature branch is displayed
+	if !strings.Contains(output, "* feature/test-feature (feature)") {
+		t.Errorf("Expected output to contain '* feature/test-feature (feature)', got: %s", output)
+	}
+}
