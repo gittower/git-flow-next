@@ -111,6 +111,10 @@ func registerBranchCommand(branchType string) {
 			abortOp, _ := cmd.Flags().GetBool("abort")
 			force, _ := cmd.Flags().GetBool("force")
 
+			// Get fetch-related flags
+			fetch, _ := cmd.Flags().GetBool("fetch")
+			noFetch, _ := cmd.Flags().GetBool("no-fetch")
+
 			// Get tag-related flags
 			tag, _ := cmd.Flags().GetBool("tag")
 			noTag, _ := cmd.Flags().GetBool("notag")
@@ -147,6 +151,7 @@ func registerBranchCommand(branchType string) {
 				KeepRemote:  getBoolFlag(keepRemote, noKeepRemote),
 				KeepLocal:   getBoolFlag(keepLocal, noKeepLocal),
 				ForceDelete: getBoolFlag(forceDelete, noForceDelete),
+				ShouldFetch: getBoolFlag(fetch, noFetch),
 			}
 
 			// Call the generic finish command with the branch type and name
@@ -158,6 +163,10 @@ func registerBranchCommand(branchType string) {
 	finishCmd.Flags().BoolP("continue", "c", false, "Continue the finish operation after resolving conflicts")
 	finishCmd.Flags().BoolP("abort", "a", false, "Abort the finish operation and return to the original state")
 	finishCmd.Flags().BoolP("force", "f", false, "Force finish a non-standard branch using this branch type's strategy")
+
+	// Add fetch-related flags
+	finishCmd.Flags().Bool("fetch", false, "Fetch from remote before finishing branch")
+	finishCmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before finishing branch")
 
 	// Add tag-related flags
 	finishCmd.Flags().Bool("tag", false, "Create a tag for the finished branch")

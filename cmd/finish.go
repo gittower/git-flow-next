@@ -29,6 +29,7 @@ type BranchRetentionOptions struct {
 	KeepRemote  *bool // Whether to keep the remote branch (nil means use config default)
 	KeepLocal   *bool // Whether to keep the local branch (nil means use config default)
 	ForceDelete *bool // Whether to force delete the branch (nil means use config default)
+	ShouldFetch *bool // Whether to fetch from remote before finishing (nil means use config default)
 }
 
 // FinishCommand is the implementation of the finish command for topic branches
@@ -234,6 +235,58 @@ func finish(state *mergestate.MergeState, branchConfig config.BranchConfig, tagO
 	}
 	fmt.Printf("Switched to branch '%s'\n", state.ParentBranch)
 
+	// Determine if we should fetch before finishing
+	shouldFetch := false
+	if retentionOptions != nil && retentionOptions.ShouldFetch != nil {
+		// Command line option overrides config
+		shouldFetch = *retentionOptions.ShouldFetch
+	} else {
+		// Check config if no command line option specified
+		configKey := fmt.Sprintf("gitflow.%s.finish.fetch", state.BranchType)
+		fetchConfig, err := git.GetConfig(configKey)
+		if err == nil && fetchConfig == "true" {
+			shouldFetch = true
+		}
+	}
+
+	// Perform fetch if requested
+	if shouldFetch {
+		// Get remote name from config
+		cfg, err := config.LoadConfig()
+		if err != nil {
+			return &errors.GitError{Operation: "load configuration", Err: err}
+		}
+		
+		remoteName := cfg.Remote
+		fmt.Printf("Fetching from %s...\n", remoteName)
+		if err := git.Fetch(remoteName); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		} else {
+			// After successful fetch, merge remote changes into the target branch
+			remoteBranch := fmt.Sprintf("%s/%s", remoteName, state.ParentBranch)
+			
+			// Check if remote branch exists
+			if git.RemoteBranchExists(remoteName, state.ParentBranch) {
+				fmt.Printf("Merging remote changes from %s into %s...\n", remoteBranch, state.ParentBranch)
+				if err := git.Merge(remoteBranch); err != nil {
+					if strings.Contains(err.Error(), "conflict") {
+						// Save state before returning conflict error
+						state.CurrentStep = "merge_remote"
+						if err := mergestate.SaveMergeState(state); err != nil {
+							return &errors.GitError{Operation: "save merge state", Err: err}
+						}
+						
+						msg := fmt.Sprintf("Merge conflicts detected while merging remote changes. Resolve conflicts and run 'git flow %s finish --continue %s'\n", state.BranchType, state.BranchName)
+						msg += fmt.Sprintf("To abort the merge, run 'git flow %s finish --abort %s'", state.BranchType, state.BranchName)
+						fmt.Println(msg)
+						return &errors.UnresolvedConflictsError{}
+					}
+					fmt.Fprintf(os.Stderr, "Warning: Failed to merge remote changes: %v\n", err)
+				}
+			}
+		}
+	}
+
 	// Perform merge based on strategy
 	fmt.Printf("Merging using strategy: %v\n", strings.ToLower(branchConfig.UpstreamStrategy))
 	var mergeErr error
@@ -291,6 +344,21 @@ func finish(state *mergestate.MergeState, branchConfig config.BranchConfig, tagO
 
 func handleContinue(state *mergestate.MergeState, branchConfig config.BranchConfig, tagOptions *TagOptions, retentionOptions *BranchRetentionOptions) error {
 	switch state.CurrentStep {
+	case "merge_remote":
+		// Check if there are still conflicts from merging remote changes
+		if git.HasConflicts() {
+			return &errors.UnresolvedConflictsError{}
+		}
+
+		// Move to the main merge step
+		state.CurrentStep = "merge"
+		if err := mergestate.SaveMergeState(state); err != nil {
+			return &errors.GitError{Operation: "save merge state", Err: err}
+		}
+		
+		// Continue with the regular merge
+		return finish(state, branchConfig, tagOptions, retentionOptions)
+
 	case "merge":
 		// Check if there are still conflicts
 		if git.HasConflicts() {

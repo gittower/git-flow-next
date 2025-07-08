@@ -60,6 +60,34 @@ brew install gittower/formula/git-flow-next
    git flow feature finish my-feature
    ```
 
+## Configuration
+
+git-flow-next supports various configuration options through Git config. Here are some key options:
+
+### Fetch Before Finish
+
+Control whether to fetch from remote before finishing topic branches:
+
+```bash
+# Enable fetch for feature branches
+git config gitflow.feature.finish.fetch true
+
+# Enable fetch for release branches  
+git config gitflow.release.finish.fetch true
+
+# Enable fetch for hotfix branches
+git config gitflow.hotfix.finish.fetch true
+```
+
+You can also use command line options to override the configuration:
+- `--fetch` - Fetch from remote before finishing branch
+- `--no-fetch` - Don't fetch from remote before finishing branch
+
+Example:
+```bash
+git flow feature finish my-feature --fetch
+```
+
 ## Documentation
 
 For detailed documentation, please visit our [documentation site](https://github.com/gittower/git-flow-next/wiki).
