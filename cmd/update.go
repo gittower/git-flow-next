@@ -8,8 +8,8 @@ import (
 	"github.com/gittower/git-flow-next/internal/config"
 	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/internal/git"
-	"github.com/gittower/git-flow-next/internal/update"
 	"github.com/gittower/git-flow-next/internal/mergestate"
+	"github.com/gittower/git-flow-next/internal/update"
 	"github.com/spf13/cobra"
 )
 

@@ -29,7 +29,7 @@ func TestBasicCommandDetection(t *testing.T) {
 			testutil.RunGit(t, dir, "commit", "-m", "test commit")
 
 			// Ensure on the branch for shorthand
-			testutil.RunGit(t, dir, "checkout", typ + "/test-basic")
+			testutil.RunGit(t, dir, "checkout", typ+"/test-basic")
 
 			output, err := testutil.RunGitFlow(t, dir, "finish", "--notag", "--no-keep")
 			assert.NoError(t, err)
@@ -113,7 +113,7 @@ func TestDeleteAlias(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults")
 	testutil.RunGitFlow(t, dir, "feature", "start", "test-delete")
-	testutil.RunGit(t, dir, "checkout", "develop") // Switch off
+	testutil.RunGit(t, dir, "checkout", "develop")                              // Switch off
 	output, err := testutil.RunGitFlow(t, dir, "delete", "feature/test-delete") // Use full prefixed name
 	assert.NoError(t, err)
 	assert.Contains(t, output, "Deleted branch feature/test-delete")
