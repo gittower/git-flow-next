@@ -147,25 +147,8 @@ func RegisterShorthandCommands() {
 			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions)
 		},
 	}
-	finishCmd.Flags().BoolP("continue", "c", false, "Continue after conflicts")
-	finishCmd.Flags().BoolP("abort", "a", false, "Abort operation")
-	finishCmd.Flags().BoolP("force", "f", false, "Force finish")
-	finishCmd.Flags().Bool("tag", false, "Create tag")
-	finishCmd.Flags().Bool("notag", false, "Don't create tag")
-	finishCmd.Flags().Bool("sign", false, "Sign tag")
-	finishCmd.Flags().Bool("no-sign", false, "Don't sign tag")
-	finishCmd.Flags().String("signingkey", "", "GPG key for signing")
-	finishCmd.Flags().StringP("message", "m", "", "Tag message")
-	finishCmd.Flags().String("messagefile", "", "Tag message from file")
-	finishCmd.Flags().String("tagname", "", "Custom tag name")
-	finishCmd.Flags().Bool("keep", false, "Keep branch")
-	finishCmd.Flags().Bool("no-keep", false, "Delete branch")
-	finishCmd.Flags().Bool("keepremote", false, "Keep remote")
-	finishCmd.Flags().Bool("no-keepremote", false, "Delete remote")
-	finishCmd.Flags().Bool("keeplocal", false, "Keep local")
-	finishCmd.Flags().Bool("no-keeplocal", false, "Delete local")
-	finishCmd.Flags().Bool("force-delete", false, "Force delete")
-	finishCmd.Flags().Bool("no-force-delete", false, "Don't force delete")
+
+	addFinishFlags(finishCmd)
 	rootCmd.AddCommand(finishCmd)
 }
 

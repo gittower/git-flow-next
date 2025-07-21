@@ -154,31 +154,7 @@ func registerBranchCommand(branchType string) {
 		},
 	}
 
-	// Add flags
-	finishCmd.Flags().BoolP("continue", "c", false, "Continue the finish operation after resolving conflicts")
-	finishCmd.Flags().BoolP("abort", "a", false, "Abort the finish operation and return to the original state")
-	finishCmd.Flags().BoolP("force", "f", false, "Force finish a non-standard branch using this branch type's strategy")
-
-	// Add tag-related flags
-	finishCmd.Flags().Bool("tag", false, "Create a tag for the finished branch")
-	finishCmd.Flags().Bool("notag", false, "Don't create a tag for the finished branch")
-	finishCmd.Flags().Bool("sign", false, "Sign the tag cryptographically")
-	finishCmd.Flags().Bool("no-sign", false, "Don't sign the tag cryptographically")
-	finishCmd.Flags().String("signingkey", "", "Use the given GPG key for the digital signature")
-	finishCmd.Flags().StringP("message", "m", "", "Use the given message for the tag")
-	finishCmd.Flags().String("messagefile", "", "Use contents of the given file as tag message")
-	finishCmd.Flags().String("tagname", "", "Use the given tag name instead of the default")
-
-	// Add branch retention flags
-	finishCmd.Flags().Bool("keep", false, "Keep the branch after finishing")
-	finishCmd.Flags().Bool("no-keep", false, "Delete the branch after finishing")
-	finishCmd.Flags().Bool("keepremote", false, "Keep the remote branch after finishing")
-	finishCmd.Flags().Bool("no-keepremote", false, "Delete the remote branch after finishing")
-	finishCmd.Flags().Bool("keeplocal", false, "Keep the local branch after finishing")
-	finishCmd.Flags().Bool("no-keeplocal", false, "Delete the local branch after finishing")
-	finishCmd.Flags().Bool("force-delete", false, "Force delete the branch")
-	finishCmd.Flags().Bool("no-force-delete", false, "Don't force delete the branch")
-
+	addFinishFlags(finishCmd)
 	branchCmd.AddCommand(finishCmd)
 
 	// Add list subcommand
@@ -327,4 +303,32 @@ func registerBranchCommand(branchType string) {
 func init() {
 	// Register topic branch commands
 	RegisterTopicBranchCommands()
+}
+
+// addFinishFlags adds common finish flags to the given Cobra command
+func addFinishFlags(cmd *cobra.Command) {
+	// Operation Control Flags
+	cmd.Flags().BoolP("continue", "c", false, "Continue the finish operation after resolving conflicts")
+	cmd.Flags().BoolP("abort", "a", false, "Abort the finish operation and return to the original state")
+	cmd.Flags().BoolP("force", "f", false, "Force finish a non-standard branch using this branch type's strategy")
+
+	// Tag-related Flags
+	cmd.Flags().Bool("tag", false, "Create a tag for the finished branch")
+	cmd.Flags().Bool("notag", false, "Don't create a tag for the finished branch")
+	cmd.Flags().Bool("sign", false, "Sign the tag cryptographically")
+	cmd.Flags().Bool("no-sign", false, "Don't sign the tag cryptographically")
+	cmd.Flags().String("signingkey", "", "Use the given GPG key for the digital signature")
+	cmd.Flags().StringP("message", "m", "", "Use the given message for the tag")
+	cmd.Flags().String("messagefile", "", "Use contents of the given file as tag message")
+	cmd.Flags().String("tagname", "", "Use the given tag name instead of the default")
+
+	// Branch Retention Flags
+	cmd.Flags().Bool("keep", false, "Keep the branch after finishing")
+	cmd.Flags().Bool("no-keep", false, "Delete the branch after finishing")
+	cmd.Flags().Bool("keepremote", false, "Keep the remote branch after finishing")
+	cmd.Flags().Bool("no-keepremote", false, "Delete the remote branch after finishing")
+	cmd.Flags().Bool("keeplocal", false, "Keep the local branch after finishing")
+	cmd.Flags().Bool("no-keeplocal", false, "Delete the local branch after finishing")
+	cmd.Flags().Bool("force-delete", false, "Force delete the branch")
+	cmd.Flags().Bool("no-force-delete", false, "Don't force delete the branch")
 }
