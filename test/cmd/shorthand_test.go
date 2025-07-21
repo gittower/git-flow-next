@@ -134,7 +134,7 @@ func TestUpdateAlias(t *testing.T) {
 
 	// Update via shorthand (from topic branch)
 	testutil.RunGit(t, dir, "checkout", "feature/test-update")
-	output, err := testutil.RunGitFlow(t, dir, "up")
+	output, err := testutil.RunGitFlow(t, dir, "update")
 	assert.NoError(t, err)
 	assert.Contains(t, output, "Successfully updated branch 'feature/test-update'")
 	contents := testutil.ReadFile(t, dir, "update.txt")

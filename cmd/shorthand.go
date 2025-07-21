@@ -68,19 +68,24 @@ func RegisterShorthandCommands() {
 	}
 	rootCmd.AddCommand(rebaseCmd)
 
-	// Update (named "up" to avoid conflict with existing top-level "update")
-	upCmd := &cobra.Command{
-		Use:   "up",
+	// Update
+	updateCmd := &cobra.Command{
+		Use:   "update",
 		Short: "Update the current topic branch from parent",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			branchType, name, err := detectBranchTypeAndName()
-			if err != nil {
-				return err
+			if err == nil {
+				return executeUpdate(branchType, name)
 			}
-			return executeUpdate(branchType, name)
+			// Fallback to original if not topic
+			var branchName string
+			if len(args) > 0 {
+				branchName = args[0]
+			}
+			return executeUpdate("", branchName)
 		},
 	}
-	rootCmd.AddCommand(upCmd)
+	rootCmd.AddCommand(updateCmd)
 
 	// Rename
 	renameCmd := &cobra.Command{
