@@ -153,7 +153,7 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ## Development
 
-For information about the project's architecture and how to set up a development environment, see [DEVELOPMENT.md](DEVELOPMENT.md).
+For information about the project's architecture and technical overview, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 

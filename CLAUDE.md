@@ -29,6 +29,14 @@ go run main.go                            # Run directly
 ./git-flow                                # Run built binary
 ```
 
+## Additional Documentation
+
+For comprehensive development information, see:
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture and design overview
+- **[CODING_GUIDELINES.md](CODING_GUIDELINES.md)** - Coding standards and conventions
+- **[TESTING_GUIDELINES.md](TESTING_GUIDELINES.md)** - Testing methodology and practices
+- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - GitHub Copilot context and patterns
+
 ## Architecture
 
 ### Command Structure
