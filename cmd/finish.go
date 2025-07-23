@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/gittower/git-flow-next/internal/config"
@@ -350,8 +349,22 @@ func createTagForBranch(state *mergestate.MergeState, branchConfig config.Branch
 		shouldSign = true // Specifying a key implies signing
 	}
 
-	// Now create the tag with all the options
-	if err := createTagWithOptions(tagName, state.ParentBranch, message, shouldSign, signingKey, useMessageFile, messageFilePath); err != nil {
+	// Create the tag using the git module
+	gitTagOptions := &git.TagOptions{
+		Message:     message,
+		MessageFile: messageFilePath,
+		Sign:        shouldSign,
+		SigningKey:  signingKey,
+	}
+	
+	// Use MessageFile if specified, otherwise use Message
+	if useMessageFile {
+		gitTagOptions.Message = "" // Clear message since we're using file
+	} else {
+		gitTagOptions.MessageFile = "" // Clear file since we're using message
+	}
+	
+	if err := git.CreateTag(tagName, gitTagOptions); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("create tag '%s'", tagName), Err: err}
 	}
 	fmt.Printf("Created tag '%s'\n", tagName)
@@ -653,55 +666,6 @@ func handleAbort(state *mergestate.MergeState) error {
 	return nil
 }
 
-// createTagWithOptions creates a new Git tag with the given name and message, and handles signing and message file
-func createTagWithOptions(tagName, targetBranch, message string, shouldSign bool, signingKey string, useMessageFile bool, messageFilePath string) error {
-	// Check if tag already exists
-	cmd := exec.Command("git", "show-ref", "--tags", tagName)
-	if err := cmd.Run(); err == nil {
-		// Tag exists
-		return nil
-	}
-
-	// Build command arguments
-	args := []string{"tag"}
-
-	// Use annotated tag
-	args = append(args, "-a")
-
-	// Apply signing if requested
-	if shouldSign {
-		args = append(args, "-s")
-
-		// Apply signing key if specified
-		if signingKey != "" {
-			args = append(args, "-u", signingKey)
-		}
-	}
-
-	// Apply tag name
-	args = append(args, tagName)
-
-	// Apply message
-	if useMessageFile {
-		args = append(args, "-F", messageFilePath)
-	} else {
-		args = append(args, "-m", message)
-	}
-
-	// Execute tag command
-	cmd = exec.Command("git", args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to create tag: %w (output: %s)", err, string(output))
-	}
-
-	return nil
-}
-
-// Old createTag function can now delegate to createTagWithOptions
-func createTag(tagName, targetBranch, message string) error {
-	return createTagWithOptions(tagName, targetBranch, message, false, "", false, "")
-}
 
 // getBoolFlag converts two opposite boolean flags into a single *bool value
 // If positive is true, returns &true

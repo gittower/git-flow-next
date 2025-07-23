@@ -301,3 +301,59 @@ func RemoteBranchExists(remote, branch string) bool {
 	cmd := exec.Command("git", "rev-parse", "--verify", "--quiet", ref)
 	return cmd.Run() == nil
 }
+
+// TagOptions contains options for tag creation
+type TagOptions struct {
+	Message     string // Tag message (required for annotated tags)
+	MessageFile string // File containing the message (optional, overrides Message)
+	Sign        bool   // Whether to sign the tag (optional)
+	SigningKey  string // Key to use for signing (optional, implies Sign=true)
+}
+
+// CreateTag creates a Git tag with the specified options
+func CreateTag(tagName string, options *TagOptions) error {
+	// Check if tag already exists
+	cmd := exec.Command("git", "show-ref", "--tags", tagName)
+	if err := cmd.Run(); err == nil {
+		// Tag already exists, skip creation
+		return nil
+	}
+
+	// Build command arguments
+	args := []string{"tag"}
+
+	// Use annotated tag
+	args = append(args, "-a")
+
+	// Apply signing if requested
+	shouldSign := options.Sign || options.SigningKey != ""
+	if shouldSign {
+		args = append(args, "-s")
+
+		// Apply signing key if specified
+		if options.SigningKey != "" {
+			args = append(args, "-u", options.SigningKey)
+		}
+	}
+
+	// Apply tag name
+	args = append(args, tagName)
+
+	// Apply message
+	if options.MessageFile != "" {
+		args = append(args, "-F", options.MessageFile)
+	} else if options.Message != "" {
+		args = append(args, "-m", options.Message)
+	} else {
+		return fmt.Errorf("tag message is required for annotated tags")
+	}
+
+	// Execute tag command
+	cmd = exec.Command("git", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create tag '%s': %w (output: %s)", tagName, err, string(output))
+	}
+
+	return nil
+}
