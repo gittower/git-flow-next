@@ -130,6 +130,11 @@ func overview() error {
 			fmt.Printf("    Upstream: %s, Downstream: %s\n",
 				branch.UpstreamStrategy,
 				branch.DownstreamStrategy)
+
+			// Add tag information if enabled
+			if branch.Tag && branch.TagPrefix != "" {
+				fmt.Printf("    Tag prefix: %s\n", branch.TagPrefix)
+			}
 		}
 	}
 	fmt.Println()

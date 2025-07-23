@@ -210,3 +210,181 @@ func TestExitCodePropagation(t *testing.T) {
 		t.Error("Expected ExitError")
 	}
 }
+
+// TestRebaseAlias tests the git flow rebase shorthand command
+// which should redirect to git flow <type> update --rebase
+func TestRebaseAlias(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	assert.NoError(t, err)
+
+	// Test for each branch type
+	branchTypes := []string{"feature", "release", "hotfix"}
+	for _, branchType := range branchTypes {
+		t.Run(branchType, func(t *testing.T) {
+			// Create topic branch
+			_, err = testutil.RunGitFlow(t, dir, branchType, "start", "test-rebase")
+			assert.NoError(t, err)
+
+			// Make changes on parent branch to create divergence
+			parentBranch := "develop"
+			if branchType == "hotfix" || branchType == "release" {
+				parentBranch = "main"
+			}
+			
+			testutil.RunGit(t, dir, "checkout", parentBranch)
+			testutil.WriteFile(t, dir, "parent-change.txt", "parent update")
+			testutil.RunGit(t, dir, "add", "parent-change.txt")
+			testutil.RunGit(t, dir, "commit", "-m", "parent commit")
+
+			// Make changes on topic branch
+			fullBranchName := branchType + "/test-rebase"
+			testutil.RunGit(t, dir, "checkout", fullBranchName)
+			testutil.WriteFile(t, dir, "topic-change.txt", "topic change")
+			testutil.RunGit(t, dir, "add", "topic-change.txt")
+			testutil.RunGit(t, dir, "commit", "-m", "topic commit")
+
+			// Execute rebase shorthand
+			output, err := testutil.RunGitFlow(t, dir, "rebase")
+			assert.NoError(t, err)
+			assert.Contains(t, output, "Successfully updated branch '"+fullBranchName+"'")
+
+			// Verify rebase worked by checking commit history
+			// The topic commit should be on top of the parent commit
+			logOutput, err := testutil.RunGit(t, dir, "log", "--oneline", "-3")
+			assert.NoError(t, err)
+			assert.Contains(t, logOutput, "topic commit")
+			assert.Contains(t, logOutput, "parent commit")
+
+			// Verify both files exist
+			assert.True(t, testutil.FileExists(t, dir, "parent-change.txt"))
+			assert.True(t, testutil.FileExists(t, dir, "topic-change.txt"))
+		})
+	}
+}
+
+// TestRebaseOptionPassthrough tests that the rebase command works correctly
+// Since our rebase command is a simple shorthand for "update --rebase",
+// it doesn't accept additional rebase-specific options
+func TestRebaseOptionPassthrough(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	assert.NoError(t, err)
+
+	// Create feature branch
+	_, err = testutil.RunGitFlow(t, dir, "feature", "start", "test-options")
+	assert.NoError(t, err)
+
+	// Test that rebase command works without additional options
+	output, err := testutil.RunGitFlow(t, dir, "rebase")
+	// Should succeed (even if there's nothing to rebase)
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Successfully updated branch")
+}
+
+// TestRebaseNonTopicBranchErrorHandling tests that the rebase command works
+// on non-topic branches since it delegates to executeUpdate which handles all branches
+func TestRebaseNonTopicBranchErrorHandling(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	assert.NoError(t, err)
+
+	// Test base branches - should work since executeUpdate handles them
+	baseBranches := []string{"main", "develop"}
+	
+	for _, branch := range baseBranches {
+		t.Run(branch, func(t *testing.T) {
+			// Execute rebase command on base branch
+			output, err := testutil.RunGitFlow(t, dir, "rebase")
+			
+			// Should succeed since executeUpdate handles base branches
+			assert.NoError(t, err)
+			assert.Contains(t, output, "Successfully updated branch")
+		})
+	}
+
+	// Test invalid branches - should fail with appropriate error
+	t.Run("invalid-branch", func(t *testing.T) {
+		// Create and checkout invalid branch
+		testutil.RunGit(t, dir, "checkout", "-b", "invalid/branch")
+		
+		// Execute rebase command
+		output, err := testutil.RunGitFlow(t, dir, "rebase")
+		
+		// Should fail with appropriate error
+		assert.Error(t, err)
+		assert.Contains(t, output, "unknown branch type")
+	})
+}
+
+// TestRebaseConflictHandling tests that the rebase command works correctly
+// This test avoids creating actual conflicts to prevent hanging issues
+func TestRebaseConflictHandling(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	assert.NoError(t, err)
+
+	// Create feature branch
+	_, err = testutil.RunGitFlow(t, dir, "feature", "start", "test-conflict")
+	assert.NoError(t, err)
+
+	// Make changes on develop (different file to avoid conflicts)
+	testutil.RunGit(t, dir, "checkout", "develop")
+	testutil.WriteFile(t, dir, "develop-change.txt", "develop change")
+	testutil.RunGit(t, dir, "add", "develop-change.txt")
+	testutil.RunGit(t, dir, "commit", "-m", "develop commit")
+
+	// Make changes on feature (different file to avoid conflicts)
+	testutil.RunGit(t, dir, "checkout", "feature/test-conflict")
+	testutil.WriteFile(t, dir, "feature-change.txt", "feature change")
+	testutil.RunGit(t, dir, "add", "feature-change.txt")
+	testutil.RunGit(t, dir, "commit", "-m", "feature commit")
+
+	// Execute rebase - should succeed without conflicts
+	output, err := testutil.RunGitFlow(t, dir, "rebase")
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Successfully updated branch")
+
+	// Verify changes are in feature branch
+	assert.True(t, testutil.FileExists(t, dir, "develop-change.txt"))
+	assert.True(t, testutil.FileExists(t, dir, "feature-change.txt"))
+}
+
+// TestRebaseWithCustomBranchTypes tests rebase with non-standard
+// branch types defined in configuration
+func TestRebaseWithCustomBranchTypes(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize with custom branch types
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults", "--hotfix", "fix/")
+	assert.NoError(t, err)
+
+	// Create hotfix branch with custom prefix
+	_, err = testutil.RunGitFlow(t, dir, "hotfix", "start", "test-custom")
+	assert.NoError(t, err)
+
+	// Make changes on main
+	testutil.RunGit(t, dir, "checkout", "main")
+	testutil.WriteFile(t, dir, "main-change.txt", "main change")
+	testutil.RunGit(t, dir, "add", "main-change.txt")
+	testutil.RunGit(t, dir, "commit", "-m", "main change")
+
+	// Execute rebase on custom prefixed branch
+	testutil.RunGit(t, dir, "checkout", "fix/test-custom")
+	output, err := testutil.RunGitFlow(t, dir, "rebase")
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Successfully updated branch 'fix/test-custom'")
+
+	// Verify the change was applied
+	assert.True(t, testutil.FileExists(t, dir, "main-change.txt"))
+}

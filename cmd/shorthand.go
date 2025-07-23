@@ -53,39 +53,28 @@ func RegisterShorthandCommands() {
 	deleteCmd.Flags().Bool("no-remote", false, "Don't delete remote tracking branch")
 	rootCmd.AddCommand(deleteCmd)
 
-	// Rebase (stub, as not in codebase; add full impl if needed)
-	rebaseCmd := &cobra.Command{
-		Use:   "rebase",
-		Short: "Rebase the current topic branch",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			_, _, err := detectBranchTypeAndName()
-			if err != nil {
-				return err
-			}
-			// TODO: Implement RebaseCommand(branchType, name, options...)
-			return fmt.Errorf("rebase not implemented")
-		},
-	}
-	rootCmd.AddCommand(rebaseCmd)
-
 	// Update
 	updateCmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update the current topic branch from parent",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			branchType, name, err := detectBranchTypeAndName()
-			if err == nil {
-				return executeUpdate(branchType, name)
-			}
-			// Fallback to original if not topic
-			var branchName string
-			if len(args) > 0 {
-				branchName = args[0]
-			}
-			return executeUpdate("", branchName)
+			useRebase, _ := cmd.Flags().GetBool("rebase")
+			return executeShorthandUpdate(useRebase, args)
 		},
 	}
+	updateCmd.Flags().Bool("rebase", false, "Force rebase strategy instead of configured strategy")
 	rootCmd.AddCommand(updateCmd)
+
+	// Rebase (shorthand for update --rebase)
+	rebaseCmd := &cobra.Command{
+		Use:   "rebase",
+		Short: "Rebase the current topic branch from parent",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Always use rebase strategy for this shorthand
+			return executeShorthandUpdate(true, args)
+		},
+	}
+	rootCmd.AddCommand(rebaseCmd)
 
 	// Rename
 	renameCmd := &cobra.Command{
@@ -150,6 +139,20 @@ func RegisterShorthandCommands() {
 
 	addFinishFlags(finishCmd)
 	rootCmd.AddCommand(finishCmd)
+}
+
+// executeShorthandUpdate handles the shared logic for both update and rebase shorthand commands
+func executeShorthandUpdate(useRebase bool, args []string) error {
+	branchType, name, err := detectBranchTypeAndName()
+	if err == nil {
+		return executeUpdate(branchType, name, useRebase)
+	}
+	// Fallback to original if not topic
+	var branchName string
+	if len(args) > 0 {
+		branchName = args[0]
+	}
+	return executeUpdate("", branchName, useRebase)
 }
 
 // detectBranchTypeAndName detects type and name from current branch

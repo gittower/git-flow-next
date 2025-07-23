@@ -103,6 +103,14 @@ func DefaultConfig() *Config {
 				DownstreamStrategy: string(MergeStrategyRebase),
 				Prefix:             "feature/",
 			},
+			"bugfix": {
+				Type:               string(BranchTypeTopic),
+				Parent:             "develop",
+				StartPoint:         "develop",
+				UpstreamStrategy:   string(MergeStrategyMerge),
+				DownstreamStrategy: string(MergeStrategyRebase),
+				Prefix:             "bugfix/",
+			},
 			"release": {
 				Type:               string(BranchTypeTopic),
 				Parent:             "main",
@@ -157,6 +165,10 @@ func LoadConfig() (*Config, error) {
 	// Get git-flow version
 	version, err := git.GetConfigInDir(currentDir, "gitflow.version")
 	if err != nil {
+		// If no version is set but AVH config exists, import AVH config
+		if CheckGitFlowAVHConfig() {
+			return ImportGitFlowAVHConfig()
+		}
 		// If no version is set, assume it's not initialized properly
 		return DefaultConfig(), nil
 	}
@@ -261,12 +273,18 @@ func IsInitialized() (bool, error) {
 		return false, fmt.Errorf("failed to get current directory: %w", err)
 	}
 
+	// Check for our own gitflow.version config
 	version, err := git.GetConfigInDir(currentDir, "gitflow.version")
-	if err != nil {
-		// If error is because the key doesn't exist, it's not initialized
-		return false, nil
+	if err == nil && version != "" {
+		return true, nil
 	}
-	return version != "", nil
+
+	// Check for git-flow-avh configuration
+	if CheckGitFlowAVHConfig() {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // CheckGitFlowAVHConfig checks if git-flow-avh configuration exists
@@ -340,6 +358,7 @@ func ImportGitFlowAVHConfig() (*Config, error) {
 	// Get prefixes from git-flow-avh config
 	prefixMap := map[string]string{
 		"feature":    "feature",
+		"bugfix":     "bugfix",
 		"release":    "release",
 		"hotfix":     "hotfix",
 		"support":    "support",
