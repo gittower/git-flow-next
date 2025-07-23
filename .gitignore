@@ -28,3 +28,4 @@ go.work
 .DS_Store
 Thumbs.db 
 /dist
+.claude
