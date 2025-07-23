@@ -111,6 +111,111 @@ Topic branch behavior is defined through Git configuration, allowing complete cu
 
 ## Configuration System
 
+### Default Configuration Overview
+
+git-flow-next provides sensible defaults that work for most teams while remaining fully customizable.
+
+#### Branch Structure
+```
+main/master     ← Production releases
+    ↓
+develop         ← Integration branch (auto-updated from main)
+    ↓
+feature/        ← New features
+release/        ← Release preparation  
+hotfix/         ← Emergency fixes
+```
+
+#### Base Branches
+
+| Branch | Type | Parent | Config Key | Auto-Update from Parent |
+|--------|------|--------|------------|------------------------|
+| `main` | base | (root) | `gitflow.branch.main` | None |
+| `develop` | base | `main` | `gitflow.branch.develop` | ✅ Yes |
+
+#### Topic Branches
+
+| Branch Type | Prefix | Parent | Start Point | Config Key | Created by Default |
+|-------------|--------|--------|-------------|------------|-------------------|
+| Feature | `feature/` | `develop` | `develop` | `gitflow.branch.feature` | ✅ Yes |
+| Release | `release/` | `main` | `develop` | `gitflow.branch.release` | ✅ Yes |
+| Hotfix | `hotfix/` | `main` | `main` | `gitflow.branch.hotfix` | ✅ Yes |
+
+#### Merge Strategies
+
+**Upstream Strategy (Finish Operations)** - How topic branches merge into their parent:
+
+| Branch Type | Default | Options | Target Branch |
+|-------------|---------|---------|---------------|
+| Feature | `merge` | `merge`, `rebase`, `squash` | → `develop` |
+| Release | `merge` | `merge`, `rebase`, `squash` | → `main` |
+| Hotfix | `merge` | `merge`, `rebase`, `squash` | → `main` |
+
+**Downstream Strategy (Update Operations)** - How parent updates are pulled into topic branches:
+
+| Branch Type | Default | Options | Source Branch |
+|-------------|---------|---------|---------------|
+| Feature | `rebase` | `merge`, `rebase` | ← `develop` |
+| Release | `merge` | `merge`, `rebase` | ← `main` |
+| Hotfix | `rebase` | `merge`, `rebase` | ← `main` |
+
+#### Tag Configuration
+
+| Branch Type | Default Tagging | Tag Prefix | When Tagged |
+|-------------|-----------------|------------|-------------|
+| Feature | ❌ Disabled | (none) | Never by default |
+| Release | ✅ Enabled | (none) | On finish |
+| Hotfix | ✅ Enabled | (none) | On finish |
+
+#### Branch Retention (After Finish)
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Delete Local | ✅ Yes | Remove local branch after successful merge |
+| Delete Remote | ✅ Yes | Remove remote branch after successful merge |
+| Force Delete | ❌ No | Use safe delete (checks for unmerged commits) |
+
+#### Core Configuration Commands
+
+```bash
+# Base branch names
+git config gitflow.branch.main main
+git config gitflow.branch.develop develop
+
+# Base branch relationships
+git config gitflow.branch.develop.parent main
+git config gitflow.branch.develop.upstreamStrategy merge
+git config gitflow.branch.develop.downstreamStrategy merge
+git config gitflow.branch.develop.autoUpdate true
+
+# Topic branch prefixes
+git config gitflow.branch.feature.prefix feature/
+git config gitflow.branch.release.prefix release/
+git config gitflow.branch.hotfix.prefix hotfix/
+
+# Branch relationships
+git config gitflow.branch.feature.parent develop
+git config gitflow.branch.release.parent main
+git config gitflow.branch.hotfix.parent main
+
+# Merge strategies (upstream - finish operations)
+git config gitflow.feature.finish.merge merge
+git config gitflow.release.finish.merge merge
+git config gitflow.hotfix.finish.merge merge
+
+# Merge strategies (downstream - update operations)
+git config gitflow.feature.downstreamStrategy rebase
+git config gitflow.release.downstreamStrategy merge
+git config gitflow.hotfix.downstreamStrategy rebase
+
+# Tag settings
+git config gitflow.feature.finish.notag true
+git config gitflow.release.finish.notag false
+git config gitflow.hotfix.finish.notag false
+```
+
+**Note**: Release and hotfix branches merge only into `main`, then `develop` is automatically updated from `main` to stay synchronized.
+
 ### Branch Configuration Structure
 
 Base branches are configured with dependency relationships:

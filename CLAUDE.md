@@ -76,6 +76,33 @@ For comprehensive development information, see:
 - `testutil.InitGitFlow()` - Initializes git-flow in test repo
 - Git operation mocks for unit tests
 
+### Testing Best Practices
+- **Use git-flow defaults**: Initialize test repos with `git flow init --defaults`
+- **Use feature branches**: Feature branches for general topic branch testing
+- **Modify config when needed**: Use `git config` for specific test scenarios
+
+## Default Configuration
+
+git-flow-next provides sensible defaults that work for most teams:
+
+### Branch Structure
+- **main/master**: Production releases
+- **develop**: Integration branch (auto-updated from main)
+- **feature/**: New features (parent: develop)
+- **release/**: Release preparation (parent: main, starts from develop)
+- **hotfix/**: Emergency fixes (parent: main)
+
+### Default Merge Strategies
+- **Feature finish**: `merge` into develop
+- **Release finish**: `merge` into main (then auto-update develop)
+- **Hotfix finish**: `merge` into main (then auto-update develop)
+- **Feature update**: `rebase` from develop
+- **Release/Hotfix update**: `merge`/`rebase` from main
+
+### Default Tag Settings
+- **Feature**: No tags created
+- **Release/Hotfix**: Tags created on finish
+
 ## Configuration Examples
 
 ### Branch Configuration
@@ -84,9 +111,17 @@ For comprehensive development information, see:
 git config gitflow.branch.feature.prefix "feat/"
 git config gitflow.branch.release.prefix "rel/"
 
-# Merge strategies
+# Merge strategies (upstream - finish operations)
 git config gitflow.feature.finish.merge rebase
 git config gitflow.release.finish.merge squash
+
+# Merge strategies (downstream - update operations)
+git config gitflow.feature.downstreamStrategy rebase
+git config gitflow.release.downstreamStrategy merge
+
+# Base branch relationships
+git config gitflow.branch.develop.parent main
+git config gitflow.branch.develop.autoUpdate true
 
 # Fetch behavior
 git config gitflow.feature.finish.fetch true

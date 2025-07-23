@@ -13,10 +13,27 @@ git-flow-next is a modern, flexible Go implementation of Git workflow management
 - **Configuration-Driven**: Branch types and behaviors defined via Git configuration (`gitflow.*` keys)
 - **Step-Based State Machine**: Complex operations broken into resumable steps
 
-### Key Branch Types
+### Key Branch Types & Default Configuration
 
-- **Base Branches** (long-living): `main`, `develop`, `staging`, `production`
-- **Topic Branches** (short-living): `feature/*`, `hotfix/*`, `release/*`
+**Base Branches** (long-living):
+- **main**: Production branch (root branch)
+- **develop**: Integration branch (auto-updates from main)
+
+**Topic Branches** (short-living):
+- **feature/***: New features (parent: develop, starts from develop)
+- **release/***: Release preparation (parent: main, starts from develop)
+- **hotfix/***: Emergency fixes (parent: main, starts from main)
+
+**Default Merge Strategies:**
+- Feature finish: `merge` into develop
+- Release finish: `merge` into main (then auto-update develop)
+- Hotfix finish: `merge` into main (then auto-update develop)
+- Feature update: `rebase` from develop
+- Release/Hotfix update: `merge`/`rebase` from main
+
+**Default Tag Settings:**
+- Feature: No tags created
+- Release/Hotfix: Tags created on finish
 
 ## Coding Guidelines
 
@@ -114,8 +131,11 @@ if !exists {
 
 **Configuration Keys:**
 - Base branches: `gitflow.branch.main`, `gitflow.branch.develop`
-- Topic branch types: `gitflow.branch.feature`, `gitflow.branch.hotfix`
-- Branch-specific settings: `gitflow.feature.finish.tag`, `gitflow.release.finish.sign`
+- Base branch relationships: `gitflow.branch.develop.parent`, `gitflow.branch.develop.autoUpdate`
+- Topic branch types: `gitflow.branch.feature`, `gitflow.branch.hotfix`, `gitflow.branch.release`
+- Merge strategies (upstream): `gitflow.feature.finish.merge`, `gitflow.release.finish.merge`
+- Merge strategies (downstream): `gitflow.feature.downstreamStrategy`, `gitflow.release.downstreamStrategy`
+- Branch-specific settings: `gitflow.feature.finish.notag`, `gitflow.release.finish.notag`
 
 ### Git Operations
 
@@ -158,15 +178,22 @@ func TestExample(t *testing.T) {
     dir := testutil.SetupTestRepo(t)
     defer testutil.CleanupTestRepo(t, dir)
     
-    // Initialize git-flow
+    // Initialize git-flow with defaults (creates main, develop, configures feature/release/hotfix)
     output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
     if err != nil {
         t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
     }
     
+    // Use feature branches for general topic branch testing
+    output, err = testutil.RunGitFlow(t, dir, "feature", "start", "test-branch")
     // Test implementation...
 }
 ```
+
+**Testing Best Practices:**
+- **Use git-flow defaults**: Initialize test repos with `git flow init --defaults`
+- **Use feature branches**: Feature branches for general topic branch testing
+- **Modify config when needed**: Use `git config` for specific test scenarios
 
 **Test Naming:**
 - Descriptive function names: `TestFinishFeatureBranchWithMergeConflict`

@@ -52,6 +52,79 @@ func TestFinishWithMergeConflict(t *testing.T) {
 
 All tests use temporary Git repositories created through test utilities.
 
+### Default Branch Configuration
+
+When using `git flow init --defaults`, the following branches and settings are configured:
+
+#### Base Branches
+- **main**: Production branch (root branch)
+- **develop**: Integration branch (auto-updates from main)
+
+#### Topic Branch Types  
+- **feature**: Prefix `feature/`, parent `develop`, starts from `develop`
+- **release**: Prefix `release/`, parent `main`, starts from `develop` 
+- **hotfix**: Prefix `hotfix/`, parent `main`, starts from `main`
+
+#### Default Merge Strategies
+- **Feature finish**: `merge` into `develop`
+- **Release finish**: `merge` into `main` (then auto-update `develop`)
+- **Hotfix finish**: `merge` into `main` (then auto-update `develop`)
+- **Feature update**: `rebase` from `develop`
+- **Release update**: `merge` from `main`
+- **Hotfix update**: `rebase` from `main`
+
+#### Default Tag Settings
+- **Feature**: No tags created
+- **Release**: Tags created on finish
+- **Hotfix**: Tags created on finish
+
+### Testing with Default Configuration
+
+- **Use git-flow defaults by default**: Initialize repositories with `git flow init --defaults`
+- **Use feature branches for topic branch testing**: Feature branches are the most common topic branch type and should be used for general topic branch functionality tests
+- **Only create standalone branches when required**: If your test specifically needs a non-git-flow branch or custom configuration, create it explicitly
+- **Adjust configuration when needed**: Use `git config` commands to modify behavior for specific test scenarios
+
+```go
+// Standard test setup - use this for most tests
+func TestExample(t *testing.T) {
+    dir := testutil.SetupTestRepo(t)
+    defer testutil.CleanupTestRepo(t, dir)
+    
+    // Initialize with defaults - creates main, develop, and configures feature/release/hotfix
+    output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+    if err != nil {
+        t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+    }
+    
+    // Use feature branches for topic branch testing
+    output, err = testutil.RunGitFlow(t, dir, "feature", "start", "test-branch")
+    // ... test implementation
+}
+
+// Example: Testing with modified merge strategy
+func TestFeatureFinishWithRebase(t *testing.T) {
+    dir := testutil.SetupTestRepo(t)
+    defer testutil.CleanupTestRepo(t, dir)
+    
+    // Initialize with defaults
+    output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+    if err != nil {
+        t.Fatalf("Failed to initialize git-flow: %v", err)
+    }
+    
+    // Modify merge strategy for this test
+    _, err = testutil.RunGit(t, dir, "config", "gitflow.feature.finish.merge", "rebase")
+    if err != nil {
+        t.Fatalf("Failed to configure rebase strategy: %v", err)
+    }
+    
+    // Now test with the modified configuration
+    output, err = testutil.RunGitFlow(t, dir, "feature", "start", "rebase-test")
+    // ... test implementation
+}
+```
+
 ### Basic Test Setup
 
 ```go
