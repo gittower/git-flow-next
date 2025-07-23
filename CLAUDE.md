@@ -35,6 +35,7 @@ For comprehensive development information, see:
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture and design overview
 - **[CODING_GUIDELINES.md](CODING_GUIDELINES.md)** - Coding standards and conventions
 - **[TESTING_GUIDELINES.md](TESTING_GUIDELINES.md)** - Testing methodology and practices
+- **[COMMIT_GUIDELINES.md](COMMIT_GUIDELINES.md)** - Commit message standards and best practices
 - **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - GitHub Copilot context and patterns
 
 ## Architecture
@@ -151,6 +152,10 @@ git config gitflow.feature.finish.fetch true
 - Implement both long and short flag variants
 - Add command examples and usage information
 - Validate inputs before executing operations
+
+## Commit Guidelines
+
+Follow the project's commit message standards as defined in **[COMMIT_GUIDELINES.md](COMMIT_GUIDELINES.md)**. Use structured format with appropriate types (feat, fix, refactor, test, docs) and clear, imperative subjects ≤50 characters.
 
 ## Development Notes
 
