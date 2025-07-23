@@ -291,10 +291,20 @@ msg += fmt.Sprintf("To abort the merge, run 'git flow %s finish --abort %s'", br
 fmt.Println(msg)
 ```
 
+## Commit Guidelines
+
+Follow the project's commit message standards as defined in [COMMIT_GUIDELINES.md](../COMMIT_GUIDELINES.md). Key points:
+
+- Use structured format: `<type>: <subject>` with optional body and footer
+- Types: feat, fix, refactor, test, docs, style, etc.
+- Subject ≤50 characters, imperative mood, no period
+- Body explains what and why, uses flowing paragraphs
+- Reference issues with "Fixes #123", "Closes #456"
+
 ## Integration Points
 
 - **Tower**: Git Tower GUI integration using same configuration
 - **CI/CD**: Webhook-triggered deployments based on branch patterns
 - **git-flow-avh**: Compatibility with existing configurations
 
-When suggesting code changes, ensure they align with these established patterns and maintain consistency with the existing codebase architecture.
+When suggesting code changes, ensure they align with these established patterns and maintain consistency with the existing codebase architecture. Always follow the commit guidelines when creating commits or suggesting commit messages.
