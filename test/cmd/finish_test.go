@@ -2204,3 +2204,209 @@ func TestFinishFeatureBranchKeepRemote(t *testing.T) {
 		t.Errorf("Expected file content to be 'feature content', got '%s'", content)
 	}
 }
+
+// TestFinishWithConsecutiveConflicts tests handling of multiple conflicts during finish operation.
+// This test uses a release branch finish which naturally creates consecutive conflicts:
+// 1. Release branch conflicts with main during merge (first conflict)
+// 2. Develop branch conflicts with main during auto-update (second conflict)
+// Steps:
+// 1. Initialize git-flow with defaults (creates main, develop branches)
+// 2. Add conflicting content to main branch  
+// 3. Add different conflicting content to develop branch
+// 4. Create release branch from develop with additional changes
+// 5. Attempt release finish - should fail with merge conflict (release vs main)
+// 6. Resolve conflict and continue - should fail with auto-update conflict (develop vs main)
+// 7. Resolve second conflict and continue - should complete successfully
+func TestFinishWithConsecutiveConflicts(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults - creates main, develop, and all topic branch configs
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Add initial conflicting content to main branch
+	_, err = testutil.RunGit(t, dir, "checkout", "main")
+	if err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+	testutil.WriteFile(t, dir, "version.txt", "version: 1.0.0\nstatus: production\nenvironment: main")
+	_, err = testutil.RunGit(t, dir, "add", "version.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file on main: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add version info to main")
+	if err != nil {
+		t.Fatalf("Failed to commit on main: %v", err)
+	}
+
+	// Create release branch first (before adding conflicting content to develop)
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	output, err = testutil.RunGitFlow(t, dir, "release", "start", "v1.1.0")
+	if err != nil {
+		t.Fatalf("Failed to create release branch: %v\nOutput: %s", err, output)
+	}
+
+	// Add release-specific changes that will conflict with main
+	testutil.WriteFile(t, dir, "version.txt", "version: 1.1.0\nstatus: release-candidate\nenvironment: release\nfeatures: new-login,improved-ui\nrelease-date: 2024-01-15")
+	_, err = testutil.RunGit(t, dir, "add", "version.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file on release: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Prepare release v1.1.0")
+	if err != nil {
+		t.Fatalf("Failed to commit on release: %v", err)
+	}
+
+	// Now add conflicting content to develop (after release branch creation)
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	testutil.WriteFile(t, dir, "version.txt", "version: 1.1.0\nstatus: development\nenvironment: develop\nfeatures: new-login,improved-ui,experimental-feature")
+	_, err = testutil.RunGit(t, dir, "add", "version.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file on develop: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add development version info with experimental features")
+	if err != nil {
+		t.Fatalf("Failed to commit on develop: %v", err)
+	}
+
+	// Attempt to finish release branch - this should cause first conflict (release vs main)
+	output, err = testutil.RunGitFlow(t, dir, "release", "finish", "v1.1.0")
+	if err == nil {
+		t.Fatal("Expected release finish to fail due to merge conflict, but it succeeded")
+	}
+
+	// Verify we're in conflict state
+	if !strings.Contains(output, "Merge conflicts detected") {
+		t.Errorf("Expected merge conflict message, got: %s", output)
+	}
+
+	// Check that merge state file exists and has correct step
+	stateFile := filepath.Join(dir, ".git", "gitflow", "state", "merge.json")
+	if _, err := os.Stat(stateFile); os.IsNotExist(err) {
+		t.Fatal("Expected merge state file to exist after conflict")
+	}
+
+	// Verify git status shows conflicts on version.txt
+	gitStatus, err := testutil.RunGit(t, dir, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("Failed to get git status: %v", err)
+	}
+	if !strings.Contains(gitStatus, "UU version.txt") && !strings.Contains(gitStatus, "AA version.txt") {
+		t.Errorf("Expected conflict markers on version.txt in git status, got: %s", gitStatus)
+	}
+
+	// Resolve first conflict manually - merge release and main versions
+	testutil.WriteFile(t, dir, "version.txt", "version: 1.1.0\nstatus: production\nenvironment: main\nfeatures: new-login,improved-ui\nrelease-date: 2024-01-15")
+	_, err = testutil.RunGit(t, dir, "add", "version.txt")
+	if err != nil {
+		t.Fatalf("Failed to stage resolved file: %v", err)
+	}
+	
+	// Commit the resolved merge
+	_, err = testutil.RunGit(t, dir, "commit", "--no-edit")
+	if err != nil {
+		t.Fatalf("Failed to commit resolved merge: %v", err)
+	}
+
+	// Continue the finish operation - this should proceed to develop auto-update and cause second conflict
+	output, err = testutil.RunGitFlow(t, dir, "release", "finish", "--continue", "v1.1.0")
+	if err == nil {
+		t.Fatal("Expected release finish --continue to fail due to develop auto-update conflict, but it succeeded")
+	}
+
+	// Verify second conflict message for develop auto-update
+	if !strings.Contains(output, "Merge conflicts detected while updating base branch 'develop'") {
+		t.Errorf("Expected develop auto-update conflict message, got: %s", output)
+	}
+
+	// Verify we're still in a conflicted state but for develop auto-update (develop vs updated main)
+	gitStatus, err = testutil.RunGit(t, dir, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("Failed to get git status after develop conflict: %v", err)
+	}
+	if !strings.Contains(gitStatus, "UU version.txt") && !strings.Contains(gitStatus, "AA version.txt") {
+		t.Errorf("Expected conflict markers for develop auto-update, got: %s", gitStatus)
+	}
+
+	// Resolve second conflict - merge develop and updated main
+	testutil.WriteFile(t, dir, "version.txt", "version: 1.1.0\nstatus: development\nenvironment: develop\nfeatures: new-login,improved-ui,experimental-feature\nrelease-date: 2024-01-15")
+	_, err = testutil.RunGit(t, dir, "add", "version.txt")
+	if err != nil {
+		t.Fatalf("Failed to stage resolved develop conflict: %v", err)
+	}
+
+	// Commit the resolved develop auto-update conflict
+	_, err = testutil.RunGit(t, dir, "commit", "--no-edit")
+	if err != nil {
+		t.Fatalf("Failed to commit resolved develop conflict: %v", err)
+	}
+
+	// Continue again - this should complete successfully
+	output, err = testutil.RunGitFlow(t, dir, "release", "finish", "--continue", "v1.1.0")
+	if err != nil {
+		t.Fatalf("Expected release finish --continue to succeed after resolving all conflicts: %v\nOutput: %s", err, output)
+	}
+
+	// Verify success message
+	if !strings.Contains(output, "Successfully finished branch") {
+		t.Errorf("Expected success message, got: %s", output)
+	}
+
+	// Verify a tag was created (releases create tags by default)
+	tags, err := testutil.RunGit(t, dir, "tag", "-l")
+	if err != nil {
+		t.Fatalf("Failed to list tags: %v", err)
+	}
+	if !strings.Contains(tags, "v1.1.0") {
+		t.Errorf("Expected tag v1.1.0 to be created, got tags: %s", tags)
+	}
+
+	// Verify merge state is cleaned up
+	if _, err := os.Stat(stateFile); !os.IsNotExist(err) {
+		t.Error("Expected merge state file to be cleaned up after successful completion")
+	}
+
+	// Verify final repository state - should be on main branch after release finish
+	currentBranch, err := testutil.RunGit(t, dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to get current branch: %v", err)
+	}
+	if strings.TrimSpace(currentBranch) != "main" {
+		t.Errorf("Expected to be on main branch after release finish, got: %s", strings.TrimSpace(currentBranch))
+	}
+
+	// Verify release branch is deleted
+	branches, err := testutil.RunGit(t, dir, "branch")
+	if err != nil {
+		t.Fatalf("Failed to list branches: %v", err)
+	}
+	if strings.Contains(branches, "release/v1.1.0") {
+		t.Error("Expected release branch to be deleted after successful finish")
+	}
+
+	// Verify main branch has the resolved content with release info
+	mainContent := testutil.ReadFile(t, dir, "version.txt")
+	if !strings.Contains(mainContent, "version: 1.1.0") || !strings.Contains(mainContent, "release-date: 2024-01-15") {
+		t.Errorf("Expected main branch to have release changes, got: %s", mainContent)
+	}
+
+	// Verify develop branch has the resolved content with both release info and develop-specific content
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop branch: %v", err)
+	}
+	developContent := testutil.ReadFile(t, dir, "version.txt")
+	if !strings.Contains(developContent, "environment: develop") || !strings.Contains(developContent, "experimental-feature") {
+		t.Errorf("Expected develop branch to have both release and develop-specific content, got: %s", developContent)
+	}
+}
