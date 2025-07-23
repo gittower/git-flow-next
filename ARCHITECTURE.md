@@ -159,6 +159,8 @@ hotfix/         ← Emergency fixes
 | Release | `merge` | `merge`, `rebase` | ← `main` |
 | Hotfix | `rebase` | `merge`, `rebase` | ← `main` |
 
+**Note**: The `--rebase` flag can be used with the `update` command to override the configured strategy and force rebase behavior.
+
 #### Tag Configuration
 
 | Branch Type | Default Tagging | Tag Prefix | When Tagged |
@@ -212,6 +214,11 @@ git config gitflow.hotfix.downstreamStrategy rebase
 git config gitflow.feature.finish.notag true
 git config gitflow.release.finish.notag false
 git config gitflow.hotfix.finish.notag false
+
+# Usage examples
+git flow update feature/my-feature              # Uses configured strategy
+git flow update feature/my-feature --rebase     # Forces rebase strategy
+git flow rebase                                 # Shorthand for update --rebase
 ```
 
 **Note**: Release and hotfix branches merge only into `main`, then `develop` is automatically updated from `main` to stay synchronized.
@@ -479,6 +486,12 @@ git flow topic list <type>
 # Base branch operations  
 git flow merge-upstream <branch>  # or: git flow up <branch>
 git flow update <branch>
+git flow update <branch> --rebase  # Force rebase strategy
+
+# Shorthand commands (auto-detect branch type)
+git flow rebase                    # Shorthand for: git flow <type> update --rebase
+git flow update                    # Shorthand for: git flow <type> update
+git flow finish                    # Shorthand for: git flow <type> finish
 
 # Status and overview
 git flow status
@@ -493,6 +506,18 @@ For compatibility, traditional commands are aliased:
 git flow feature start <name>    # → git flow topic start feature <name>
 git flow hotfix finish <name>    # → git flow topic finish hotfix <name>
 git flow release list            # → git flow topic list release
+```
+
+### Shorthand Commands
+
+git-flow-next provides convenient shorthand commands that automatically detect your current topic branch:
+
+```bash
+git flow rebase                   # → git flow <type> update --rebase
+git flow update                   # → git flow <type> update
+git flow finish                   # → git flow <type> finish
+git flow delete                   # → git flow <type> delete
+git flow rename <name>            # → git flow <type> rename <name>
 ```
 
 ## Command Implementation

@@ -25,7 +25,8 @@ If merge conflicts occur, they will be handled according to the configured merge
 		if len(args) > 0 {
 			branchName = args[0]
 		}
-		if err := executeUpdate("", branchName); err != nil {
+		useRebase, _ := cmd.Flags().GetBool("rebase")
+		if err := executeUpdate("", branchName, useRebase); err != nil {
 			var exitCode errors.ExitCode
 			if flowErr, ok := err.(errors.Error); ok {
 				exitCode = flowErr.ExitCode()
@@ -53,7 +54,8 @@ If merge conflicts occur, they will be handled according to the configured merge
 			if len(args) > 0 {
 				name = args[0]
 			}
-			if err := executeUpdate(branchType, name); err != nil {
+			useRebase, _ := cmd.Flags().GetBool("rebase")
+			if err := executeUpdate(branchType, name, useRebase); err != nil {
 				var exitCode errors.ExitCode
 				if flowErr, ok := err.(errors.Error); ok {
 					exitCode = flowErr.ExitCode()
@@ -66,10 +68,16 @@ If merge conflicts occur, they will be handled according to the configured merge
 			return nil
 		},
 	}
+	
+	// Add --rebase flag to the command
+	cmd.Flags().Bool("rebase", false, "Force rebase strategy instead of configured strategy")
+	
 	return cmd
 }
 
 func init() {
+	// Add --rebase flag to the root update command
+	updateCmd.Flags().Bool("rebase", false, "Force rebase strategy instead of configured strategy")
 	rootCmd.AddCommand(updateCmd)
 }
 
@@ -79,7 +87,7 @@ func AddUpdateCommand(parentCmd *cobra.Command) {
 }
 
 // executeUpdate updates a branch with changes from its parent branch
-func executeUpdate(branchType string, name string) error {
+func executeUpdate(branchType string, name string, useRebase bool) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized()
 	if err != nil {
@@ -164,6 +172,11 @@ func executeUpdate(branchType string, name string) error {
 
 	if strategy == "" {
 		strategy = "merge" // Default to merge if no strategy configured
+	}
+
+	// Override strategy if --rebase flag is set
+	if useRebase {
+		strategy = "rebase"
 	}
 
 	// Create merge state

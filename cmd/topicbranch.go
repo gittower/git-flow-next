@@ -183,7 +183,7 @@ func registerBranchCommand(branchType string) {
 			if len(args) > 0 {
 				name = args[0]
 			}
-			if err := executeUpdate(branchType, name); err != nil {
+			if err := executeUpdate(branchType, name, false); err != nil {
 				var exitCode errors.ExitCode
 				if flowErr, ok := err.(errors.Error); ok {
 					exitCode = flowErr.ExitCode()

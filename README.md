@@ -69,7 +69,7 @@ git-flow-next provides convenient shorthand commands that automatically detect y
 | Shorthand | Full Command | Description |
 |-----------|--------------|-------------|
 | `git flow delete` | `git flow <type> delete <name>` | Delete the current topic branch |
-| `git flow rebase` | `git flow <type> update --rebase` | Rebase the current topic branch *(planned)* |
+| `git flow rebase` | `git flow <type> update --rebase` | Rebase the current topic branch |
 | `git flow update` | `git flow <type> update` | Update the current topic branch |
 | `git flow rename` | `git flow <type> rename <name>` | Rename the current topic branch |
 | `git flow publish` | `git flow <type> publish` | Publish the current topic branch *(planned)* |
@@ -89,6 +89,7 @@ When you use a shorthand command, git-flow-next:
 # On a feature branch
 git checkout feature/my-awesome-feature
 git flow finish  # Executes: git flow feature finish my-awesome-feature
+git flow rebase  # Executes: git flow feature update --rebase
 
 # On a release branch  
 git checkout release/v1.2.0
@@ -97,6 +98,7 @@ git flow publish  # Executes: git flow release publish v1.2.0
 # On a hotfix branch
 git checkout hotfix/critical-bug
 git flow finish  # Executes: git flow hotfix finish critical-bug
+git flow rebase  # Executes: git flow hotfix update --rebase
 ```
 
 ### Branch Detection
@@ -138,7 +140,6 @@ The shorthand commands work with all standard git-flow branch types:
 
 Some shorthand commands are currently planned for future releases:
 
-- **`git flow rebase`**: Will be implemented as an alias to `git flow <type> update --rebase`
 - **`git flow publish`**: Will be implemented as an alias to `git flow <type> publish`
 
 These commands currently show "not implemented" messages when used.
