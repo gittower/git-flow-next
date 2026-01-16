@@ -38,13 +38,16 @@ If git-flow-avh configuration exists, it will be imported.`,
 		hotfixPrefix, _ := cmd.Flags().GetString("hotfix")
 		supportPrefix, _ := cmd.Flags().GetString("support")
 		tagPrefix, _ := cmd.Flags().GetString("tag")
-		InitCommand(useDefaults, !noCreateBranches, preset, custom, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix)
+		force, _ := cmd.Flags().GetBool("force")
+		noForce, _ := cmd.Flags().GetBool("no-force")
+		forceFlag := getBoolFlagInit(force, noForce)
+		InitCommand(useDefaults, !noCreateBranches, preset, custom, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix, forceFlag)
 	},
 }
 
 // InitCommand is the implementation of the init command
-func InitCommand(useDefaults, createBranches bool, preset string, custom bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string) {
-	if err := initFlow(useDefaults, createBranches, preset, custom, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix); err != nil {
+func InitCommand(useDefaults, createBranches bool, preset string, custom bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string, force *bool) {
+	if err := initFlow(useDefaults, createBranches, preset, custom, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix, force); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -57,16 +60,42 @@ func InitCommand(useDefaults, createBranches bool, preset string, custom bool, m
 }
 
 // initFlow performs the actual initialization logic and returns any errors
-func initFlow(useDefaults, createBranches bool, preset string, custom bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string) error {
+func initFlow(useDefaults, createBranches bool, preset string, custom bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string, force *bool) error {
 	// Check if we're in a git repo
 	if !git.IsGitRepo() {
 		return &errors.GitError{Operation: "check if git repository", Err: fmt.Errorf("not a git repository. Please run 'git init' first")}
 	}
 
-	var cfg *config.Config
+	// Determine if force is enabled (default: false)
+	forceReinit := false
+	if force != nil {
+		forceReinit = *force
+	}
 
 	// Check if any configuration options are provided
 	hasConfigFlags := mainBranch != "" || developBranch != "" || featurePrefix != "" || bugfixPrefix != "" || releasePrefix != "" || hotfixPrefix != "" || supportPrefix != "" || tagPrefix != ""
+
+	// Check if already initialized
+	initialized, err := config.IsInitialized()
+	if err != nil {
+		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+	}
+
+	if initialized {
+		// Special case: AVH import should work without --force (migration, not reconfiguration)
+		isAVHImport := config.CheckGitFlowAVHConfig() && preset == "" && !custom &&
+			!useDefaults && !hasConfigFlags
+
+		if !forceReinit && !isAVHImport {
+			return &errors.AlreadyInitializedError{}
+		}
+
+		if forceReinit {
+			fmt.Fprintln(os.Stderr, "Warning: Reinitializing git-flow. Existing configuration will be overwritten.")
+		}
+	}
+
+	var cfg *config.Config
 
 	// Check if git-flow-avh config exists and no explicit options are provided
 	if config.CheckGitFlowAVHConfig() && preset == "" && !custom && !useDefaults && !hasConfigFlags {
@@ -559,6 +588,18 @@ func interactiveConfig() config.ConfigOverrides {
 	return overrides
 }
 
+// getBoolFlagInit converts two opposite boolean flags into a single *bool value
+func getBoolFlagInit(positive, negative bool) *bool {
+	if positive {
+		return &positive
+	}
+	if negative {
+		falseBool := false
+		return &falseBool
+	}
+	return nil
+}
+
 func init() {
 	rootCmd.AddCommand(initCmd)
 
@@ -575,4 +616,6 @@ func init() {
 	initCmd.Flags().StringP("hotfix", "x", "", "Hotfix branch prefix")
 	initCmd.Flags().StringP("support", "s", "", "Support branch prefix")
 	initCmd.Flags().StringP("tag", "t", "", "Version tag prefix")
+	initCmd.Flags().BoolP("force", "f", false, "Force reinitialization of an already initialized repository")
+	initCmd.Flags().Bool("no-force", false, "Don't force reinitialize (default behavior)")
 }

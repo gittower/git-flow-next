@@ -44,6 +44,17 @@ func (e *NotInitializedError) ExitCode() ExitCode {
 	return ExitCodeNotInitialized
 }
 
+// AlreadyInitializedError indicates git-flow is already initialized
+type AlreadyInitializedError struct{}
+
+func (e *AlreadyInitializedError) Error() string {
+	return "git flow is already initialized (use --force to reinitialize)"
+}
+
+func (e *AlreadyInitializedError) ExitCode() ExitCode {
+	return ExitCodeInvalidInput
+}
+
 // EmptyBranchNameError indicates that a branch name was not provided
 type EmptyBranchNameError struct{}
 

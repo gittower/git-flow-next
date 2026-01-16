@@ -564,3 +564,89 @@ func TestInitWithDefaultsAndOverrides(t *testing.T) {
 		t.Error("Expected 'hotfix' branch configuration to exist")
 	}
 }
+
+// TestInitAlreadyInitializedError tests that init fails when already initialized
+func TestInitAlreadyInitializedError(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// First init should succeed
+	_, err := runGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("First init failed: %v", err)
+	}
+
+	// Second init should fail with exit code 2
+	output, err := runGitFlow(t, dir, "init", "--defaults")
+	if err == nil {
+		t.Fatalf("Expected second init to fail")
+	}
+
+	if !strings.Contains(output, "already initialized") {
+		t.Errorf("Expected 'already initialized' error, got: %s", output)
+	}
+}
+
+// TestInitWithForceReinit tests that --force allows reinitialization
+func TestInitWithForceReinit(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// First init
+	_, err := runGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("First init failed: %v", err)
+	}
+
+	// Reinit with --force and different settings
+	output, err := runGitFlow(t, dir, "init", "--force", "--defaults", "--feature=feat/")
+	if err != nil {
+		t.Fatalf("Force reinit failed: %v\nOutput: %s", err, output)
+	}
+
+	// Verify new config applied
+	featurePrefix := getGitConfig(t, dir, "gitflow.branch.feature.prefix")
+	if featurePrefix != "feat/" {
+		t.Errorf("Expected feature prefix 'feat/', got: %s", featurePrefix)
+	}
+}
+
+// TestInitWithForceShortFlag tests that -f short flag works
+func TestInitWithForceShortFlag(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// First init
+	_, err := runGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("First init failed: %v", err)
+	}
+
+	// Reinit with -f short flag
+	_, err = runGitFlow(t, dir, "init", "-f", "--defaults")
+	if err != nil {
+		t.Fatalf("Force reinit with -f failed: %v", err)
+	}
+}
+
+// TestInitNoForceFlag tests that --no-force explicitly denies reinit
+func TestInitNoForceFlag(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// First init
+	_, err := runGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("First init failed: %v", err)
+	}
+
+	// Reinit with --no-force should fail
+	output, err := runGitFlow(t, dir, "init", "--no-force", "--defaults")
+	if err == nil {
+		t.Fatalf("Expected --no-force to prevent reinit")
+	}
+
+	if !strings.Contains(output, "already initialized") {
+		t.Errorf("Expected 'already initialized' error, got: %s", output)
+	}
+}

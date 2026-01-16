@@ -6,7 +6,7 @@ git-flow-init - Initialize git-flow in a repository
 
 ## SYNOPSIS
 
-**git-flow init** [**--preset**=*preset*] [**--custom**] [**--defaults**] [*options*]
+**git-flow init** [**-f**|**--force**|**--no-force**] [**--preset**=*preset*] [**--custom**] [**--defaults**] [*options*]
 
 ## DESCRIPTION
 
@@ -33,6 +33,14 @@ Initialize git-flow configuration in the current Git repository. This command se
 
 **--no-create-branches**
 : Don't create branches even if they don't exist in the repository.
+
+### Initialization Control
+
+**--force**, **-f**
+: Force reinitialization of an already initialized repository. Existing git-flow configuration will be overwritten.
+
+**--no-force**
+: Don't allow reinitialization if already initialized (default behavior). Exits with error if git-flow is already configured.
 
 ### Branch Name Overrides
 
@@ -171,6 +179,11 @@ Interactive initialization:
 git flow init
 ```
 
+Reinitialize with different settings:
+```bash
+git flow init --force --preset=github
+```
+
 ## CONFIGURATION
 
 After initialization, git-flow stores configuration in **.git/config** under the **gitflow.*** namespace:
@@ -200,7 +213,7 @@ After initialization, git-flow stores configuration in **.git/config** under the
 : Repository not found or not a git repository
 
 **2**
-: Repository already initialized (use config commands to modify)
+: Repository already initialized (use **--force** to reinitialize)
 
 **3**
 : Invalid preset or configuration options
@@ -211,7 +224,8 @@ After initialization, git-flow stores configuration in **.git/config** under the
 
 ## NOTES
 
-- **git-flow init** can be run multiple times safely
+- **git-flow init** requires **--force** to reinitialize an already initialized repository
+- Existing git-flow-avh configuration is automatically imported without requiring **--force**
 - Existing branches are preserved during initialization
 - Compatible with repositories previously initialized with git-flow-avh
 - All configuration is stored locally in the repository
