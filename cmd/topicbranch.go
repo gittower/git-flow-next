@@ -154,6 +154,9 @@ func registerBranchCommand(branchType string) {
 			fetch, _ := cmd.Flags().GetBool("fetch")
 			noFetch, _ := cmd.Flags().GetBool("no-fetch")
 
+			// Get remote check flag
+			noRemoteCheck, _ := cmd.Flags().GetBool("no-remote-check")
+
 			// Determine branch name - use provided arg or detect from current branch
 			var name string
 			if len(args) > 0 {
@@ -213,7 +216,7 @@ func registerBranchCommand(branchType string) {
 			}
 
 			// Call the generic finish command with the branch type and name
-			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, getBoolFlag(fetch, noFetch))
+			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, getBoolFlag(fetch, noFetch), noRemoteCheck)
 		},
 	}
 
@@ -433,6 +436,9 @@ func addFinishFlags(cmd *cobra.Command) {
 	// Fetch Flags
 	cmd.Flags().Bool("fetch", false, "Fetch from remote before finishing")
 	cmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before finishing")
+
+	// Remote Check Flags
+	cmd.Flags().Bool("no-remote-check", false, "Skip check for commits behind remote tracking branch")
 }
 
 // getBoolFlag converts two opposite boolean flags into a single *bool value

@@ -240,3 +240,19 @@ func (e *RemoteBranchNotFoundError) Error() string {
 func (e *RemoteBranchNotFoundError) ExitCode() ExitCode {
 	return ExitCodeBranchNotFound
 }
+
+// BranchBehindRemoteError indicates the local branch is behind its remote tracking branch
+type BranchBehindRemoteError struct {
+	BranchName    string
+	RemoteName    string
+	CommitsBehind int
+}
+
+func (e *BranchBehindRemoteError) Error() string {
+	return fmt.Sprintf("branch '%s' is %d commit(s) behind '%s/%s'. Pull the latest changes or use --no-remote-check to proceed anyway",
+		e.BranchName, e.CommitsBehind, e.RemoteName, e.BranchName)
+}
+
+func (e *BranchBehindRemoteError) ExitCode() ExitCode {
+	return ExitCodeInvalidInput
+}

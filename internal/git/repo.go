@@ -495,3 +495,30 @@ func CreateTrackingBranch(localBranch, remote, remoteBranch string) error {
 	}
 	return nil
 }
+
+// GetBehindCount returns how many commits the local branch is behind its remote tracking branch.
+// Returns 0 if the branch has no remote tracking branch or is up to date.
+func GetBehindCount(branch, remote string) (int, error) {
+	remoteBranch := remote + "/" + branch
+
+	// Check if remote branch exists first
+	if !RemoteBranchExists(remote, branch) {
+		return 0, nil // No remote branch, nothing to be behind
+	}
+
+	// git rev-list --count branch..remote/branch
+	cmd := exec.Command("git", "rev-list", "--count", branch+".."+remoteBranch)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get behind count: %w", err)
+	}
+
+	countStr := strings.TrimSpace(string(output))
+	var count int
+	_, err = fmt.Sscanf(countStr, "%d", &count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse commit count '%s': %w", countStr, err)
+	}
+
+	return count, nil
+}

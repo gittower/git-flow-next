@@ -132,6 +132,9 @@ The operation maintains a persistent state file that allows it to resume after c
 **--no-fetch**
 : Don't fetch from remote before finishing. Overrides git config setting `gitflow.<type>.finish.fetch`.
 
+**--no-remote-check**
+: Skip the check that verifies the local branch is not behind its remote tracking branch. By default (when fetch is enabled), finish will abort if the branch is behind to prevent incomplete integrations.
+
 ## MERGE STRATEGIES
 
 The merge strategy used when finishing follows a three-layer precedence system:
@@ -314,7 +317,7 @@ git config gitflow.<type>.finish.fetch true
 : Topic branch not found
 
 **2**
-: Git operation failed (conflicts, etc.)
+: Branch is behind remote tracking branch (use **--no-remote-check** to override), or other invalid input
 
 **3**
 : Invalid branch name or configuration
@@ -339,7 +342,8 @@ git config gitflow.<type>.finish.fetch true
 - **--preserve-merges** flag only applies to rebase operations
 - **--squash** and **--rebase** flags are mutually exclusive when both set explicitly
 - Use **--continue** and **--abort** for conflict resolution
-- Tag creation behavior varies by topic branch type configuration  
+- Tag creation behavior varies by topic branch type configuration
 - The **git-flow finish** shorthand automatically detects current topic branch type
 - Child branches are automatically updated when their parent changes
 - Some topic branch types (like releases and hotfixes) may create tags by default
+- When fetch is enabled, the local branch is checked against its remote tracking branch; if behind, finish aborts to prevent incomplete integrations (use **--no-remote-check** to skip)

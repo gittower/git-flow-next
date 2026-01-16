@@ -151,7 +151,8 @@ func RegisterShorthandCommands() {
 				Squash:         getBoolPtr(cmd, "squash", "no-squash"),
 				SquashMessage:  getStringPtrFromFlag(cmd, "squash-message"),
 			}
-			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, nil)
+			noRemoteCheck, _ := cmd.Flags().GetBool("no-remote-check")
+			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, nil, noRemoteCheck)
 		},
 	}
 

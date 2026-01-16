@@ -79,8 +79,8 @@ const (
 // =============================================================================
 
 // FinishCommand is the implementation of the finish command for topic branches
-func FinishCommand(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool) {
-	if err := executeFinish(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, fetch); err != nil {
+func FinishCommand(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noRemoteCheck bool) {
+	if err := executeFinish(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, fetch, noRemoteCheck); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -97,7 +97,7 @@ func FinishCommand(branchType string, name string, continueOp bool, abortOp bool
 // =============================================================================
 
 // executeFinish performs the actual branch finishing logic and returns any errors
-func executeFinish(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool) error {
+func executeFinish(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noRemoteCheck bool) error {
 	// Get configuration early
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -200,6 +200,21 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 			return &errors.GitError{Operation: "fetch from remote", Err: err}
 		}
 		fmt.Printf("Fetch completed\n")
+
+		// Check if branch is behind remote (only if we fetched and check is enabled)
+		if !noRemoteCheck {
+			behindCount, err := git.GetBehindCount(name, cfg.Remote)
+			if err != nil {
+				// Non-fatal warning - proceed if we can't determine status
+				fmt.Fprintf(os.Stderr, "Warning: Could not check remote status: %v\n", err)
+			} else if behindCount > 0 {
+				return &errors.BranchBehindRemoteError{
+					BranchName:    name,
+					RemoteName:    cfg.Remote,
+					CommitsBehind: behindCount,
+				}
+			}
+		}
 	}
 
 	// Regular finish command flow

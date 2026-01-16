@@ -1362,3 +1362,249 @@ func TestFinishCleansUpBaseBranch(t *testing.T) {
 		t.Error("Expected feature branch to be deleted after finish")
 	}
 }
+
+// TestFinishBranchBehindRemote tests that finish fails when local branch is behind remote
+func TestFinishBranchBehindRemote(t *testing.T) {
+	// Setup test repo with remote
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Create a feature branch
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "behind-test")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Add a commit to the feature branch
+	testutil.WriteFile(t, dir, "local.txt", "local content")
+	_, err = testutil.RunGit(t, dir, "add", "local.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Local commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Push the feature branch to remote
+	_, err = testutil.RunGit(t, dir, "push", "-u", "origin", "feature/behind-test")
+	if err != nil {
+		t.Fatalf("Failed to push feature branch: %v", err)
+	}
+
+	// Clone the remote to simulate a teammate
+	teammateDir, err := os.MkdirTemp("", "git-flow-test-teammate-*")
+	if err != nil {
+		t.Fatalf("Failed to create teammate directory: %v", err)
+	}
+	defer os.RemoveAll(teammateDir)
+
+	_, err = testutil.RunGit(t, teammateDir, "clone", remoteDir, ".")
+	if err != nil {
+		t.Fatalf("Failed to clone remote: %v", err)
+	}
+	_, err = testutil.RunGit(t, teammateDir, "config", "user.name", "Teammate")
+	if err != nil {
+		t.Fatalf("Failed to configure teammate user name: %v", err)
+	}
+	_, err = testutil.RunGit(t, teammateDir, "config", "user.email", "teammate@example.com")
+	if err != nil {
+		t.Fatalf("Failed to configure teammate user email: %v", err)
+	}
+
+	// Teammate checks out the feature branch and adds a commit
+	_, err = testutil.RunGit(t, teammateDir, "checkout", "feature/behind-test")
+	if err != nil {
+		t.Fatalf("Failed to checkout feature branch in teammate repo: %v", err)
+	}
+	testutil.WriteFile(t, teammateDir, "teammate.txt", "teammate content")
+	_, err = testutil.RunGit(t, teammateDir, "add", "teammate.txt")
+	if err != nil {
+		t.Fatalf("Failed to add teammate file: %v", err)
+	}
+	_, err = testutil.RunGit(t, teammateDir, "commit", "-m", "Teammate commit")
+	if err != nil {
+		t.Fatalf("Failed to commit teammate file: %v", err)
+	}
+	_, err = testutil.RunGit(t, teammateDir, "push")
+	if err != nil {
+		t.Fatalf("Failed to push teammate commit: %v", err)
+	}
+
+	// Now back to original repo - local is behind remote
+	// Try to finish with fetch enabled - should fail
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "behind-test", "--fetch")
+	if err == nil {
+		t.Fatalf("Expected finish to fail when branch is behind remote, but it succeeded\nOutput: %s", output)
+	}
+
+	if !strings.Contains(output, "behind") {
+		t.Errorf("Expected error message to mention 'behind', got: %s", output)
+	}
+
+	// Verify branch still exists (not deleted since finish failed)
+	if !testutil.BranchExists(t, dir, "feature/behind-test") {
+		t.Error("Expected feature branch to still exist after failed finish")
+	}
+}
+
+// TestFinishBranchBehindRemoteWithNoCheck tests that --no-remote-check bypasses the check
+func TestFinishBranchBehindRemoteWithNoCheck(t *testing.T) {
+	// Setup test repo with remote
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Create a feature branch
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "nocheck-test")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Add a commit to the feature branch
+	testutil.WriteFile(t, dir, "local.txt", "local content")
+	_, err = testutil.RunGit(t, dir, "add", "local.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Local commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Push the feature branch to remote
+	_, err = testutil.RunGit(t, dir, "push", "-u", "origin", "feature/nocheck-test")
+	if err != nil {
+		t.Fatalf("Failed to push feature branch: %v", err)
+	}
+
+	// Clone the remote to simulate a teammate
+	teammateDir, err := os.MkdirTemp("", "git-flow-test-teammate-*")
+	if err != nil {
+		t.Fatalf("Failed to create teammate directory: %v", err)
+	}
+	defer os.RemoveAll(teammateDir)
+
+	_, err = testutil.RunGit(t, teammateDir, "clone", remoteDir, ".")
+	if err != nil {
+		t.Fatalf("Failed to clone remote: %v", err)
+	}
+	_, err = testutil.RunGit(t, teammateDir, "config", "user.name", "Teammate")
+	if err != nil {
+		t.Fatalf("Failed to configure teammate user name: %v", err)
+	}
+	_, err = testutil.RunGit(t, teammateDir, "config", "user.email", "teammate@example.com")
+	if err != nil {
+		t.Fatalf("Failed to configure teammate user email: %v", err)
+	}
+
+	// Teammate checks out the feature branch and adds a commit
+	_, err = testutil.RunGit(t, teammateDir, "checkout", "feature/nocheck-test")
+	if err != nil {
+		t.Fatalf("Failed to checkout feature branch in teammate repo: %v", err)
+	}
+	testutil.WriteFile(t, teammateDir, "teammate.txt", "teammate content")
+	_, err = testutil.RunGit(t, teammateDir, "add", "teammate.txt")
+	if err != nil {
+		t.Fatalf("Failed to add teammate file: %v", err)
+	}
+	_, err = testutil.RunGit(t, teammateDir, "commit", "-m", "Teammate commit")
+	if err != nil {
+		t.Fatalf("Failed to commit teammate file: %v", err)
+	}
+	_, err = testutil.RunGit(t, teammateDir, "push")
+	if err != nil {
+		t.Fatalf("Failed to push teammate commit: %v", err)
+	}
+
+	// Now back to original repo - local is behind remote
+	// Finish with --no-remote-check should succeed
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "nocheck-test", "--fetch", "--no-remote-check")
+	if err != nil {
+		t.Fatalf("Expected finish with --no-remote-check to succeed, but it failed: %v\nOutput: %s", err, output)
+	}
+
+	// Verify branch is deleted (finish succeeded)
+	if testutil.BranchExists(t, dir, "feature/nocheck-test") {
+		t.Error("Expected feature branch to be deleted after successful finish")
+	}
+}
+
+// TestFinishBranchNoRemoteTracking tests finish works when no remote tracking exists
+func TestFinishBranchNoRemoteTracking(t *testing.T) {
+	// Setup test repo with remote (but we won't push the feature branch)
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Create a feature branch (local only, not pushed)
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "local-only")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Add a commit
+	testutil.WriteFile(t, dir, "local.txt", "local content")
+	_, err = testutil.RunGit(t, dir, "add", "local.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Local commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Finish with fetch enabled - should succeed because no remote tracking branch exists
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "local-only", "--fetch")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed for local-only branch, but it failed: %v\nOutput: %s", err, output)
+	}
+
+	// Verify branch is deleted
+	if testutil.BranchExists(t, dir, "feature/local-only") {
+		t.Error("Expected feature branch to be deleted after finish")
+	}
+}
+
+// TestFinishBranchUpToDateWithRemote tests finish works when branch is up to date with remote
+func TestFinishBranchUpToDateWithRemote(t *testing.T) {
+	// Setup test repo with remote
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Create a feature branch
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "uptodate-test")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Add a commit
+	testutil.WriteFile(t, dir, "local.txt", "local content")
+	_, err = testutil.RunGit(t, dir, "add", "local.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Local commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Push to remote (so we're up to date)
+	_, err = testutil.RunGit(t, dir, "push", "-u", "origin", "feature/uptodate-test")
+	if err != nil {
+		t.Fatalf("Failed to push feature branch: %v", err)
+	}
+
+	// Finish with fetch enabled - should succeed because we're up to date
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "uptodate-test", "--fetch")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed when up to date with remote, but it failed: %v\nOutput: %s", err, output)
+	}
+
+	// Verify branch is deleted
+	if testutil.BranchExists(t, dir, "feature/uptodate-test") {
+		t.Error("Expected feature branch to be deleted after finish")
+	}
+}
