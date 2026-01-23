@@ -112,12 +112,12 @@ func publish(branchType string, name string) error {
 
 	// Run publish operation wrapped with hooks
 	return hooks.WithHooks(gitDir, branchType, hooks.HookActionPublish, hookCtx, func() error {
-		return executePublish(fullBranchName, shortName, branchType, remote)
+		return executePublish(fullBranchName, shortName, branchType, remote, branchConfig.PushOption)
 	})
 }
 
 // executePublish performs the actual publish operation (called within hooks wrapper)
-func executePublish(fullBranchName, shortName, branchType, remote string) error {
+func executePublish(fullBranchName, shortName, branchType, remote, pushOption string) error {
 	// Fetch to get latest remote refs
 	fmt.Printf("Fetching from '%s'...\n", remote)
 	if err := git.Fetch(remote); err != nil {
@@ -135,7 +135,7 @@ func executePublish(fullBranchName, shortName, branchType, remote string) error 
 
 	// Push the branch to remote with tracking
 	fmt.Printf("Publishing '%s' to '%s'...\n", fullBranchName, remote)
-	if err := git.PushBranch(remote, fullBranchName); err != nil {
+	if err := git.PushBranch(remote, fullBranchName, pushOption); err != nil {
 		return &errors.GitError{
 			Operation: fmt.Sprintf("push branch '%s' to '%s'", fullBranchName, remote),
 			Err:       err,

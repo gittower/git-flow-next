@@ -34,6 +34,7 @@ type BranchConfig struct {
 	AutoUpdate         bool
 	Tag                bool   // whether to create a tag when finishing
 	TagPrefix          string // prefix to use for tag names
+	PushOption         string
 }
 
 // MergeStrategy represents the strategy for merging branches

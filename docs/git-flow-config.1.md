@@ -85,6 +85,9 @@ Manage git-flow configuration for base branches and topic branch types. The **co
 **--tag**[=*bool*]
 : Create tags on finish. Default: **false**
 
+**--push-option**=*option*
+: Transmit the given string to the server. (e.g., "ci.skip")
+
 ### Edit Base Branch (`edit base`)
 
 Same options as `add base`:

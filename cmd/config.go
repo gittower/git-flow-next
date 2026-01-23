@@ -76,7 +76,7 @@ Parent branch must be a configured base branch.
 Examples:
   git-flow config add topic feature develop --prefix=feat/
   git-flow config add topic release main --starting-point=develop --tag=true
-  git-flow config add topic hotfix main --upstream-strategy=squash`,
+  git-flow config add topic hotfix main --upstream-strategy=squash --push-option=ci.skip`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
@@ -87,8 +87,9 @@ Examples:
 		upstreamStrategy, _ := cmd.Flags().GetString("upstream-strategy")
 		downstreamStrategy, _ := cmd.Flags().GetString("downstream-strategy")
 		tag, _ := cmd.Flags().GetBool("tag")
+		pushOption, _ := cmd.Flags().GetString("pushOption")
 
-		ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag)
+		ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag, pushOption)
 	},
 }
 
@@ -256,8 +257,8 @@ func ConfigAddBaseCommand(name, parent, upstreamStrategy, downstreamStrategy str
 }
 
 // ConfigAddTopicCommand adds a topic branch type configuration
-func ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) {
-	if err := executeConfigAddTopic(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag); err != nil {
+func ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool, pushOption string) {
+	if err := executeConfigAddTopic(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag, pushOption); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -451,7 +452,7 @@ func executeConfigAddBase(name, parent, upstreamStrategy, downstreamStrategy str
 	return nil
 }
 
-func executeConfigAddTopic(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) error {
+func executeConfigAddTopic(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool, pushOption string) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized()
 	if err != nil {
@@ -518,6 +519,7 @@ func executeConfigAddTopic(name, parent, prefix, startingPoint, upstreamStrategy
 		DownstreamStrategy: downstreamStrategy,
 		Prefix:             prefix,
 		Tag:                tag,
+		PushOption:         pushOption,
 	}
 
 	// Add to configuration
