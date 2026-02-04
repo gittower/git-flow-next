@@ -16,6 +16,36 @@ func GetConfig(key string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// GetConfigAllValues gets all values for a multi-value Git config key
+func GetConfigAllValues(key string) ([]string, error) {
+	return GetConfigAllValuesInDir("", key)
+}
+
+// GetConfigAllValuesInDir gets all values for a multi-value Git config key in the specified directory
+func GetConfigAllValuesInDir(dir, key string) ([]string, error) {
+	cmd := exec.Command("git", "config", "--get-all", key)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	output, err := cmd.Output()
+	if err != nil {
+		// If no config values match, return empty slice (not an error)
+		if strings.Contains(err.Error(), "exit status 1") {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("failed to get git config %s: %w", key, err)
+	}
+
+	var values []string
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		if line != "" {
+			values = append(values, line)
+		}
+	}
+	return values, nil
+}
+
 // GetConfigInDir gets a Git config value in the specified directory
 func GetConfigInDir(dir, key string) (string, error) {
 	cmd := exec.Command("git", "config", "--get", key)

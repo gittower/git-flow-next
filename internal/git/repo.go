@@ -475,11 +475,11 @@ func MergeSquashWithMessage(branchName string, message string) error {
 }
 
 // PushBranch pushes a local branch to a remote and sets up tracking
-func PushBranch(remote, branch, pushoption string) error {
+func PushBranch(remote, branch string, pushOptions []string) error {
 	args := []string{"push", "-u", remote}
 
-	if pushoption != "" {
-		args = append(args, "-o", pushoption)
+	for _, opt := range pushOptions {
+		args = append(args, "-o", opt)
 	}
 
 	args = append(args, branch)

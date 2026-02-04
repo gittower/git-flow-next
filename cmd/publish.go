@@ -13,8 +13,10 @@ import (
 
 // PublishCommand is the implementation of the publish command for topic branches.
 // If name is empty, the current branch will be published.
-func PublishCommand(branchType string, name string) {
-	if err := publish(branchType, name); err != nil {
+// pushOptions are CLI-provided push options to transmit to the server.
+// noPushOption suppresses all push options (both CLI and config defaults).
+func PublishCommand(branchType string, name string, pushOptions []string, noPushOption bool) {
+	if err := publish(branchType, name, pushOptions, noPushOption); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -27,7 +29,7 @@ func PublishCommand(branchType string, name string) {
 }
 
 // publish performs the actual publish logic and returns any errors
-func publish(branchType string, name string) error {
+func publish(branchType string, name string, cliPushOptions []string, noPushOption bool) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized()
 	if err != nil {
@@ -110,14 +112,47 @@ func publish(branchType string, name string) error {
 		hookCtx.Version = shortName
 	}
 
+	// Resolve push options using three-layer precedence:
+	// Layer 1: No default push options (branch config has no push option field)
+	// Layer 2: Git config (gitflow.<branchType>.publish.push-option)
+	// Layer 3: CLI flags add to config defaults
+	// --no-push-option suppresses all options
+	pushOptions := resolvePushOptions(cfg, branchType, cliPushOptions, noPushOption)
+
 	// Run publish operation wrapped with hooks
 	return hooks.WithHooks(gitDir, branchType, hooks.HookActionPublish, hookCtx, func() error {
-		return executePublish(fullBranchName, shortName, branchType, remote, branchConfig.PushOption)
+		return executePublish(fullBranchName, shortName, branchType, remote, pushOptions)
 	})
 }
 
+// resolvePushOptions resolves push options using three-layer precedence:
+// - Layer 1: No default push options (branch config has no push option field)
+// - Layer 2: Git config (gitflow.<branchType>.publish.push-option)
+// - Layer 3: CLI flags add to config defaults
+// If noPushOption is true, all push options are suppressed.
+func resolvePushOptions(cfg *config.Config, branchType string, cliPushOptions []string, noPushOption bool) []string {
+	// --no-push-option suppresses all options
+	if noPushOption {
+		return nil
+	}
+
+	var resolvedOptions []string
+
+	// Layer 2: Load from git config (multi-value key)
+	configKey := fmt.Sprintf("gitflow.%s.publish.push-option", branchType)
+	configOptions, err := git.GetConfigAllValues(configKey)
+	if err == nil {
+		resolvedOptions = append(resolvedOptions, configOptions...)
+	}
+
+	// Layer 3: CLI flags add to config defaults
+	resolvedOptions = append(resolvedOptions, cliPushOptions...)
+
+	return resolvedOptions
+}
+
 // executePublish performs the actual publish operation (called within hooks wrapper)
-func executePublish(fullBranchName, shortName, branchType, remote, pushOption string) error {
+func executePublish(fullBranchName, shortName, branchType, remote string, pushOptions []string) error {
 	// Fetch to get latest remote refs
 	fmt.Printf("Fetching from '%s'...\n", remote)
 	if err := git.Fetch(remote); err != nil {
@@ -135,7 +170,7 @@ func executePublish(fullBranchName, shortName, branchType, remote, pushOption st
 
 	// Push the branch to remote with tracking
 	fmt.Printf("Publishing '%s' to '%s'...\n", fullBranchName, remote)
-	if err := git.PushBranch(remote, fullBranchName, pushOption); err != nil {
+	if err := git.PushBranch(remote, fullBranchName, pushOptions); err != nil {
 		return &errors.GitError{
 			Operation: fmt.Sprintf("push branch '%s' to '%s'", fullBranchName, remote),
 			Err:       err,

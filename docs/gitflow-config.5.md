@@ -93,7 +93,7 @@ Command overrides use the pattern: **gitflow.*branchtype*.*command*.*option***
 
 ### Common Commands
 
-**start**, **finish**, **update**, **delete**, **rename**
+**start**, **finish**, **update**, **delete**, **rename**, **publish**
 
 ### Common Options
 
@@ -121,6 +121,25 @@ Command overrides use the pattern: **gitflow.*branchtype*.*command*.*option***
 
 **message**
 : Custom message for tags.
+
+**push-option**
+: Push option to transmit to the server during publish (publish command only). This is a multi-value key; use `git config --add` to specify multiple options. CLI options are combined with config defaults (additive). Use `--no-push-option` flag to suppress config defaults.
+: *Default*: none
+: *Example*: `git config gitflow.feature.publish.push-option "ci.skip"`
+
+### Push Option Examples
+
+```bash
+# Skip CI when publishing feature branches
+git config gitflow.feature.publish.push-option "ci.skip"
+
+# Auto-create merge request when publishing release branches (GitLab)
+git config gitflow.release.publish.push-option "merge_request.create"
+git config --add gitflow.release.publish.push-option "merge_request.target=main"
+
+# Set topic for Gerrit when publishing hotfix branches
+git config gitflow.hotfix.publish.push-option "%topic=hotfix"
+```
 
 ## EXAMPLE CONFIGURATIONS
 

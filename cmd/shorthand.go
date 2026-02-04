@@ -111,9 +111,13 @@ func RegisterShorthandCommands() {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
-			PublishCommand(branchType, name)
+			pushOptions, _ := cmd.Flags().GetStringArray("push-option")
+			noPushOption, _ := cmd.Flags().GetBool("no-push-option")
+			PublishCommand(branchType, name, pushOptions, noPushOption)
 		},
 	}
+	publishCmd.Flags().StringArrayP("push-option", "o", nil, "Push option to transmit to the server (repeatable)")
+	publishCmd.Flags().Bool("no-push-option", false, "Don't send any push options (overrides config defaults)")
 	rootCmd.AddCommand(publishCmd)
 
 	// Finish

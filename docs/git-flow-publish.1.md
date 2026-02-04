@@ -6,7 +6,7 @@ git-flow-publish - Publish a topic branch to the remote repository
 
 ## SYNOPSIS
 
-**git-flow** *topic* **publish** [*name*]
+**git-flow** *topic* **publish** [*name*] [**-o** *option*]... [**--no-push-option**]
 
 ## DESCRIPTION
 
@@ -30,6 +30,14 @@ The command will:
 
 *name*
 : Optional. The name of the branch to publish. If omitted, publishes the current branch. Can be specified with or without the branch prefix.
+
+## OPTIONS
+
+**-o** *option*, **--push-option**=*option*
+: Transmit the given string to the server during push. This option can be repeated multiple times to send multiple push options. Push options are used by hosting platforms like GitLab, Gitea, and Gerrit for server-side behavior (e.g., creating merge requests, skipping CI). Config defaults and CLI options are combined additively.
+
+**--no-push-option**
+: Suppress all push options, including any configured defaults via `gitflow.<branchtype>.publish.push-option`. Use this when you want to publish without triggering any server-side behaviors that would be activated by configured push options.
 
 ## EXAMPLES
 
@@ -65,6 +73,28 @@ Publish using the full branch name (with prefix):
 git flow feature publish feature/my-feature
 ```
 
+### Using Push Options
+
+Publish with a push option to skip CI:
+```bash
+git flow feature publish my-feature -o ci.skip
+```
+
+Publish and create a GitLab merge request:
+```bash
+git flow feature publish my-feature -o merge_request.create -o merge_request.target=main
+```
+
+Publish with multiple push options for Gerrit:
+```bash
+git flow feature publish my-feature -o %submit -o %topic=my-topic
+```
+
+Publish without any push options (override config defaults):
+```bash
+git flow feature publish my-feature --no-push-option
+```
+
 ## CONFIGURATION
 
 **gitflow.origin**
@@ -74,6 +104,19 @@ git flow feature publish feature/my-feature
 ```bash
 # Use 'upstream' instead of 'origin'
 git config gitflow.origin upstream
+```
+
+**gitflow.*branchtype*.publish.push-option**
+: Default push options to transmit when publishing branches of this type. This is a multi-value key; multiple options can be configured by using `git config --add`. CLI options are combined with config defaults (additive). Use `--no-push-option` to suppress these defaults.
+
+### Configuring Default Push Options
+```bash
+# Always skip CI when publishing feature branches
+git config gitflow.feature.publish.push-option "ci.skip"
+
+# Create a merge request when publishing release branches
+git config gitflow.release.publish.push-option "merge_request.create"
+git config --add gitflow.release.publish.push-option "merge_request.target=main"
 ```
 
 ## WORKFLOW INTEGRATION

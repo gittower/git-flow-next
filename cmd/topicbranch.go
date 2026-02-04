@@ -354,16 +354,20 @@ the local and remote branches. After publishing, other team members
 can track this branch using 'git flow %s track'.
 
 If no name is provided, the current branch is published.`, branchType, branchType),
-		Example: fmt.Sprintf("  git flow %s publish my-feature\n  git flow %s publish", branchType, branchType),
+		Example: fmt.Sprintf("  git flow %s publish my-feature\n  git flow %s publish -o ci.skip", branchType, branchType),
 		Args:    cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			name := ""
 			if len(args) > 0 {
 				name = args[0]
 			}
-			PublishCommand(branchType, name)
+			pushOptions, _ := cmd.Flags().GetStringArray("push-option")
+			noPushOption, _ := cmd.Flags().GetBool("no-push-option")
+			PublishCommand(branchType, name, pushOptions, noPushOption)
 		},
 	}
+	publishCmd.Flags().StringArrayP("push-option", "o", nil, "Push option to transmit to the server (repeatable)")
+	publishCmd.Flags().Bool("no-push-option", false, "Don't send any push options (overrides config defaults)")
 	branchCmd.AddCommand(publishCmd)
 
 	// Add track subcommand

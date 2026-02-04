@@ -1,225 +1,281 @@
 package cmd_test
 
 import (
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
-// TestPublishFeatureBranchWithPushOption tests publishing a feature branch with push-option configured.
+// installPushOptionHook installs a pre-receive hook on the bare remote that captures
+// push options to a file. Returns a function to read the captured options.
+func installPushOptionHook(t *testing.T, remoteDir string) func() (int, []string) {
+	t.Helper()
+
+	// Enable push options on the bare remote
+	_, err := testutil.RunGit(t, remoteDir, "config", "receive.advertisePushOptions", "true")
+	if err != nil {
+		t.Fatalf("Failed to enable push options on remote: %v", err)
+	}
+
+	// Create hooks directory if it doesn't exist
+	hooksDir := filepath.Join(remoteDir, "hooks")
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		t.Fatalf("Failed to create hooks directory: %v", err)
+	}
+
+	// Install pre-receive hook that captures push options
+	hookScript := `#!/bin/sh
+echo "$GIT_PUSH_OPTION_COUNT" > "$GIT_DIR/push-options-received"
+i=0
+while [ "$i" -lt "${GIT_PUSH_OPTION_COUNT:-0}" ]; do
+    eval "echo \$GIT_PUSH_OPTION_$i" >> "$GIT_DIR/push-options-received"
+    i=$((i + 1))
+done
+cat  # drain stdin so push doesn't fail
+`
+	hookPath := filepath.Join(hooksDir, "pre-receive")
+	if err := os.WriteFile(hookPath, []byte(hookScript), 0755); err != nil {
+		t.Fatalf("Failed to write pre-receive hook: %v", err)
+	}
+
+	// Return function to read captured options
+	return func() (int, []string) {
+		optionsFile := filepath.Join(remoteDir, "push-options-received")
+		data, err := os.ReadFile(optionsFile)
+		if err != nil {
+			// File doesn't exist means no push options were sent
+			return 0, nil
+		}
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		if len(lines) == 0 {
+			return 0, nil
+		}
+		count, err := strconv.Atoi(lines[0])
+		if err != nil {
+			return 0, nil
+		}
+		var options []string
+		if len(lines) > 1 {
+			options = lines[1:]
+		}
+		return count, options
+	}
+}
+
+// TestPublishWithPushOption tests that a single --push-option flag is transmitted to the remote.
 // Steps:
-// 1. Sets up a test repository with a remote
-// 2. Configures push-option for feature branch type
+// 1. Sets up a test repository with a remote and installs a pre-receive hook to capture push options
+// 2. Initializes git-flow and creates a feature branch
+// 3. Runs 'git flow feature publish my-feature --push-option ci.skip'
+// 4. Reads captured push options from the remote hook output file
+// 5. Verifies exactly one push option "ci.skip" was received
+func TestPublishWithPushOption(t *testing.T) {
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	readOptions := installPushOptionHook(t, remoteDir)
+
+	_, err := testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
+	if err != nil {
+		t.Fatalf("Failed to start feature: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "publish", "my-feature", "--push-option", "ci.skip")
+	if err != nil {
+		t.Fatalf("Failed to publish feature: %v\nOutput: %s", err, output)
+	}
+
+	count, options := readOptions()
+	if count != 1 {
+		t.Errorf("Expected 1 push option, got %d", count)
+	}
+	if len(options) != 1 || options[0] != "ci.skip" {
+		t.Errorf("Expected push option 'ci.skip', got %v", options)
+	}
+}
+
+// TestPublishWithMultiplePushOptions tests that multiple -o flags are all transmitted to the remote.
+// Steps:
+// 1. Sets up a test repository with a remote and installs a pre-receive hook
+// 2. Initializes git-flow and creates a feature branch
+// 3. Runs 'git flow feature publish my-feature -o ci.skip -o merge_request.create'
+// 4. Reads captured push options from the remote hook output file
+// 5. Verifies both "ci.skip" and "merge_request.create" were received in order
+func TestPublishWithMultiplePushOptions(t *testing.T) {
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	readOptions := installPushOptionHook(t, remoteDir)
+
+	_, err := testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
+	if err != nil {
+		t.Fatalf("Failed to start feature: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "publish", "my-feature", "-o", "ci.skip", "-o", "merge_request.create")
+	if err != nil {
+		t.Fatalf("Failed to publish feature: %v\nOutput: %s", err, output)
+	}
+
+	count, options := readOptions()
+	if count != 2 {
+		t.Errorf("Expected 2 push options, got %d", count)
+	}
+	if len(options) != 2 || options[0] != "ci.skip" || options[1] != "merge_request.create" {
+		t.Errorf("Expected push options ['ci.skip', 'merge_request.create'], got %v", options)
+	}
+}
+
+// TestPublishWithConfigPushOptions tests that push options from git config are transmitted to the remote.
+// Steps:
+// 1. Sets up a test repository with a remote and installs a pre-receive hook
+// 2. Initializes git-flow and sets gitflow.feature.publish.push-option config values
 // 3. Creates a feature branch
-// 4. Publishes the branch
-// 5. Verifies the branch was published successfully
-func TestPublishFeatureBranchWithPushOption(t *testing.T) {
-	// Setup test repo with remote
+// 4. Runs 'git flow feature publish my-feature' (no CLI push options)
+// 5. Reads captured push options and verifies config defaults were sent
+func TestPublishWithConfigPushOptions(t *testing.T) {
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Configure push-option for feature branch type
-	_, err := testutil.RunGit(t, dir, "config", "gitflow.branch.feature.pushOption", "ci.skip")
+	readOptions := installPushOptionHook(t, remoteDir)
+
+	// Configure push options for feature branches
+	_, err := testutil.RunGit(t, dir, "config", "gitflow.feature.publish.push-option", "ci.skip")
 	if err != nil {
 		t.Fatalf("Failed to set push-option config: %v", err)
 	}
-
-	// Create a feature branch
-	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "test-push-option")
+	_, err = testutil.RunGit(t, dir, "config", "--add", "gitflow.feature.publish.push-option", "merge_request.create")
 	if err != nil {
-		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
+		t.Fatalf("Failed to add push-option config: %v", err)
 	}
 
-	// Publish the feature
-	output, err = testutil.RunGitFlow(t, dir, "feature", "publish", "test-push-option")
+	_, err = testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
+	if err != nil {
+		t.Fatalf("Failed to start feature: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "publish", "my-feature")
 	if err != nil {
 		t.Fatalf("Failed to publish feature: %v\nOutput: %s", err, output)
 	}
 
-	// Verify output contains success message
-	if !strings.Contains(output, "Successfully published 'feature/test-push-option'") {
-		t.Errorf("Expected success message in output, got: %s", output)
+	count, options := readOptions()
+	if count != 2 {
+		t.Errorf("Expected 2 push options from config, got %d", count)
 	}
-
-	// Verify remote branch exists
-	_, err = testutil.RunGit(t, dir, "fetch", "origin")
-	if err != nil {
-		t.Fatalf("Failed to fetch: %v", err)
-	}
-
-	if !testutil.RemoteBranchExists(t, dir, "origin", "feature/test-push-option") {
-		t.Error("Expected remote branch 'origin/feature/test-push-option' to exist")
+	if len(options) != 2 || options[0] != "ci.skip" || options[1] != "merge_request.create" {
+		t.Errorf("Expected push options ['ci.skip', 'merge_request.create'], got %v", options)
 	}
 }
 
-// TestPublishWithConfigAddTopicPushOption tests adding a topic type with --push-option flag.
+// TestPublishWithNoPushOption tests that --no-push-option suppresses config defaults.
 // Steps:
-// 1. Sets up a test repository with a remote
-// 2. Uses 'config add topic' command with --push-option flag
-// 3. Verifies the configuration is saved correctly
-// 4. Creates a branch of that type and publishes it
-// 5. Verifies the branch was published successfully
-func TestPublishWithConfigAddTopicPushOption(t *testing.T) {
-	// Setup test repo with remote
+// 1. Sets up a test repository with a remote and installs a pre-receive hook
+// 2. Initializes git-flow and sets gitflow.feature.publish.push-option config values
+// 3. Creates a feature branch
+// 4. Runs 'git flow feature publish my-feature --no-push-option'
+// 5. Reads captured push options and verifies none were sent (count is 0)
+func TestPublishWithNoPushOption(t *testing.T) {
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Add custom topic type with --push-option flag
-	output, err := testutil.RunGitFlow(t, dir, "config", "add", "topic", "bugfix", "develop",
-		"--prefix=bugfix/", "--push-option=ci.skip")
+	readOptions := installPushOptionHook(t, remoteDir)
+
+	// Configure push options for feature branches
+	_, err := testutil.RunGit(t, dir, "config", "gitflow.feature.publish.push-option", "ci.skip")
 	if err != nil {
-		t.Fatalf("Failed to add topic with --push-option: %v\nOutput: %s", err, output)
+		t.Fatalf("Failed to set push-option config: %v", err)
 	}
 
-	// Verify the push-option was saved to config
-	configOutput, err := testutil.RunGit(t, dir, "config", "gitflow.branch.bugfix.pushOption")
+	_, err = testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
 	if err != nil {
-		t.Fatalf("Failed to read push-option config: %v", err)
+		t.Fatalf("Failed to start feature: %v", err)
 	}
 
-	if !strings.Contains(configOutput, "ci.skip") {
-		t.Errorf("Expected push-option 'ci.skip' in config, got: %s", configOutput)
-	}
-
-	// Create a bugfix branch
-	output, err = testutil.RunGitFlow(t, dir, "bugfix", "start", "urgent-fix")
-	if err != nil {
-		t.Fatalf("Failed to start bugfix: %v\nOutput: %s", err, output)
-	}
-
-	// Publish the bugfix
-	output, err = testutil.RunGitFlow(t, dir, "bugfix", "publish", "urgent-fix")
-	if err != nil {
-		t.Fatalf("Failed to publish bugfix: %v\nOutput: %s", err, output)
-	}
-
-	// Verify success
-	if !strings.Contains(output, "Successfully published 'bugfix/urgent-fix'") {
-		t.Errorf("Expected success message in output, got: %s", output)
-	}
-
-	// Verify remote branch exists
-	if !testutil.RemoteBranchExists(t, dir, "origin", "bugfix/urgent-fix") {
-		t.Error("Expected remote branch to exist")
-	}
-}
-
-// TestPublishWithoutPushOption tests publishing without push-option configured.
-// Steps:
-// 1. Sets up a test repository with a remote
-// 2. Ensures no push-option is configured (default behavior)
-// 3. Creates and publishes a branch normally
-// 4. Verifies it works without push-option
-func TestPublishWithoutPushOption(t *testing.T) {
-	// Setup test repo with remote
-	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
-	defer testutil.CleanupTestRepo(t, dir)
-	defer testutil.CleanupTestRepo(t, remoteDir)
-
-	// Create a feature branch
-	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "no-push-option")
-	if err != nil {
-		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
-	}
-
-	// Publish without push-option configured (should work normally)
-	output, err = testutil.RunGitFlow(t, dir, "feature", "publish", "no-push-option")
+	output, err := testutil.RunGitFlow(t, dir, "feature", "publish", "my-feature", "--no-push-option")
 	if err != nil {
 		t.Fatalf("Failed to publish feature: %v\nOutput: %s", err, output)
 	}
 
-	// Verify success
-	if !strings.Contains(output, "Successfully published 'feature/no-push-option'") {
-		t.Errorf("Expected success message in output, got: %s", output)
-	}
-
-	// Verify remote branch exists
-	if !testutil.RemoteBranchExists(t, dir, "origin", "feature/no-push-option") {
-		t.Error("Expected remote branch to exist")
+	count, options := readOptions()
+	if count != 0 {
+		t.Errorf("Expected 0 push options with --no-push-option, got %d: %v", count, options)
 	}
 }
 
-// TestPublishReleaseBranchWithPushOption tests publishing a release branch with push-option.
+// TestPublishWithConfigAndCliPushOptions tests that CLI options combine with config defaults.
 // Steps:
-// 1. Sets up a test repository with a remote
-// 2. Configures push-option for release branch type
-// 3. Creates and publishes a release branch
-// 4. Verifies success
-func TestPublishReleaseBranchWithPushOption(t *testing.T) {
-	// Setup test repo with remote
+// 1. Sets up a test repository with a remote and installs a pre-receive hook
+// 2. Initializes git-flow and sets gitflow.feature.publish.push-option to "ci.skip"
+// 3. Creates a feature branch
+// 4. Runs 'git flow feature publish my-feature --push-option merge_request.create'
+// 5. Reads captured push options and verifies both "ci.skip" and "merge_request.create" received
+func TestPublishWithConfigAndCliPushOptions(t *testing.T) {
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Configure push-option for release branch type
-	_, err := testutil.RunGit(t, dir, "config", "gitflow.branch.release.pushOption", "merge_request.create")
+	readOptions := installPushOptionHook(t, remoteDir)
+
+	// Configure push option for feature branches
+	_, err := testutil.RunGit(t, dir, "config", "gitflow.feature.publish.push-option", "ci.skip")
 	if err != nil {
 		t.Fatalf("Failed to set push-option config: %v", err)
 	}
 
-	// Create a release branch
-	output, err := testutil.RunGitFlow(t, dir, "release", "start", "2.0.0")
+	_, err = testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
 	if err != nil {
-		t.Fatalf("Failed to start release: %v\nOutput: %s", err, output)
+		t.Fatalf("Failed to start feature: %v", err)
 	}
 
-	// Publish the release
-	output, err = testutil.RunGitFlow(t, dir, "release", "publish", "2.0.0")
+	output, err := testutil.RunGitFlow(t, dir, "feature", "publish", "my-feature", "-o", "merge_request.create")
 	if err != nil {
-		t.Fatalf("Failed to publish release: %v\nOutput: %s", err, output)
+		t.Fatalf("Failed to publish feature: %v\nOutput: %s", err, output)
 	}
 
-	// Verify success message
-	if !strings.Contains(output, "Successfully published 'release/2.0.0'") {
-		t.Errorf("Expected success message in output, got: %s", output)
+	count, options := readOptions()
+	if count != 2 {
+		t.Errorf("Expected 2 push options (config + CLI), got %d", count)
 	}
-
-	// Verify remote branch exists
-	if !testutil.RemoteBranchExists(t, dir, "origin", "release/2.0.0") {
-		t.Error("Expected remote branch to exist")
+	// Config options come first, then CLI options
+	if len(options) != 2 || options[0] != "ci.skip" || options[1] != "merge_request.create" {
+		t.Errorf("Expected push options ['ci.skip', 'merge_request.create'], got %v", options)
 	}
 }
 
-// TestPublishHotfixBranchWithPushOption tests publishing a hotfix branch with push-option.
+// TestPublishWithoutPushOptions tests that no push options are sent when none are configured or provided.
 // Steps:
-// 1. Sets up a test repository with a remote
-// 2. Configures push-option for hotfix branch type
-// 3. Creates and publishes a hotfix branch
-// 4. Verifies success
-func TestPublishHotfixBranchWithPushOption(t *testing.T) {
-	// Setup test repo with remote
+// 1. Sets up a test repository with a remote and installs a pre-receive hook
+// 2. Initializes git-flow and creates a feature branch (no push option config)
+// 3. Runs 'git flow feature publish my-feature'
+// 4. Reads captured push options and verifies count is 0 or hook file shows no options
+func TestPublishWithoutPushOptions(t *testing.T) {
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Configure push-option for hotfix branch type
-	_, err := testutil.RunGit(t, dir, "config", "gitflow.branch.hotfix.pushOption", "ci.variable=\"DEPLOY=production\"")
+	readOptions := installPushOptionHook(t, remoteDir)
+
+	_, err := testutil.RunGitFlow(t, dir, "feature", "start", "my-feature")
 	if err != nil {
-		t.Fatalf("Failed to set push-option config: %v", err)
+		t.Fatalf("Failed to start feature: %v", err)
 	}
 
-	// Create a hotfix branch
-	output, err := testutil.RunGitFlow(t, dir, "hotfix", "start", "1.0.1")
+	output, err := testutil.RunGitFlow(t, dir, "feature", "publish", "my-feature")
 	if err != nil {
-		t.Fatalf("Failed to start hotfix: %v\nOutput: %s", err, output)
+		t.Fatalf("Failed to publish feature: %v\nOutput: %s", err, output)
 	}
 
-	// Publish the hotfix
-	output, err = testutil.RunGitFlow(t, dir, "hotfix", "publish", "1.0.1")
-	if err != nil {
-		t.Fatalf("Failed to publish hotfix: %v\nOutput: %s", err, output)
-	}
-
-	// Verify success message
-	if !strings.Contains(output, "Successfully published 'hotfix/1.0.1'") {
-		t.Errorf("Expected success message in output, got: %s", output)
-	}
-
-	// Verify remote branch exists
-	if !testutil.RemoteBranchExists(t, dir, "origin", "hotfix/1.0.1") {
-		t.Error("Expected remote branch to exist")
+	count, options := readOptions()
+	if count != 0 {
+		t.Errorf("Expected 0 push options when none configured, got %d: %v", count, options)
 	}
 }

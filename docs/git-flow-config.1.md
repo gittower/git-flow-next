@@ -85,9 +85,6 @@ Manage git-flow configuration for base branches and topic branch types. The **co
 **--tag**[=*bool*]
 : Create tags on finish. Default: **false**
 
-**--push-option**=*option*
-: Transmit the given string to the server. (e.g., "ci.skip")
-
 ### Edit Base Branch (`edit base`)
 
 Same options as `add base`:
@@ -189,16 +186,62 @@ git-flow-next follows a three-layer configuration hierarchy:
 3. **Command-line flags** - Always take precedence
 
 Example showing precedence:
-```bash  
+```bash
 # Layer 1: Branch default
 git config gitflow.branch.release.tag true
 
 # Layer 2: Command override (takes precedence over Layer 1)
-git config gitflow.release.finish.notag true  
+git config gitflow.release.finish.notag true
 
 # Layer 3: Command flag (takes precedence over both)
 git flow release finish --tag  # Forces tag creation
 ```
+
+## COMMAND-SPECIFIC CONFIGURATION
+
+Command-specific options are configured via git config at Layer 2:
+
+### Publish Command Options
+
+**gitflow.*type*.publish.push-option**
+: Push options to pass to git push (supports multiple values). Example:
+```bash
+# Single push option
+git config gitflow.feature.publish.push-option "ci.skip"
+
+# Multiple push options (use --add for additional values)
+git config gitflow.release.publish.push-option "merge_request.create"
+git config --add gitflow.release.publish.push-option "merge_request.target=main"
+```
+
+### Finish Command Options
+
+**gitflow.*type*.finish.fetch**
+: Fetch from remote before finishing. Default: **false**
+
+**gitflow.*type*.finish.notag**
+: Disable tag creation (overrides branch.*.tag setting)
+
+**gitflow.*type*.finish.sign**
+: Sign the tag with GPG
+
+**gitflow.*type*.finish.signingkey**
+: GPG key to use for signing
+
+**gitflow.*type*.finish.keep**
+: Keep branch after finishing
+
+**gitflow.*type*.finish.keepremote**
+: Keep remote branch after finishing
+
+**gitflow.*type*.finish.keeplocal**
+: Keep local branch after finishing
+
+**gitflow.*type*.finish.rebase**
+: Use rebase strategy when finishing
+
+**gitflow.*type*.finish.squash**
+: Use squash strategy when finishing
 
 ## VALIDATION
 
