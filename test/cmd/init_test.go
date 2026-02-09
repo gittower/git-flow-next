@@ -432,11 +432,11 @@ func TestInitInteractiveDefaultTagPrefixIsEmpty(t *testing.T) {
 // TestInitInteractiveExplicitTagPrefix tests that typing an explicit tag prefix
 // in interactive mode sets it correctly.
 // Steps:
-// 1. Sets up a test repository
-// 2. Runs 'git flow init' with interactive input, accepting defaults for all fields
-//    except tag prefix which is set to 'v'
-// 3. Verifies gitflow.branch.release.tagprefix is 'v'
-// 4. Verifies gitflow.branch.hotfix.tagprefix is 'v'
+//  1. Sets up a test repository
+//  2. Runs 'git flow init' with interactive input, accepting defaults for all fields
+//     except tag prefix which is set to 'v'
+//  3. Verifies gitflow.branch.release.tagprefix is 'v'
+//  4. Verifies gitflow.branch.hotfix.tagprefix is 'v'
 func TestInitInteractiveExplicitTagPrefix(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
