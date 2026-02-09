@@ -87,7 +87,7 @@ These options control where git-flow configuration is stored. Only one scope opt
 : Override support branch prefix (default: support/)
 
 **--tag**=*prefix*, **-t** *prefix*
-: Override version tag prefix (default: v)
+: Override version tag prefix (default: none)
 
 ## PRESETS
 

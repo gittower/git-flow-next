@@ -108,7 +108,6 @@ gitflow.branch.release.prefix=release/
 gitflow.branch.release.upstreamStrategy=merge
 gitflow.branch.release.downstreamStrategy=merge
 gitflow.branch.release.tag=true
-gitflow.branch.release.tagprefix=v
 gitflow.branch.release.autoUpdate=false
 
 # Hotfix branches  
@@ -119,7 +118,6 @@ gitflow.branch.hotfix.prefix=hotfix/
 gitflow.branch.hotfix.upstreamStrategy=merge
 gitflow.branch.hotfix.downstreamStrategy=merge
 gitflow.branch.hotfix.tag=true
-gitflow.branch.hotfix.tagprefix=v
 gitflow.branch.hotfix.autoUpdate=false
 ```
 
@@ -269,12 +267,10 @@ git config gitflow.branch.release.type topic
 git config gitflow.branch.release.parent main
 git config gitflow.branch.release.startPoint develop
 git config gitflow.branch.release.tag true
-git config gitflow.branch.release.tagprefix v
 
 git config gitflow.branch.hotfix.type topic
 git config gitflow.branch.hotfix.parent main
 git config gitflow.branch.hotfix.tag true
-git config gitflow.branch.hotfix.tagprefix v
 ```
 
 ### Custom Workflow
