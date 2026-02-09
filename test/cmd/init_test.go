@@ -397,6 +397,71 @@ func TestInitInteractiveWithBranchCreation(t *testing.T) {
 	}
 }
 
+// TestInitInteractiveDefaultTagPrefixIsEmpty tests that pressing Enter for tag prefix
+// in interactive mode results in an empty tag prefix (matching git-flow-avh behavior).
+// Steps:
+// 1. Sets up a test repository
+// 2. Runs 'git flow init' with interactive input, pressing Enter for all prompts
+// 3. Verifies gitflow.branch.release.tagprefix is empty (not written to config)
+// 4. Verifies gitflow.branch.hotfix.tagprefix is empty (not written to config)
+func TestInitInteractiveDefaultTagPrefixIsEmpty(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// All defaults: 8 empty lines (main, develop, feature, bugfix, release, hotfix, support, tag prefix)
+	input := "\n\n\n\n\n\n\n\n"
+
+	output, err := runGitFlowWithInput(t, dir, input, "init")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow init: %v\nOutput: %s", err, output)
+	}
+
+	// Verify tag prefix is empty for release
+	releaseTagPrefix := getGitConfig(t, dir, "gitflow.branch.release.tagprefix")
+	if releaseTagPrefix != "" {
+		t.Errorf("Expected gitflow.branch.release.tagprefix to be empty, got: %s", releaseTagPrefix)
+	}
+
+	// Verify tag prefix is empty for hotfix
+	hotfixTagPrefix := getGitConfig(t, dir, "gitflow.branch.hotfix.tagprefix")
+	if hotfixTagPrefix != "" {
+		t.Errorf("Expected gitflow.branch.hotfix.tagprefix to be empty, got: %s", hotfixTagPrefix)
+	}
+}
+
+// TestInitInteractiveExplicitTagPrefix tests that typing an explicit tag prefix
+// in interactive mode sets it correctly.
+// Steps:
+// 1. Sets up a test repository
+// 2. Runs 'git flow init' with interactive input, accepting defaults for all fields
+//    except tag prefix which is set to 'v'
+// 3. Verifies gitflow.branch.release.tagprefix is 'v'
+// 4. Verifies gitflow.branch.hotfix.tagprefix is 'v'
+func TestInitInteractiveExplicitTagPrefix(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// 7 empty lines for defaults, then 'v' for tag prefix
+	input := "\n\n\n\n\n\n\nv\n"
+
+	output, err := runGitFlowWithInput(t, dir, input, "init")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow init: %v\nOutput: %s", err, output)
+	}
+
+	// Verify tag prefix is 'v' for release
+	releaseTagPrefix := getGitConfig(t, dir, "gitflow.branch.release.tagprefix")
+	if releaseTagPrefix != "v" {
+		t.Errorf("Expected gitflow.branch.release.tagprefix to be 'v', got: %s", releaseTagPrefix)
+	}
+
+	// Verify tag prefix is 'v' for hotfix
+	hotfixTagPrefix := getGitConfig(t, dir, "gitflow.branch.hotfix.tagprefix")
+	if hotfixTagPrefix != "v" {
+		t.Errorf("Expected gitflow.branch.hotfix.tagprefix to be 'v', got: %s", hotfixTagPrefix)
+	}
+}
+
 // TestInitWithFlags tests the init command with custom branch prefixes
 func TestInitWithFlags(t *testing.T) {
 	// Setup
