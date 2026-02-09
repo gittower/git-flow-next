@@ -379,7 +379,7 @@ func TestInitInteractiveWithBranchCreation(t *testing.T) {
 
 	// Interactive input for init prompts:
 	// main branch, develop branch, feature prefix, bugfix prefix, release prefix, hotfix prefix, support prefix, tag prefix
-	input := "custom-main\ncustom-dev\nfeature/\nbugfix/\nrelease/\nhotfix/\nsupport/\nv\n"
+	input := "custom-main\ncustom-dev\nfeature/\nbugfix/\nrelease/\nhotfix/\nsupport/\n\n"
 
 	// Run git-flow init with interactive input
 	output, err := runGitFlowWithInput(t, dir, input, "init")

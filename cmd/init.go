@@ -491,13 +491,12 @@ func interactiveClassicCustomization() config.ConfigOverrides {
 		overrides.HotfixPrefix = hotfixPrefix
 	}
 
-	fmt.Print("? Version tag prefix [v]: ")
+	fmt.Print("? Version tag prefix (press Enter for none) []: ")
 	tagPrefix, _ := reader.ReadString('\n')
 	tagPrefix = strings.TrimSpace(tagPrefix)
-	if tagPrefix == "" {
-		tagPrefix = "v" // Default to "v" if empty
+	if tagPrefix != "" {
+		overrides.TagPrefix = tagPrefix
 	}
-	overrides.TagPrefix = tagPrefix
 
 	return overrides
 }
@@ -653,13 +652,12 @@ func interactiveConfig() config.ConfigOverrides {
 	}
 
 	// Prompt for version tag prefix
-	fmt.Print("Version tag prefix [v]: ")
+	fmt.Print("Version tag prefix (press Enter for none) []: ")
 	tagPrefix, _ := reader.ReadString('\n')
 	tagPrefix = strings.TrimSpace(tagPrefix)
-	if tagPrefix == "" {
-		tagPrefix = "v" // Default to "v" if empty
+	if tagPrefix != "" {
+		overrides.TagPrefix = tagPrefix
 	}
-	overrides.TagPrefix = tagPrefix
 
 	return overrides
 }
