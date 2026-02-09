@@ -223,8 +223,7 @@ These are operational settings that adjust command behavior. Some can override L
     upstreamstrategy = merge
     downstreamstrategy = merge
     tag = true
-    tagprefix = v
-    
+
 [gitflow "branch.hotfix"]
     type = topic
     parent = main
@@ -232,7 +231,6 @@ These are operational settings that adjust command behavior. Some can override L
     upstreamstrategy = merge
     downstreamstrategy = merge
     tag = true
-    tagprefix = v
 ```
 
 ### GitHub Flow
