@@ -12,7 +12,7 @@ Two inline status indicators followed by a 1-3 sentence assessment:
 
 - **Verdict**: One of three values:
   - `✅ **Approved**` — Good to merge, no issues.
-  - `✅ **Approved with suggestions**` — Good to merge, but review the suggestions.
+  - `✅ **Approved with notes**` — Good to merge, but review the notes.
   - `🚫 **Changes requested**` — Do not merge until issues are resolved.
 - **Impact**: One of three values:
   - `🔴 **High impact**` — Touches critical paths, wide scope of impact, data loss or security implications if wrong.
@@ -25,9 +25,9 @@ The assessment summary briefly explains why those two states were chosen. It sho
 
 Findings are grouped by severity, not by category (security, code quality, etc.). Each item is a concise one-liner describing what is wrong without file or line references — inline diff comments carry that detail.
 
-- `### Blocking` — Must fix before merge. Issues that would cause failures, data loss, security vulnerabilities, or violate critical project guidelines.
+- `### Must fix` — Must fix before merge. Issues that would cause failures, data loss, security vulnerabilities, or violate critical project guidelines.
 - `### Should fix` — Expected to be addressed but won't block merge. Convention violations, gaps in documentation, maintainability concerns.
-- `### Suggestions` — Optional improvements at the author's discretion. Style, additional tests, minor optimizations.
+- `### Nit` — Optional improvements at the author's discretion. Style, additional tests, minor optimizations.
 
 If a severity section has no items, omit it entirely.
 
@@ -37,7 +37,7 @@ Always present. Starts with a summary sentence evaluating whether tests are suff
 
 Contains up to three subsections (h4):
 
-- `#### Test issues` — Problems with existing tests: guideline violations, broken setup, tautological assertions, missing isolation, shared state mutation, tests that can never fail, wrong assertion targets. Each item tagged with severity: `[blocking]`, `[should fix]`, or `[suggestion]`.
+- `#### Test issues` — Problems with existing tests: guideline violations, broken setup, tautological assertions, missing isolation, shared state mutation, tests that can never fail, wrong assertion targets. Each item tagged with severity: `[must fix]`, `[should fix]`, or `[nit]`.
 - `#### Existing tests` — Table of tests in the changeset with columns: Test file, What it covers (a brief explanation of the scenario being tested — what setup, action, and expected outcome the test verifies), Evaluation (✅ Solid, ⚠️ with note).
 - `#### Missing tests` — Tests that should exist but don't. Each tagged with `[impact: high]`, `[impact: medium]`, or `[impact: low]`.
 
@@ -52,15 +52,16 @@ The numbering is continuous across categories so items are easy to reference. Th
 ## Rules
 
 1. All sections use h3 (`###`). Subsections within Test Coverage use h4 (`####`).
-2. The summary items (Blocking, Should fix, Suggestions) stay concise and do not include file/line details — inline diff comments provide that context.
+2. The summary items (Must fix, Should fix, Nit) stay concise and do not include file/line details — inline diff comments provide that context.
 3. The Test Coverage Assessment is always present and always includes the summary sentence.
 4. If a severity section has no items, omit the section entirely.
 5. If an area defined in the project's review guidelines was evaluated and had no findings, state what was evaluated and that no issues were found in the assessment summary. The reviewer should know which areas were checked.
 6. The verdict and impact are independent dimensions: verdict reflects quality of the change, impact reflects consequence of getting it wrong.
+   Verdict is determined by the highest severity present: **Must fix** → Changes requested, **Should fix** (with or without Nit) → Approved with notes, **Nit** only or no findings → Approved.
 7. Severity definitions:
-   - **Blocking**: Issues that would cause failures, data loss, security vulnerabilities, or violate critical project guidelines. The PR must not merge until these are resolved.
+   - **Must fix**: Issues that would cause failures, data loss, security vulnerabilities, or violate critical project guidelines. The PR must not merge until these are resolved.
    - **Should fix**: Issues that affect maintainability, violate project conventions, or have gaps that should be addressed. Won't block merge but expected to be resolved.
-   - **Suggestions**: Optional improvements. Style preferences, additional test ideas, minor optimizations. Author's discretion.
+   - **Nit**: Optional improvements. Style preferences, additional test ideas, minor optimizations. Author's discretion.
 
 ## Review Scope
 
@@ -72,19 +73,19 @@ All findings from all areas are merged into the severity sections. If an area wa
 
 ## Concrete Examples
 
-### Example 1: Changes requested with blocking issues
+### Example 1: Changes requested with must-fix issues
 
 ```markdown
 🚫 **Changes requested** · 🔴 **High impact**
 
 Modifies the core data processing pipeline and introduces a new
-caching layer that multiple modules depend on. Two blocking issues
+caching layer that multiple modules depend on. Two must-fix issues
 prevent merge: a silently ignored error in a critical path and a
 flaky test. The scope of impact is high — failures here could cause
 silent data loss. Security and performance were reviewed with no
 concerns.
 
-### Blocking
+### Must fix
 - Silently ignored error in directory creation could fail without indication on restricted systems.
 - Test mutates shared state without cleanup, causing ordering-dependent flaky failures.
 
@@ -92,7 +93,7 @@ concerns.
 - Business logic mixed into the request handler instead of the service layer, violating project architecture guidelines.
 - No documentation update for the new `--force` flag.
 
-### Suggestions
+### Nit
 - Configuration value used directly instead of going through the resolution chain defined in project guidelines.
 - Imports not grouped according to project style conventions.
 
@@ -101,7 +102,7 @@ Tests cover the happy path well but lack edge case and error path
 coverage for the new processing logic.
 
 #### Test issues
-- **[blocking]** `processor_test.go::TestProcess` — Mutates shared state
+- **[must fix]** `processor_test.go::TestProcess` — Mutates shared state
   without cleanup, will cause ordering-dependent flaky failures.
 
 #### Existing tests
@@ -118,7 +119,7 @@ coverage for the new processing logic.
 
 <details><summary>🤖 AI fix prompt</summary>
 
-## Blocking
+## Must fix
 
 1. In `internal/processor/setup.go`, the error returned by `os.MkdirAll`
    is not checked. Wrap the call in proper error handling and return a
@@ -137,7 +138,7 @@ coverage for the new processing logic.
 4. Add documentation for the new `--force` flag. Include a description
    of its behavior, default value, and any interaction with existing flags.
 
-## Suggestions
+## Nit
 
 5. In `internal/processor/config.go`, update the configuration resolution
    to follow the project's config precedence chain instead of reading the
@@ -149,10 +150,10 @@ coverage for the new processing logic.
 </details>
 ```
 
-### Example 2: Approved with suggestions, no blocking issues
+### Example 2: Approved with notes, no must-fix issues
 
 ```markdown
-✅ **Approved with suggestions** · 🟡 **Medium impact**
+✅ **Approved with notes** · 🟡 **Medium impact**
 
 Adds a new machine-readable output mode for the status endpoint. The
 implementation follows existing patterns well and test coverage is
@@ -163,7 +164,7 @@ no concerns.
 ### Should fix
 - No documentation for the new `--format` flag.
 
-### Suggestions
+### Nit
 - The output formatter could share an interface with the existing pretty-printer to reduce duplication.
 - Commit message on `a1b2c3d` exceeds the project's subject line length limit.
 
@@ -191,7 +192,7 @@ isolated and assertions are meaningful.
    of the output format, its intended use in automation, and how it
    differs from the default human-readable output.
 
-## Suggestions
+## Nit
 
 2. Extract a shared formatter interface that both the pretty-printer
    and machine-readable formatter implement, reducing duplication in
@@ -199,6 +200,96 @@ isolated and assertions are meaningful.
 
 3. Amend commit `a1b2c3d` to shorten the subject line per the project's
    commit message conventions.
+
+</details>
+```
+
+## Follow-up Reviews
+
+When new commits are pushed to a branch that has already been reviewed, the AI reviews only the new commits and produces a follow-up review. The follow-up review must not repeat findings from the previous review — it builds on top of it.
+
+### Follow-up Header
+
+Same verdict and impact format as an initial review, but the assessment summary must state:
+
+- The commit range reviewed (e.g. `a1b2c3d`..`f4e5d6a`)
+- How many commits are covered
+- A link or reference to the previous review it builds on
+- An updated overall assessment reflecting the current state of the PR
+
+The verdict and impact reflect the **current state of the entire PR**, not just the new commits. If the previous review had must-fix issues and the new commits resolve them, the verdict should update accordingly.
+
+### Follow-up Sections
+
+The follow-up review uses three sections to track state changes, followed by an incremental test coverage assessment:
+
+- `### Resolved from previous review` — Items from the prior review that have been addressed. Use strikethrough on the original finding with a brief note on how it was resolved.
+- `### Still open from previous review` — Items from the prior review that remain unaddressed. Listed without re-explaining — the previous review has the detail.
+- `### New findings` — New issues introduced by the new commits. Uses the same severity subsections (`#### Must fix`, `#### Should fix`, `#### Nit`). If a severity level has no new findings, omit it.
+
+If a section would be empty, omit it entirely. For example, if all previous items are resolved and there are no new findings, only the "Resolved" section appears.
+
+### Follow-up Test Coverage Assessment
+
+Incremental — only covers tests added or changed in the new commits. Updates the missing tests list from the prior review (noting what was addressed and what remains). Does not repeat the full test table from the previous review.
+
+### Follow-up AI Fix Prompt
+
+Combines still-open items from the previous review and new findings into a single actionable prompt, organized by category (`## Still open`, `## New findings` with severity subsections).
+
+### Example 3: Follow-up review after fixes
+
+```markdown
+✅ **Approved** · 🔴 **High impact**
+
+Follow-up review covering commits `a1b2c3d`..`f4e5d6a` (3 commits),
+building on [previous review](#link-to-previous-review).
+
+The must-fix issues from the prior review have been resolved. Error
+handling is now in place and the flaky test has been fixed. One new
+nit introduced by the new commits. All areas reviewed with no
+remaining concerns.
+
+### Resolved from previous review
+- ~~Silently ignored error in directory creation~~ — Fixed, proper error handling added.
+- ~~Test mutates shared state without cleanup~~ — Fixed, uses isolated fixtures now.
+- ~~No documentation update for the new `--force` flag~~ — Fixed, documentation added.
+
+### Still open from previous review
+- Business logic mixed into the request handler instead of the service layer.
+
+### New findings
+
+#### Nit
+- New helper function in `utils/parse.go` duplicates existing logic in `utils/format.go`.
+
+### Test Coverage Assessment
+Previous gaps have been partially addressed. Concurrent access test
+added. Error path for 429 responses still untested.
+
+#### Existing tests
+| Test file | What it covers | Evaluation |
+|-----------|---------------|------------|
+| `processor_test.go::TestProcessConcurrent` | Spawns multiple goroutines accessing the shared cache simultaneously and verifies no data races or corruption | ✅ Solid |
+
+#### Missing tests
+- **[impact: medium]** Error path when upstream service returns 429 is still untested
+
+---
+
+<details><summary>🤖 AI fix prompt</summary>
+
+## Still open
+
+1. In `handlers/process.go`, move the business logic out of the HTTP
+   handler into the service layer, following the project's layered
+   architecture pattern.
+
+## New nit
+
+2. In `utils/parse.go`, the new `extractFields` function duplicates
+   logic already present in `utils/format.go::parseFields`. Reuse the
+   existing function or extract a shared helper.
 
 </details>
 ```

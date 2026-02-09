@@ -101,15 +101,15 @@ When given a directory (or auto-detecting):
 
    For each issue found in the review:
 
-   **Blocking Issues (must fix):**
-   - Address all blocking issues before continuing
+   **Must fix:**
+   - Address all must-fix issues before continuing
    - These prevent the PR from being merged
 
-   **Warnings (should fix):**
-   - Address warnings that improve code quality
+   **Should fix:**
+   - Address should-fix items that improve code quality
    - Document any intentionally skipped with rationale
 
-   **Suggestions (optional):**
+   **Nit:**
    - Consider implementing if they improve the code
    - Skip if they add unnecessary complexity
 

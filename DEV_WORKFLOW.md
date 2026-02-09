@@ -198,7 +198,7 @@ The implementation phase transforms issues or concepts into working code.
    - Run tests frequently: `go test ./...`
 
 5. **Local Review**
-   - `/local-review` - Self-review against [REVIEW_GUIDELINES.md](REVIEW_GUIDELINES.md)
+   - `/local-review` - Self-review against project review criteria
    - Generates review notes
 
 6. **Address Review Findings**

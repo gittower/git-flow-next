@@ -59,9 +59,9 @@ gh api repos/$REPO/pulls/$PR_NUMBER/comments --paginate
 - Are there implicit issues? (e.g., "this looks complex" may imply refactoring needed)
 
 **Categorize by your assessment of severity:**
-- **Blocking**: Bugs, security issues, missing critical tests, architectural problems
-- **Warnings**: Missing edge case tests, documentation gaps, code clarity issues
-- **Suggestions**: Style preferences, optional improvements, nice-to-haves
+- **Must fix**: Bugs, security issues, missing critical tests, architectural problems
+- **Should fix**: Missing edge case tests, documentation gaps, code clarity issues
+- **Nit**: Style preferences, optional improvements, nice-to-haves
 
 **Skip items that are:**
 - Already addressed in follow-up comments
@@ -140,7 +140,7 @@ Write to `$AI_FOLDER/review-plan-<sha>.md` following the create-plan template st
 **Details**:
 <Fix prompt content if available, or detailed description of what to change>
 
-**Severity**: Blocking | Warning | Suggestion
+**Severity**: Must fix | Should fix | Nit
 
 ### Task 2: <Next issue>
 **Files**: `<path/to/file1.go>`, `<path/to/file2.go>`
@@ -153,7 +153,7 @@ Write to `$AI_FOLDER/review-plan-<sha>.md` following the create-plan template st
 
 **Depends on**: Task 1 (if applicable)
 
-**Severity**: Warning
+**Severity**: Should fix
 
 ### Task N: Add/Update Tests
 **Files**: `test/cmd/<file>_test.go`
@@ -190,29 +190,29 @@ After each checkpoint, verify:
 
 | Checkpoint | After Task | Verification |
 |------------|------------|--------------|
-| 1 | Task 1 | <blocking issue resolved> |
-| 2 | Task 2 | <warning addressed> |
+| 1 | Task 1 | <must-fix issue resolved> |
+| 2 | Task 2 | <should-fix item addressed> |
 | 3 | Task N | All tests pass |
 
 ## Commit Strategy
 
 Plan commits following COMMIT_GUIDELINES.md:
-1. Fix blocking issues first (group related fixes)
-2. Address warnings (separate commits for distinct concerns)
-3. Implement suggestions (optional, can be separate PR)
+1. Fix must-fix issues first (group related fixes)
+2. Address should-fix items (separate commits for distinct concerns)
+3. Implement nits (optional, can be separate PR)
 
 Example commit messages:
-- `fix(<scope>): <blocking issue summary>`
+- `fix(<scope>): <must-fix issue summary>`
 - `test(<scope>): <add missing test>`
-- `refactor(<scope>): <address warning>`
+- `refactor(<scope>): <address should-fix item>`
 
 ## Estimated Scope
 - Files to modify: <count>
 - New files: <count>
 - Tests to add/modify: <count>
-- Blocking issues: <count>
-- Warnings: <count>
-- Suggestions: <count>
+- Must fix: <count>
+- Should fix: <count>
+- Nit: <count>
 ```
 
 ### 7. Handle Empty Reviews
@@ -299,7 +299,7 @@ Add a test that:
 4. Finishes with --no-verify flag
 5. Verifies the squash commit succeeds (hook bypassed)
 
-**Severity**: Warning
+**Severity**: Should fix
 
 ## Test Plan
 
@@ -335,9 +335,9 @@ flag correctly bypasses hooks during squash merge commit operations.
 - Files to modify: 1
 - New files: 0
 - Tests to add: 1
-- Blocking issues: 0
-- Warnings: 1
-- Suggestions: 0
+- Must fix: 0
+- Should fix: 1
+- Nit: 0
 ```
 
 ---

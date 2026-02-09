@@ -30,7 +30,6 @@ The end-to-end development process is described in [DEV_WORKFLOW.md](DEV_WORKFLO
 | [CODING_GUIDELINES.md](CODING_GUIDELINES.md) | Code conventions, patterns, and architecture |
 | [TESTING_GUIDELINES.md](TESTING_GUIDELINES.md) | Test methodology, structure, and best practices |
 | [COMMIT_GUIDELINES.md](COMMIT_GUIDELINES.md) | Commit message format and standards |
-| [REVIEW_GUIDELINES.md](REVIEW_GUIDELINES.md) | Code review checklist and process |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Design concepts and technical overview |
 | [CODE_REFERENCE.md](CODE_REFERENCE.md) | Codebase navigation and implementation details |
 | [CONFIGURATION.md](CONFIGURATION.md) | Configuration reference and examples |
@@ -185,13 +184,13 @@ For a detailed overview of our end-to-end development process — from issue ana
 
 ### Review Process
 
-All code changes are reviewed according to [REVIEW_GUIDELINES.md](REVIEW_GUIDELINES.md), which covers:
-- Code review checklist (architecture, style, testing, documentation)
-- Issue categories (blocking, warnings, suggestions)
-- Approval requirements
-- Merge process
+Code changes are reviewed using two skills, each with their own review criteria:
+- **`/local-review`** — self-review before creating a PR (see `.claude/skills/local-review/REVIEW_CRITERIA.md`)
+- **`/code-review`** — automated PR review via GitHub API (see `.claude/skills/code-review/REVIEW_CRITERIA.md`)
 
-Please review your changes against these guidelines before submitting a pull request.
+Both cover: architecture, code style, testing, documentation, and security checklists.
+
+Please review your changes against these criteria before submitting a pull request.
 
 ## Getting Help
 

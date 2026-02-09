@@ -59,12 +59,12 @@ If EVENT == "issue_comment" or "pull_request_review_comment":
 Before reviewing or responding, load project-specific guidelines:
 
 1. **Read CLAUDE.md** (if exists) - may contain review instructions
-2. **Follow references** - if CLAUDE.md mentions other files (e.g., "see `REVIEW_GUIDELINES.md`"), read them
-3. **Check common locations**: `REVIEW_GUIDELINES.md`, `.github/CONTRIBUTING.md`, `docs/code-standards.md`
+2. **Follow references** - if CLAUDE.md mentions other guideline files, read them
+3. **Read `REVIEW_CRITERIA.md`** (in this skill's directory) - defines what to evaluate (review criteria, checklists, severity definitions)
 4. **Read `REVIEW_FORMAT.md`** (in this skill's directory) - defines the output structure for all review output
 
 **Two concerns, two documents:**
-- `REVIEW_GUIDELINES.md` defines **what to evaluate** (review criteria, checklists, severity definitions)
+- `REVIEW_CRITERIA.md` defines **what to evaluate** (review criteria, checklists, severity definitions)
 - `REVIEW_FORMAT.md` defines **how to present findings** (output structure, sections, formatting rules)
 
 ---
@@ -89,7 +89,7 @@ LAST_REVIEW_COMMIT=$(echo "$LAST_REVIEW" | jq -r '.commit_id // empty')
 
 **Decision:**
 - No previous review → Full review (`gh pr diff $PR_NUMBER`)
-- Same commit → Post "No new changes to review"
+- Same commit → Complete successfully with no action (do not post anything)
 - New commits in history → Incremental review
 - Last commit not in history → Force-push handling
 
@@ -99,7 +99,7 @@ LAST_REVIEW_COMMIT=$(echo "$LAST_REVIEW" | jq -r '.commit_id // empty')
 git diff $LAST_REVIEW_COMMIT..$CURRENT_HEAD
 ```
 
-Only comment on lines changed in new commits.
+Only comment on lines changed in new commits. Use the **Follow-up Reviews** format from `REVIEW_FORMAT.md` — track resolved/still-open items from the previous review and present new findings separately.
 
 ### Force-Push Handling
 
@@ -126,8 +126,8 @@ Use the `Write` tool to create a JSON payload, then submit via `gh api --input`:
   "event": "COMMENT",
   "commit_id": "<HEAD commit SHA>",
   "comments": [
-    {"path": "src/users.js", "line": 42, "body": "**Issue:** Missing input validation..."},
-    {"path": "src/api.js", "line": 15, "body": "**Issue:** Ignored error return value."}
+    {"path": "src/users.js", "line": 42, "body": "**Issue:** Missing input validation...\n\n<details>\n<summary>🤖 AI fix prompt</summary>\n\n```prompt\nFix instructions here...\n```\n\n</details>"},
+    {"path": "src/api.js", "line": 15, "body": "**Issue:** Ignored error return value.\n\n<details>\n<summary>🤖 AI fix prompt</summary>\n\n```prompt\nFix instructions here...\n```\n\n</details>"}
   ]
 }
 ```
@@ -149,7 +149,7 @@ gh api repos/$REPO/pulls/$PR_NUMBER/reviews --input review_payload.json
 **Review structure:**
 - `body`: The review summary, formatted per `REVIEW_FORMAT.md`. Contains the header (verdict + impact + assessment), severity sections, test coverage assessment, and AI fix prompt. Severity section items are concise one-liners **without** file/line references — inline diff comments carry that detail. If some findings cannot be attached as inline comments (line number uncertain), include them in the relevant severity section with file path context as an exception.
 - `comments`: File-specific findings with confident line numbers. Each comment targets a file and line number so it appears directly on the diff. Every finding that can be mapped to a specific line MUST be an inline comment.
-- `event`: Map verdict to event — `"APPROVE"` for "Approved" or "Approved with suggestions", `"REQUEST_CHANGES"` for "Changes requested"
+- `event`: Map verdict to event — `"APPROVE"` for "Approved" or "Approved with notes", `"REQUEST_CHANGES"` for "Changes requested"
 
 **CRITICAL: Single review per trigger.** Submit exactly ONE review. NEVER post separate issue comments (`gh pr comment`) for initial reviews — all feedback goes in a single review submission. The only exception is responding to re-review requests or @claude mentions, which use issue comments to reply.
 
@@ -159,8 +159,8 @@ gh api repos/$REPO/pulls/$PR_NUMBER/reviews --input review_payload.json
 
 The review body MUST follow the structure defined in `REVIEW_FORMAT.md`. The workflow is:
 
-1. **Evaluate** the changeset using `REVIEW_GUIDELINES.md` criteria (test coverage, coding guidelines & architecture, code quality, security, documentation, commit messages)
-2. **Classify** each finding by severity: Blocking, Should fix, or Suggestion
+1. **Evaluate** the changeset using `REVIEW_CRITERIA.md` criteria (test coverage, coding guidelines & architecture, code quality, security, documentation, commit messages)
+2. **Classify** each finding by severity: Must fix, Should fix, or Nit
 3. **Format** all findings into the `REVIEW_FORMAT.md` structure:
    - Header with verdict, impact, and 1-3 sentence assessment (mention areas evaluated with no findings)
    - Severity sections with concise one-liners (omit empty sections)
@@ -312,8 +312,8 @@ DRY RUN - Review for PR #123
   "event": "REQUEST_CHANGES",
   "commit_id": "abc123...",
   "comments": [
-    {"path": "src/users.js", "line": 42, "body": "**Issue:** Missing input validation..."},
-    {"path": "src/api.js", "line": 15, "body": "**Issue:** Ignored error return value."}
+    {"path": "src/users.js", "line": 42, "body": "**Issue:** Missing input validation...\n\n<details>\n<summary>🤖 AI fix prompt</summary>\n\n```prompt\nFix instructions here...\n```\n\n</details>"},
+    {"path": "src/api.js", "line": 15, "body": "**Issue:** Ignored error return value.\n\n<details>\n<summary>🤖 AI fix prompt</summary>\n\n```prompt\nFix instructions here...\n```\n\n</details>"}
   ]
 }
 ```

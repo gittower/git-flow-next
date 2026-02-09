@@ -49,7 +49,6 @@ For comprehensive development information, see:
 - **[CONFIGURATION.md](CONFIGURATION.md)** - Complete configuration reference and examples
 - **[TESTING_GUIDELINES.md](TESTING_GUIDELINES.md)** - Testing methodology and practices
 - **[COMMIT_GUIDELINES.md](COMMIT_GUIDELINES.md)** - Commit message standards and best practices
-- **[REVIEW_GUIDELINES.md](REVIEW_GUIDELINES.md)** - Code review checklist and process
 - **[RELEASING.md](RELEASING.md)** - Release process and versioning
 - **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - GitHub Copilot context and patterns
 
