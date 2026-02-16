@@ -133,7 +133,7 @@ The operation maintains a persistent state file that allows it to resume after c
 ### Remote Fetch Options
 
 **--fetch**
-: Fetch from remote before finishing the branch (default). This fetches both the base branch and the topic branch to ensure the latest remote changes are known before merging. Overrides git config setting `gitflow.<type>.finish.fetch`.
+: Fetch from remote before finishing the branch (default). This fetches both the base branch and the topic branch to ensure the latest remote changes are known before merging. Overrides git config setting `gitflow.<type>.finish.fetch`. If no remote is configured, the fetch is automatically skipped.
 
 **--no-fetch**
 : Don't fetch from remote before finishing. Disables the default fetch behavior. Overrides git config setting `gitflow.<type>.finish.fetch`.

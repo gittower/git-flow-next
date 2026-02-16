@@ -195,7 +195,7 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify)
 
 	// Perform fetch if enabled (only on initial finish, not continue)
-	if resolvedOptions.ShouldFetch {
+	if resolvedOptions.ShouldFetch && git.RemoteExists(cfg.Remote) {
 		fmt.Printf("Fetching from remote '%s'...\n", cfg.Remote)
 		// Fetch base branch
 		if err := git.FetchBranch(cfg.Remote, branchConfig.Parent); err != nil {
@@ -354,7 +354,7 @@ func executeSteps(cfg *config.Config, state *mergestate.MergeState, branchConfig
 		case stepUpdateChildren:
 			err = handleUpdateChildrenStep(cfg, state, branchConfig, resolvedOptions)
 		case stepDeleteBranch:
-			return handleDeleteBranchStep(state, resolvedOptions) // Final step
+			return handleDeleteBranchStep(cfg, state, resolvedOptions) // Final step
 		default:
 			return &errors.GitError{Operation: fmt.Sprintf("unknown step '%s'", state.CurrentStep), Err: nil}
 		}
@@ -746,7 +746,7 @@ func handleUpdateChildrenStep(cfg *config.Config, state *mergestate.MergeState, 
 }
 
 // handleDeleteBranchStep handles branch deletion
-func handleDeleteBranchStep(state *mergestate.MergeState, resolvedOptions *config.ResolvedFinishOptions) error {
+func handleDeleteBranchStep(cfg *config.Config, state *mergestate.MergeState, resolvedOptions *config.ResolvedFinishOptions) error {
 	// Ensure we're on the parent branch before deletion
 	if err := git.Checkout(state.ParentBranch); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("checkout parent branch '%s'", state.ParentBranch), Err: err}
@@ -763,7 +763,8 @@ func handleDeleteBranchStep(state *mergestate.MergeState, resolvedOptions *confi
 	// Delete branches based on settings
 	// Use force delete since we've already merged the branch
 	forceDelete := true
-	if err := deleteBranchesIfNeeded(state, keepRemote, keepLocal, forceDelete); err != nil {
+
+	if err := deleteBranchesIfNeeded(state, cfg.Remote, keepRemote, keepLocal, forceDelete); err != nil {
 		return err
 	}
 
@@ -785,19 +786,12 @@ func handleDeleteBranchStep(state *mergestate.MergeState, resolvedOptions *confi
 	// Run post-hook after successful completion
 	gitDir, err := git.GetGitDir()
 	if err == nil {
-		// Get remote from config for hook context
-		cfg, cfgErr := config.LoadConfig()
-		remote := "origin"
-		if cfgErr == nil {
-			remote = cfg.Remote
-		}
-
 		hookCtx := hooks.HookContext{
 			BranchType: state.BranchType,
 			BranchName: state.BranchName,
 			FullBranch: state.FullBranchName,
 			BaseBranch: state.ParentBranch,
-			Origin:     remote,
+			Origin:     cfg.Remote,
 			ExitCode:   0, // Success
 		}
 		// Set version for branches configured with tagging
@@ -935,13 +929,13 @@ func updateChildBranch(cfg *config.Config, branchName string, state *mergestate.
 }
 
 // deleteBranchesIfNeeded deletes branches based on retention settings
-func deleteBranchesIfNeeded(state *mergestate.MergeState, keepRemote, keepLocal, forceDelete bool) error {
+func deleteBranchesIfNeeded(state *mergestate.MergeState, remote string, keepRemote, keepLocal, forceDelete bool) error {
 	// Delete remote branch if not keeping it and if remote branch exists
 	if !keepRemote {
 		// Only attempt to delete if the remote branch actually exists
-		if git.RemoteBranchExists("origin", state.FullBranchName) {
-			remoteBranch := fmt.Sprintf("origin/%s", state.FullBranchName)
-			if err := git.DeleteRemoteBranch("origin", state.FullBranchName); err != nil {
+		if git.RemoteBranchExists(remote, state.FullBranchName) {
+			remoteBranch := fmt.Sprintf("%s/%s", remote, state.FullBranchName)
+			if err := git.DeleteRemoteBranch(remote, state.FullBranchName); err != nil {
 				return &errors.GitError{Operation: fmt.Sprintf("delete remote branch '%s'", remoteBranch), Err: err}
 			}
 		}
