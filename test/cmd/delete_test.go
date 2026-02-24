@@ -445,7 +445,7 @@ func TestDeleteFeatureWithCommandLineOverride(t *testing.T) {
 // 3. Adds a remote repository but doesn't push the branch
 // 4. Attempts to delete the branch with --remote flag
 // 5. Verifies the branch is deleted locally
-// 6. Verifies an error occurs when trying to delete the non-existent remote branch
+// 6. Verifies no error occurs when trying to delete the non-existent remote branch
 func TestDeleteFeatureWithNonExistentRemote(t *testing.T) {
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
@@ -476,10 +476,10 @@ func TestDeleteFeatureWithNonExistentRemote(t *testing.T) {
 		t.Fatalf("Feature branch unexpectedly exists on remote")
 	}
 
-	// Delete feature branch with remote deletion - should fail
+	// Delete feature branch with remote deletion - should succeed
 	_, err = testutil.RunGitFlow(t, dir, "feature", "delete", "test-feature", "--remote")
-	if err == nil {
-		t.Fatalf("Expected error when deleting non-existent remote branch")
+	if err != nil {
+		t.Fatalf("Failed to delete remote: %v", err)
 	}
 
 	// Verify branch is deleted locally
