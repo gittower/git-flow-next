@@ -350,7 +350,7 @@ func executeSteps(cfg *config.Config, state *mergestate.MergeState, branchConfig
 		case stepMerge:
 			err = handleMergeStep(cfg, state, branchConfig, resolvedOptions)
 		case stepCreateTag:
-			err = handleCreateTagStep(state, resolvedOptions)
+			err = handleCreateTagStep(cfg, state, resolvedOptions)
 		case stepUpdateChildren:
 			err = handleUpdateChildrenStep(cfg, state, branchConfig, resolvedOptions)
 		case stepDeleteBranch:
@@ -667,7 +667,7 @@ func handleMergeStep(cfg *config.Config, state *mergestate.MergeState, branchCon
 }
 
 // handleCreateTagStep handles the tag creation step
-func handleCreateTagStep(state *mergestate.MergeState, resolvedOptions *config.ResolvedFinishOptions) error {
+func handleCreateTagStep(cfg *config.Config, state *mergestate.MergeState, resolvedOptions *config.ResolvedFinishOptions) error {
 	if resolvedOptions.ShouldTag {
 		// Apply tag message filter for any branch type configured with tagging
 		// The filter script (filter-flow-{branchType}-finish-tag-message) decides what to do
@@ -676,12 +676,7 @@ func handleCreateTagStep(state *mergestate.MergeState, resolvedOptions *config.R
 			return &errors.GitError{Operation: "get git directory", Err: err}
 		}
 
-		// Load config to get remote name
-		cfg, cfgErr := config.LoadConfig()
-		remote := "origin"
-		if cfgErr == nil {
-			remote = cfg.Remote
-		}
+		remote := cfg.Remote
 
 		ctx := hooks.FilterContext{
 			BranchType: state.BranchType,
@@ -763,7 +758,6 @@ func handleDeleteBranchStep(cfg *config.Config, state *mergestate.MergeState, re
 	// Delete branches based on settings
 	// Use force delete since we've already merged the branch
 	forceDelete := true
-
 	if err := deleteBranchesIfNeeded(state, cfg.Remote, keepRemote, keepLocal, forceDelete); err != nil {
 		return err
 	}
