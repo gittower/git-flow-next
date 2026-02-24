@@ -198,7 +198,7 @@ The implementation phase transforms issues or concepts into working code.
    - Run tests frequently: `go test ./...`
 
 5. **Local Review**
-   - `/local-review` - Self-review against project review criteria
+   - `/code-review` - Self-review against project review criteria
    - Generates review notes
 
 6. **Address Review Findings**
@@ -385,7 +385,7 @@ The following skills are used throughout this workflow:
 | `/create-plan` | Generate implementation plan | `.ai/*/plan.md` |
 | `/validate-tests` | Check test approach against guidelines | Updates `plan.md` |
 | `/implement` | Execute plan, commit properly | Code + commits |
-| `/local-review` | Review code against guidelines | Review notes |
+| `/code-review` | Review code against guidelines | Review notes |
 | `/commit` | Commit following guidelines | Git commit |
 | `/pr-summary` | Generate PR summary | `.ai/*/pr_summary.md` |
 
@@ -414,7 +414,7 @@ git flow feature start 42-squash-merge
 /commit             # for each logical change
 
 # 6. Review before PR
-/local-review
+/code-review
 
 # 7. Publish and create PR summary
 git flow feature publish 42-squash-merge
@@ -440,7 +440,7 @@ git flow feature start my-feature
 /commit
 
 # 5. Review and publish
-/local-review
+/code-review
 git flow feature publish my-feature
 /pr-summary
 ```

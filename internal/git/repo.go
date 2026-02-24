@@ -2,7 +2,6 @@ package git
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -154,30 +153,14 @@ func HasCommits() (bool, error) {
 
 // CreateInitialCommit creates an initial commit and branch
 func CreateInitialCommit(branch string) error {
-	// Create a README.md file if it doesn't exist
-	if _, err := os.Stat("README.md"); os.IsNotExist(err) {
-		content := fmt.Sprintf("# Git Flow Repository\n\nThis repository is using git-flow with the following branches:\n- %s: Production releases\n- develop: Development\n", branch)
-		err = os.WriteFile("README.md", []byte(content), 0644)
-		if err != nil {
-			return fmt.Errorf("failed to create README.md: %w", err)
-		}
-	}
-
-	// Add the file to git
-	cmd := exec.Command("git", "add", "README.md")
+	// Create an empty initial commit
+	cmd := exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
 	_, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf("failed to add README.md: %w", err)
-	}
-
-	// Create the initial commit
-	cmd = exec.Command("git", "commit", "-m", "Initial commit")
-	_, err = cmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to create initial commit: %w", err)
 	}
 
-	// Create the branch (it will be created automatically as the first branch)
+	// Rename the default branch to the target name
 	cmd = exec.Command("git", "branch", "-m", branch)
 	_, err = cmd.Output()
 	if err != nil {

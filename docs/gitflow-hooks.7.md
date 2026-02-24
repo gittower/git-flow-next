@@ -6,7 +6,7 @@ gitflow-hooks - Git-flow hooks and filters for customizing workflow behavior
 
 ## SYNOPSIS
 
-Custom scripts in `.git/hooks/` to extend and customize git-flow operations.
+Custom scripts to extend and customize git-flow operations, located in a configurable hooks directory.
 
 ## DESCRIPTION
 
@@ -16,7 +16,32 @@ Git-flow supports two types of extension points:
 
 **Hooks** execute scripts before and after operations (e.g., running CI checks before starting a release).
 
-All scripts are located in the `.git/hooks/` directory following specific naming conventions.
+All scripts are located in the hooks directory following specific naming conventions.
+
+## HOOKS DIRECTORY
+
+By default, git-flow looks for hook and filter scripts in `.git/hooks/`. This can be overridden using configuration, following a three-level precedence:
+
+1. **gitflow.path.hooks** — git-flow-specific override. Set this to use a dedicated directory for git-flow hooks, independent of Git's own hooks. Compatible with git-flow-avh.
+
+2. **core.hooksPath** — Git's native hooks path configuration. If set and `gitflow.path.hooks` is not, git-flow respects this setting.
+
+3. **.git/hooks** — Default location when neither configuration is set. Worktree-aware: in a git worktree, hooks are resolved from the main repository's `.git/hooks` directory.
+
+Both absolute and relative paths are supported. Relative paths are resolved from the repository root.
+
+### Examples
+
+```bash
+# Use a tracked directory for git-flow hooks (absolute)
+git config gitflow.path.hooks /shared/team-hooks
+
+# Use a tracked directory for git-flow hooks (relative to repo root)
+git config gitflow.path.hooks .githooks
+
+# Use Git's native hooks path (also respected by git-flow)
+git config core.hooksPath .githooks
+```
 
 ## FILTERS
 
@@ -268,8 +293,8 @@ fi
 
 ## CREATING HOOK SCRIPTS
 
-1. Create the script in `.git/hooks/` with the appropriate name
-2. Make the script executable: `chmod +x .git/hooks/<script-name>`
+1. Create the script in the hooks directory (default: `.git/hooks/`) with the appropriate name
+2. Make the script executable: `chmod +x <hooks-dir>/<script-name>`
 3. Test the script manually before relying on it
 
 ### Tips
@@ -284,14 +309,38 @@ fi
 
 Since `.git/hooks/` is not tracked by Git, consider these approaches for sharing hooks:
 
-### Using a hooks directory in the repository
+### Using gitflow.path.hooks (recommended)
 
 ```bash
 # Store hooks in a tracked directory
 mkdir .githooks
 
-# Configure Git to use this directory
+# Configure git-flow to use this directory
+git config gitflow.path.hooks .githooks
+```
+
+This only affects git-flow hooks and filters, leaving Git's own hooks unaffected.
+
+### Using core.hooksPath
+
+```bash
+# Store hooks in a tracked directory
+mkdir .githooks
+
+# Configure Git (and git-flow) to use this directory
 git config core.hooksPath .githooks
+```
+
+Note: This also affects Git's own hooks (pre-commit, commit-msg, etc.).
+
+### Using global or system configuration
+
+```bash
+# Set a shared hooks directory for all repositories (user-wide)
+git config --global gitflow.path.hooks /shared/team-hooks
+
+# Set a shared hooks directory system-wide
+sudo git config --system gitflow.path.hooks /etc/git-flow-hooks
 ```
 
 ### Using symbolic links
@@ -381,7 +430,7 @@ exit 0
 
 ## SEE ALSO
 
-**git-flow**(1), **git-flow-start**(1), **git-flow-finish**(1), **githooks**(5)
+**git-flow**(1), **git-flow-start**(1), **git-flow-finish**(1), **gitflow-config**(5), **githooks**(5)
 
 ## REFERENCES
 

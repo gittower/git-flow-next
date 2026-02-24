@@ -21,6 +21,7 @@ Create a well-formatted commit following the project's COMMIT_GUIDELINES.md.
 3. **Analyze Changes**
    - Review the diff to understand what changed
    - Identify the appropriate commit type and scope per COMMIT_GUIDELINES.md
+   - Choose the type based on **what the change does**, not what file extension it has — use the decision guide below
 
 4. **Write Commit Message** per COMMIT_GUIDELINES.md rules
 
@@ -37,6 +38,28 @@ Create a well-formatted commit following the project's COMMIT_GUIDELINES.md.
    ```
 
 6. **Verify** — run `git log -1` to check the message
+
+## Commit Type Decision Guide
+
+Choose the type based on the **purpose** of the change, not the file type:
+
+| Type | Use when... | Example |
+|------|------------|---------|
+| **feat** | Adding new user-facing functionality | New CLI command, new flag, new config option |
+| **fix** | Fixing a user-facing bug | Incorrect merge behavior, wrong exit code |
+| **refactor** | Restructuring code without behavior change | Extract helper, rename internal function |
+| **test** | Adding/fixing tests (even if fixing a bug *in* a test) | New test case, fix flaky test |
+| **docs** | Changing **user-facing documentation** content | Update README, manpage, ARCHITECTURE.md |
+| **ci** | Changing CI/CD, automation, review tooling, GitHub config | Workflows, Copilot/Claude instructions, skills, `.github/` config |
+| **build** | Changing build system or dependencies | go.mod, build scripts, Makefile |
+| **style** | Code formatting only, no logic change | `go fmt`, whitespace fixes |
+| **chore** | Maintenance that doesn't fit above | Update .gitignore, tool config |
+
+### Common pitfalls
+
+- **`.md` files are not always `docs`** — a Markdown file that configures tool behavior (e.g., Copilot instructions, Claude skills, review criteria) is `ci`, not `docs`
+- **`fix` is for user-facing bugs only** — fixing a CI workflow is `ci`, fixing a test is `test`, fixing a build script is `build`
+- **`test` covers test fixes too** — use `test:` not `fix:` when correcting test code
 
 ## Hard Wrapping Technique
 

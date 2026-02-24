@@ -105,7 +105,7 @@ Spawn a subagent:
 
 - **subagent_type**: `general-purpose`
 - **description**: `Review changes locally`
-- **prompt**: `Read the skill definition at .claude/skills/local-review/SKILL.md and execute it fully. Review all new commits on the current branch vs main. Write the review to <ai-folder>/.`
+- **prompt**: `Read the skill definition at .claude/skills/code-review/SKILL.md and execute it fully. Review all new commits on the current branch vs main. Write the review to <ai-folder>/.`
 
 **Verify**: Use Glob to confirm `<ai-folder>/review-*.md` was created.
 

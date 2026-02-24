@@ -126,6 +126,31 @@ func SetupTestRepo(t *testing.T) string {
 	return dir
 }
 
+// SetupEmptyTestRepo creates a temporary Git repository with no commits.
+// This is useful for testing behavior when git-flow init encounters an empty repo.
+func SetupEmptyTestRepo(t *testing.T) string {
+	dir, err := os.MkdirTemp("", "git-flow-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temporary directory: %v", err)
+	}
+
+	_, err = RunGit(t, dir, "init", "--initial-branch=main")
+	if err != nil {
+		t.Fatalf("Failed to initialize Git repository: %v", err)
+	}
+
+	_, err = RunGit(t, dir, "config", "user.name", "Test User")
+	if err != nil {
+		t.Fatalf("Failed to configure Git user name: %v", err)
+	}
+	_, err = RunGit(t, dir, "config", "user.email", "test@example.com")
+	if err != nil {
+		t.Fatalf("Failed to configure Git user email: %v", err)
+	}
+
+	return dir
+}
+
 // CleanupTestRepo removes the temporary test repository
 func CleanupTestRepo(t *testing.T, dir string) {
 	err := os.RemoveAll(dir)

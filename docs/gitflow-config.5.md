@@ -96,6 +96,24 @@ Command-line flags always take the highest precedence and override both configur
 : Name of the remote repository to use for operations.
 : *Default*: "origin"
 
+## PATH CONFIGURATION
+
+**gitflow.path.hooks**
+: Override the directory where git-flow looks for hook and filter scripts. When set, git-flow uses this directory instead of the default `.git/hooks/` or Git's `core.hooksPath`. Supports absolute paths or paths relative to the repository root.
+: *Default*: not set (falls back to `core.hooksPath`, then `.git/hooks`)
+: *Compatibility*: matches git-flow-avh `gitflow.path.hooks` behavior
+
+```bash
+# Absolute path
+git config gitflow.path.hooks /shared/team-hooks
+
+# Relative path (resolved from repository root)
+git config gitflow.path.hooks .githooks
+
+# Global default for all repositories
+git config --global gitflow.path.hooks .githooks
+```
+
 ## BRANCH CONFIGURATION
 
 Branch configuration uses the pattern: **gitflow.branch.*name*.*property***

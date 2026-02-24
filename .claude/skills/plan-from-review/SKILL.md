@@ -366,6 +366,5 @@ Each review plan captures the state at that revision, allowing:
 
 After creating the plan:
 - Use `/implement .ai/<folder>/review-plan-<sha>.md` to execute the fixes
-- Use `/local-review` after implementing to verify changes
+- Use `/code-review` after implementing to verify changes
 - Use `/commit` to create properly formatted commits
-- Re-run `/code-review` to trigger re-review after pushing fixes

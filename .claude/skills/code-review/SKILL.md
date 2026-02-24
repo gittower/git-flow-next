@@ -1,343 +1,241 @@
 ---
 name: code-review
-description: PR code review mechanics via GitHub API
-allowed-tools: Bash, Read, Write, Grep, Glob
+description: Review changes or PRs against project guidelines
+allowed-tools: Read, Write, Grep, Glob, Bash
 ---
 
-# Code Review Skill
+# Code Review
 
-PR code review mechanics: create reviews via GitHub API, post inline comments, respond to mentions.
+Review local changes or pull requests against project guidelines. All output is written locally — never posted to GitHub.
 
-## Input Context
+## Arguments
 
-The workflow provides:
-- `EVENT`: GitHub event type (`pull_request`, `issue_comment`, `pull_request_review_comment`)
-- `REPO`: Repository in `owner/repo` format
-- `PR_NUMBER`: Pull request number
-- `COMMENT`: Comment body (empty for `pull_request` events)
+`/code-review [target] [--output path]`
 
-## Execution Context Detection
+### Target (optional)
 
-Run these two commands (in parallel) to check for CI environment:
+Specifies what to review. Can be:
 
-```bash
-echo $GITHUB_ACTIONS
-```
+- **Nothing** - auto-detect new commits on current branch vs main (default)
+- **Commit range** - review specific commits (e.g., `HEAD~3..HEAD`, `abc123..def456`)
+- **Single commit** - review one commit (e.g., `HEAD~1`, `abc123`)
+- **Branch comparison** - review branch diff (e.g., `main..feature/foo`)
+- **PR number** - review a pull request (e.g., `#123` or `123`)
 
-```bash
-echo $CI
-```
+### Output (optional)
 
-If either prints `true`, you are in **CI mode**. If both are empty, you are in **local mode**.
+`--output path` or `-o path` - where to write the review:
 
-**Execution modes:**
-- **CI mode**: `GITHUB_ACTIONS=true` or `CI=true` — Posts reviews to GitHub
-- **Local mode**: Neither set — Auto-enables dry-run, outputs review to console
+- A folder name within `.ai/` (e.g., `issue-59-add-no-verify-option`)
+- A relative path (e.g., `.ai/issue-59-add-no-verify-option`)
+- If omitted with auto-detect mode: auto-detects from branch name, writes to `.ai/`
+- If omitted with explicit target: outputs directly to conversation (no file)
+- If omitted with PR mode: auto-saves to `.ai/` (see step 6)
 
-When running locally, inform the user:
-> "Running in local mode — dry-run enabled automatically. Review output will be displayed but not posted to GitHub."
-
----
-
-## Intent Detection
-
-```
-If EVENT == "pull_request":
-  → INTENT = "review"
-
-If EVENT == "issue_comment" or "pull_request_review_comment":
-  If COMMENT contains "@claude review" or "@claude re-review":
-    → INTENT = "review"
-  Else:
-    → INTENT = "respond"
-```
-
----
-
-## Loading Guidelines
-
-Before reviewing or responding, load project-specific guidelines:
-
-1. **Read CLAUDE.md** (if exists) - may contain review instructions
-2. **Follow references** - if CLAUDE.md mentions other guideline files, read them
-3. **Read `REVIEW_CRITERIA.md`** (in this skill's directory) - defines what to evaluate (review criteria, checklists, severity definitions)
-4. **Read `REVIEW_FORMAT.md`** (in this skill's directory) - defines the output structure for all review output
-
-**Two concerns, two documents:**
-- `REVIEW_CRITERIA.md` defines **what to evaluate** (review criteria, checklists, severity definitions)
-- `REVIEW_FORMAT.md` defines **how to present findings** (output structure, sections, formatting rules)
-
----
-
-## Action: Review
-
-### Pre-Review Check
-
-Determine what needs reviewing:
+### Examples
 
 ```bash
-# Get Claude's previous reviews
-LAST_REVIEW=$(gh api repos/$REPO/pulls/$PR_NUMBER/reviews \
-  --jq '[.[] | select(.user.login == "github-actions[bot]" or .user.login == "claude[bot]")] | sort_by(.submitted_at) | last')
+# Auto-detect new commits vs main (writes to .ai/)
+/code-review
 
-# Get current HEAD commit
-CURRENT_HEAD=$(gh pr view $PR_NUMBER --json headRefOid --jq '.headRefOid')
+# Auto-detect, specify output folder
+/code-review --output issue-59-add-no-verify-option
+/code-review -o .ai/my-feature
 
-# Get commit SHA from last review
-LAST_REVIEW_COMMIT=$(echo "$LAST_REVIEW" | jq -r '.commit_id // empty')
+# Review specific commits (outputs to conversation)
+/code-review HEAD~3..HEAD
+/code-review abc123
+/code-review main..feature/foo
+
+# Review commits and save to file
+/code-review HEAD~5..HEAD --output code-audit
+
+# Review a pull request (auto-saves to .ai/)
+/code-review #123
+/code-review 123
 ```
 
-**Decision:**
-- No previous review → Full review (`gh pr diff $PR_NUMBER`)
-- Same commit → Complete successfully with no action (do not post anything)
-- New commits in history → Incremental review
-- Last commit not in history → Force-push handling
+## Instructions
+
+1. **Parse Arguments**
+   - Check if a commit/range target was provided
+   - Check if the target is a PR number (`#123` or bare `123` that isn't a valid git ref)
+   - Check if `--output` or `-o` flag was provided
+   - Determine review mode: "auto-detect" (default), "explicit", or "pr"
+
+2. **Gather Context**
+
+   For **auto-detect mode** (no target specified):
+   - Get current branch name
+   - Find associated workflow folder in `.ai/`
+   - Read the original issue/concept and plan if available
+
+   For **explicit mode** (commit/range target specified):
+   - Validate the commit range/ref exists
+   - No workflow folder lookup needed
+
+   For **PR mode** (PR number specified):
+   - Fetch PR metadata:
+     ```bash
+     gh pr view <number> --json title,author,baseRefName,headRefName,headRefOid,number
+     ```
+   - No workflow folder lookup needed
+
+3. **Detect and Get Changes**
+
+   For **auto-detect mode**:
+   - Determine the main branch: run `git config gitflow.branch.main.name` (fallback to `main`)
+   - Detect new commits: run `git log <main>..HEAD --oneline`
+   - If no new commits exist, inform the user and stop
+   - Get the diff for those commits: `git diff <main>...HEAD`
+   - List the commits being reviewed
+
+   For **explicit mode**:
+   - If range (contains `..`): `git diff <range>` and `git log <range> --oneline`
+   - If single commit: `git show <commit> --stat` and `git log -1 <commit>`
+
+   For **PR mode**:
+   - Get the full diff: `gh pr diff <number>`
+   - Get the commit list: `gh pr view <number> --json commits --jq '.commits[].oid'`
+   - List all modified files from the diff
+
+   For all modes:
+   - List all modified files
+
+4. **Review Against Guidelines**
+
+   Review the code against **[REVIEW_CRITERIA.md](REVIEW_CRITERIA.md)**, which covers:
+   - Test coverage
+   - Coding guidelines and architecture
+   - Code quality
+   - Security
+   - Documentation
+   - Commit messages
+
+5. **Code Quality Checks** (auto-detect mode only)
+
+   Skip this step for explicit mode (reviewing historical commits) and PR mode.
+
+   For auto-detect mode, run:
+   ```bash
+   # Format check
+   go fmt ./...
+
+   # Vet check
+   go vet ./...
+   ```
+
+6. **Determine Output Location**
+
+   **Filename includes revision(s) being reviewed:**
+
+   ```bash
+   # For auto-detect mode: use HEAD short SHA
+   HEAD_SHA=$(git rev-parse --short HEAD)
+   FILENAME="review-${HEAD_SHA}.md"
+
+   # For commit range (abc123..def456): use both endpoints
+   START_SHA=$(git rev-parse --short abc123)
+   END_SHA=$(git rev-parse --short def456)
+   FILENAME="review-${START_SHA}-${END_SHA}.md"
+
+   # For single commit: use that commit's short SHA
+   COMMIT_SHA=$(git rev-parse --short abc123)
+   FILENAME="review-${COMMIT_SHA}.md"
+
+   # For PR mode: use PR number and head SHA
+   HEAD_SHA=$(gh pr view <number> --json headRefOid --jq '.headRefOid' | cut -c1-7)
+   FILENAME="review-pr<number>-${HEAD_SHA}.md"
+   ```
+
+   If `--output` / `-o` was provided:
+   - If it starts with `.ai/`, use it directly
+   - Otherwise, treat it as a folder name within `.ai/` (prepend `.ai/`)
+   - Create the folder if it doesn't exist
+   - Write to `<folder>/<filename>`
+
+   If no `--output` and **auto-detect mode**:
+   - Extract issue number from branch name (e.g., `feature/59-...` → `59`)
+   - Look for existing `.ai/issue-<number>-*` folder
+   - If no `.ai/` folder exists, create one based on the branch name pattern
+   - Write to `<folder>/<filename>`
 
-### Incremental Review
+   If no `--output` and **PR mode**:
+   - Extract issue number from the PR branch name if possible
+   - Look for existing `.ai/issue-<number>-*` folder
+   - Fall back to `.ai/pr-<number>/`
+   - Write to `<folder>/<filename>`
 
-```bash
-git diff $LAST_REVIEW_COMMIT..$CURRENT_HEAD
-```
+   If no `--output` and **explicit mode**:
+   - Output directly to the conversation (no file written)
 
-Only comment on lines changed in new commits. Use the **Follow-up Reviews** format from `REVIEW_FORMAT.md` — track resolved/still-open items from the previous review and present new findings separately.
+   Examples:
+   - Auto-detect at HEAD `c9625f7` → `.ai/issue-59-foo/review-c9625f7.md`
+   - Range `abc123..def456` with `-o issue-59-foo` → `.ai/issue-59-foo/review-abc123-def456.md`
+   - Single commit `abc123` with `-o .ai/my-feature` → `.ai/my-feature/review-abc123.md`
+   - PR `#60` at head `a1b2c3d` → `.ai/issue-59-foo/review-pr60-a1b2c3d.md`
+   - Explicit mode, no flag → output to conversation (no file)
 
-### Force-Push Handling
+7. **Generate Review Report**
 
-```bash
-git merge-base --is-ancestor $LAST_REVIEW_COMMIT $CURRENT_HEAD
-# Exit 0 = normal push, non-zero = force-push
-```
+   Write the review to file OR output directly to conversation based on step 6.
 
-When force-push detected:
-1. Full review against base branch
-2. Fetch previous comments: `gh api repos/$REPO/pulls/$PR_NUMBER/comments`
-3. Skip re-commenting on same file+line+issue
+   Use this format:
 
-### Submitting the Review
+   ```markdown
+   # Code Review: <branch-name, commit-range, or PR #number>
 
-Use the `Write` tool to create a JSON payload, then submit via `gh api --input`:
+   ## Summary
+   - Revision(s): `<start-sha>` to `<end-sha>` (or single `<sha>`)
+   - Files changed: <count>
+   - Lines added: <count>
+   - Lines removed: <count>
+   - Commits reviewed: <count> (list the commit SHAs/subjects)
+   ```
 
-1. **Build the JSON payload** using the `Write` tool (avoids pipe permission issues in CI):
+   For **PR mode**, add PR metadata to the summary:
+   ```markdown
+   - PR: #<number> - <title>
+   - Author: <author>
+   - Base: <base-branch> ← <head-branch>
+   ```
 
-```json
-// Write to review_payload.json using the Write tool
-{
-  "body": "Review summary here",
-  "event": "COMMENT",
-  "commit_id": "<HEAD commit SHA>",
-  "comments": [
-    {"path": "src/users.js", "line": 42, "body": "**Issue:** Missing input validation...\n\n<details>\n<summary>🤖 AI fix prompt</summary>\n\n```prompt\nFix instructions here...\n```\n\n</details>"},
-    {"path": "src/api.js", "line": 15, "body": "**Issue:** Ignored error return value.\n\n<details>\n<summary>🤖 AI fix prompt</summary>\n\n```prompt\nFix instructions here...\n```\n\n</details>"}
-  ]
-}
-```
+   Then continue with:
 
-2. **Get the HEAD commit SHA:**
+   ```markdown
+   ## Checklist Results
 
-```bash
-COMMIT_SHA=$(gh pr view $PR_NUMBER --json headRefOid --jq '.headRefOid')
-```
+   ### Passed
+   - <item 1>
+   - <item 2>
 
-3. **Submit the review:**
+   ### Must Fix
+   - [ ] <issue 1> - <file:line> - <description>
+   - [ ] <issue 2> - <file:line> - <description>
 
-```bash
-gh api repos/$REPO/pulls/$PR_NUMBER/reviews --input review_payload.json
-```
+   ### Should Fix
+   - <item 1>
 
-**IMPORTANT:** Do NOT use `jq ... | gh api ...` pipes — piped commands trigger separate permission checks in CI that cause failures. Always write the JSON payload to a file first using the `Write` tool, then pass it via `--input`.
+   ## Quality Checks (auto-detect mode only)
+   - Format: PASS/FAIL
+   - Vet: PASS/FAIL
 
-**Review structure:**
-- `body`: The review summary, formatted per `REVIEW_FORMAT.md`. Contains the header (verdict + impact + assessment), severity sections, test coverage assessment, and AI fix prompt. Severity section items are concise one-liners **without** file/line references — inline diff comments carry that detail. If some findings cannot be attached as inline comments (line number uncertain), include them in the relevant severity section with file path context as an exception.
-- `comments`: File-specific findings with confident line numbers. Each comment targets a file and line number so it appears directly on the diff. Every finding that can be mapped to a specific line MUST be an inline comment.
-- `event`: Map verdict to event — `"APPROVE"` for "Approved" or "Approved with notes", `"REQUEST_CHANGES"` for "Changes requested"
+   ## Recommendations
+   1. <recommendation>
+   2. <recommendation>
 
-**CRITICAL: Single review per trigger.** Submit exactly ONE review. NEVER post separate issue comments (`gh pr comment`) for initial reviews — all feedback goes in a single review submission. The only exception is responding to re-review requests or @claude mentions, which use issue comments to reply.
+   ## Ready for PR? (auto-detect mode only)
+   <YES/NO - explain if NO>
+   ```
 
-**CRITICAL: No fallback comments.** If you cannot determine the correct line number for a finding, include it in the review body with the file path — do NOT post it as a separate issue comment.
+   For explicit and PR modes, omit "Quality Checks" and "Ready for PR?" sections.
 
-### Review Output Format
+8. **Report Findings**
+   - If issues found, list them with specific file:line references
+   - Suggest fixes for each issue
+   - For auto-detect mode: indicate if changes are PR-ready
+   - For explicit and PR modes: provide code review feedback directly in conversation
 
-The review body MUST follow the structure defined in `REVIEW_FORMAT.md`. The workflow is:
+## Issue Categories
 
-1. **Evaluate** the changeset using `REVIEW_CRITERIA.md` criteria (test coverage, coding guidelines & architecture, code quality, security, documentation, commit messages)
-2. **Classify** each finding by severity: Must fix, Should fix, or Nit
-3. **Format** all findings into the `REVIEW_FORMAT.md` structure:
-   - Header with verdict, impact, and 1-3 sentence assessment (mention areas evaluated with no findings)
-   - Severity sections with concise one-liners (omit empty sections)
-   - Test Coverage Assessment (always present) with subsections as applicable
-   - AI fix prompt in a collapsible `<details>` block at the bottom
-4. **Attach** file-specific findings as inline diff comments — the severity sections in the body stay concise and free of file/line details
-
-### Determining Line Numbers
-
-The `line` field must be the line number in the NEW file version (at the PR's HEAD commit).
-
-**Preferred method — fetch PR branch and read files directly:**
-
-Fetch the PR branch and use standard file/git operations. Always use `origin/` prefixed refs — bare branch names like `main` may not exist as local refs in CI:
-
-```bash
-# Fetch both branches with proper remote refs
-git fetch origin <branch-name>:refs/remotes/origin/<branch-name>
-git fetch origin main:refs/remotes/origin/main
-
-# View diff stats (always use origin/ prefix)
-git diff origin/main...origin/<branch-name> --stat
-
-# Read file content directly
-git show origin/<branch-name>:path/to/file.go
-
-# Or use the Read tool on fetched files
-```
-
-**IMPORTANT:** Do NOT use `FETCH_HEAD` — it changes with each `git fetch` call. Always use explicit `origin/<branch-name>` refs instead.
-
-**Alternative — GitHub API (CI mode or when git fetch unavailable):**
-
-```bash
-# Fetch file content at PR HEAD
-gh api repos/$REPO/contents/PATH?ref=$COMMIT_SHA --jq '.content' | base64 -d
-```
-
-Then search for the specific code pattern to find its line number. This is more reliable than parsing diff hunks.
-
-**Fallback — parse from diff:**
-
-1. Find the `@@` hunk header: `@@ -196,12 +196,41 @@` — the `+196` is the starting line in the new file
-2. Count lines from hunk start: only count `+` lines and context lines (no prefix), skip `-` lines
-3. For deleted lines, use `"side": "LEFT"` with the old file line number
-
-**When uncertain:** If you cannot confidently determine the line number, do NOT guess. Include the finding in the review body instead:
-> **src/users.js**: Missing input validation in `processUser()` function.
-
----
-
-## Error Handling (CI Mode)
-
-In CI mode, the skill MUST fail explicitly rather than complete silently when it cannot perform its review. Use `exit 1` to indicate failure.
-
-### Permission Errors
-
-After any `gh api` call, check for permission failures:
-
-```bash
-# Check if API call failed
-if ! RESULT=$(gh api repos/$REPO/pulls/$PR_NUMBER/reviews --input - 2>&1); then
-  echo "ERROR: Failed to submit review - $RESULT"
-  exit 1
-fi
-```
-
-Common permission errors to catch:
-- `Resource not accessible by integration` — missing workflow permissions
-- `Not Found` — repo access denied or PR doesn't exist
-- `Validation Failed` — invalid review data (e.g., bad line numbers)
-
-### Review Quality Failures
-
-The skill MUST fail if it cannot produce a meaningful review:
-
-1. **No findings with valid line numbers**: If line detection fails for ALL findings and none can be attached as inline comments, the review adds no value. **Exit with error** rather than posting only a summary.
-
-2. **API submission failure**: If the review submission itself fails for any reason, **exit with error**.
-
-```bash
-# Track successful line detections
-INLINE_COMMENT_COUNT=<number of comments with confirmed line numbers>
-
-if [ "$INLINE_COMMENT_COUNT" -eq 0 ] && [ "$TOTAL_FINDINGS" -gt 0 ]; then
-  echo "ERROR: Found $TOTAL_FINDINGS issues but could not determine line numbers for any. Review cannot proceed."
-  exit 1
-fi
-```
-
-### Success Criteria
-
-A review is considered successful when:
-- At least one inline comment has a verified line number, OR
-- There are genuinely no findings (clean PR)
-- The review was successfully submitted to GitHub
-
----
-
-## Action: Respond
-
-Handle @claude mentions that aren't review requests.
-
-**IMPORTANT:** In CI mode, you MUST post your response to GitHub. Do not just produce text output — the user cannot see your output, only GitHub comments. Your response is invisible unless you post it.
-
-### Fetch Context
-
-```bash
-# Get review comments (inline on code)
-gh api repos/$REPO/pulls/$PR_NUMBER/comments --paginate
-
-# Get issue comments (general PR discussion)
-gh api repos/$REPO/issues/$PR_NUMBER/comments --paginate
-```
-
-### Posting the Response
-
-After formulating your response, you MUST post it to GitHub:
-
-```bash
-# Reply to an inline review comment thread
-gh api repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies \
-  -f body="Response here"
-
-# Reply to a general PR/issue comment
-gh pr comment $PR_NUMBER --body "Response here"
-```
-
-**Choose the right method:**
-- If the @claude mention is on an inline review comment → use the replies API with the comment ID
-- If the @claude mention is on a general PR comment → use `gh pr comment`
-
-Respond based on the question/request. If project guidelines specify a response format, use it.
-
----
-
-## Dry Run Mode
-
-When `--dry-run` is passed OR running in local mode (no CI environment detected):
-- Analyze normally but DO NOT post to GitHub
-- Output the exact JSON that would be submitted
-
-````
-DRY RUN - Review for PR #123
-
-```json
-{
-  "body": "<Review body formatted per REVIEW_FORMAT.md>",
-  "event": "REQUEST_CHANGES",
-  "commit_id": "abc123...",
-  "comments": [
-    {"path": "src/users.js", "line": 42, "body": "**Issue:** Missing input validation...\n\n<details>\n<summary>🤖 AI fix prompt</summary>\n\n```prompt\nFix instructions here...\n```\n\n</details>"},
-    {"path": "src/api.js", "line": 15, "body": "**Issue:** Ignored error return value.\n\n<details>\n<summary>🤖 AI fix prompt</summary>\n\n```prompt\nFix instructions here...\n```\n\n</details>"}
-  ]
-}
-```
-````
-
-For responses, output the comment body:
-
-````
-DRY RUN - Response for PR #123
-
-```markdown
-Your response text here exactly as it would be posted...
-```
-````
-
----
-
-## Exit Codes (CI Mode)
-
-In CI mode, use exit codes to signal workflow success or failure:
-
-| Exit Code | Meaning |
-|-----------|---------|
-| `0` | Review completed successfully |
-| `1` | Review failed (permissions, line detection, API error) |
-
-**Local mode** does not use exit codes — it outputs dry-run results for the user to review.
+Categorize findings using the severity levels defined in REVIEW_CRITERIA.md (Must fix, Should fix, Nit).

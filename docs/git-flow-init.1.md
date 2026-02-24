@@ -270,6 +270,7 @@ By default, git-flow stores configuration in the repository's **.git/config** fi
 - **git-flow init** requires **--force** to reconfigure an already initialized repository in non-interactive mode
 - In interactive mode without **--force**, users are prompted for confirmation before reconfiguring
 - Existing branches are preserved during initialization
+- When initializing a repository with no existing commits, **git-flow init** creates an empty initial commit to enable branch creation. No files are added to the working directory
 - Compatible with repositories previously initialized with git-flow-avh
 - Configuration scope options (**--local**, **--global**, **--system**, **--file**) only affect the **init** command. All other git-flow commands (start, finish, update, etc.) always read from merged config using Git's standard precedence (local > global > system)
 - When checking initialization status without an explicit scope flag, git-flow checks merged config and reports which scope the configuration was found in

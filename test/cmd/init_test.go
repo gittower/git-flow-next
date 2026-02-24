@@ -1164,3 +1164,90 @@ func TestInitForceWithLocalScope(t *testing.T) {
 		t.Errorf("Expected gitflow.version in local config to be '1.0', got: %s", version)
 	}
 }
+
+// TestInitEmptyRepoCreatesEmptyCommit tests that git flow init in an empty
+// repo creates an empty initial commit with no files in the working tree.
+// Steps:
+// 1. Sets up an empty test repository (no commits)
+// 2. Runs 'git flow init --defaults'
+// 3. Verifies exactly one commit exists on main via 'git rev-list --count main'
+// 4. Verifies the commit has no file changes via 'git diff-tree --no-commit-id -r HEAD'
+func TestInitEmptyRepoCreatesEmptyCommit(t *testing.T) {
+	dir := testutil.SetupEmptyTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Run git-flow init --defaults
+	output, err := runGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow init --defaults: %v\nOutput: %s", err, output)
+	}
+
+	// Verify exactly one commit exists on main
+	commitCount, err := testutil.RunGit(t, dir, "rev-list", "--count", "main")
+	if err != nil {
+		t.Fatalf("Failed to count commits: %v", err)
+	}
+	if strings.TrimSpace(commitCount) != "1" {
+		t.Errorf("Expected exactly 1 commit on main, got: %s", strings.TrimSpace(commitCount))
+	}
+
+	// Verify the commit has no file changes (empty tree)
+	diffOutput, err := testutil.RunGit(t, dir, "diff-tree", "--no-commit-id", "-r", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to check commit tree: %v", err)
+	}
+	if strings.TrimSpace(diffOutput) != "" {
+		t.Errorf("Expected empty commit (no file changes), got: %s", diffOutput)
+	}
+}
+
+// TestInitEmptyRepoCreatesBranches tests that git flow init in an empty
+// repo creates the expected main and develop branches.
+// Steps:
+// 1. Sets up an empty test repository (no commits)
+// 2. Runs 'git flow init --defaults'
+// 3. Verifies 'main' branch exists via branchExists helper
+// 4. Verifies 'develop' branch exists via branchExists helper
+func TestInitEmptyRepoCreatesBranches(t *testing.T) {
+	dir := testutil.SetupEmptyTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Run git-flow init --defaults
+	output, err := runGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow init --defaults: %v\nOutput: %s", err, output)
+	}
+
+	// Verify main branch exists
+	if !branchExists(t, dir, "main") {
+		t.Error("Expected 'main' branch to exist")
+	}
+
+	// Verify develop branch exists
+	if !branchExists(t, dir, "develop") {
+		t.Error("Expected 'develop' branch to exist")
+	}
+}
+
+// TestInitEmptyRepoDoesNotCreateReadme tests that git flow init in an empty
+// repo does not create a README.md file in the working directory.
+// Steps:
+// 1. Sets up an empty test repository (no commits)
+// 2. Runs 'git flow init --defaults'
+// 3. Verifies no README.md file exists in the working directory via os.Stat
+func TestInitEmptyRepoDoesNotCreateReadme(t *testing.T) {
+	dir := testutil.SetupEmptyTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Run git-flow init --defaults
+	output, err := runGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow init --defaults: %v\nOutput: %s", err, output)
+	}
+
+	// Verify no README.md file exists in the working directory
+	readmePath := filepath.Join(dir, "README.md")
+	if _, err := os.Stat(readmePath); !os.IsNotExist(err) {
+		t.Error("Expected no README.md file in working directory, but it exists")
+	}
+}

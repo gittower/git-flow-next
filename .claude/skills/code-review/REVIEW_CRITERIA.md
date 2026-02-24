@@ -1,6 +1,6 @@
 # Review Criteria
 
-Defines what to evaluate during automated PR code reviews and how to classify findings. The referenced guideline files define the actual rules — this document directs review focus.
+Defines what to evaluate during local self-reviews, quality checks to run, and how to classify findings. The referenced guideline files define the actual rules — this document directs review focus.
 
 ## Review Areas
 
@@ -37,6 +37,21 @@ Evaluate against the documentation requirements in [CODING_GUIDELINES.md](../../
 Do commit messages follow project conventions?
 
 Evaluate against [COMMIT_GUIDELINES.md](../../../COMMIT_GUIDELINES.md).
+
+---
+
+## Quality Checks
+
+Run these before submitting:
+
+```bash
+go build ./...   # Build check
+go test ./...    # Test check
+go fmt ./...     # Format check
+go vet ./...     # Vet check
+```
+
+All checks must pass before code review.
 
 ---
 

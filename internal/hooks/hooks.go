@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/gittower/git-flow-next/internal/git"
 )
 
 // RunPreHook executes a pre-hook script. Returns an error if the hook fails (non-zero exit).
@@ -32,16 +34,37 @@ func RunPostHook(gitDir string, branchType string, action HookAction, ctx HookCo
 	return runHook(gitDir, HookPost, branchType, action, ctx)
 }
 
+// configLookup is a package-level function variable for testability.
+var configLookup = git.GetConfigInDir
+
+// resolveHooksPath resolves a hooks path that may be relative to the repository root.
+func resolveHooksPath(hooksPath, repoRoot string) string {
+	if filepath.IsAbs(hooksPath) {
+		return hooksPath
+	}
+	return filepath.Join(repoRoot, hooksPath)
+}
+
 // getHooksDir returns the directory where hooks are stored.
-// For regular repositories, this is gitDir/hooks.
-// For worktrees, hooks are shared in the main repository's git directory.
-// Worktree git directories have a path like: /repo/.git/worktrees/<name>
-// In this case, hooks should be found at /repo/.git/hooks (the common git dir).
+// Resolution follows three-level precedence:
+//  1. gitflow.path.hooks - git-flow-specific override (avh compatibility)
+//  2. core.hooksPath - Git's native hooks path configuration
+//  3. .git/hooks - default location (worktree-aware)
 func getHooksDir(gitDir string) string {
-	// Check if this is a worktree git directory
-	// Worktree git dirs have a path pattern: .../worktrees/<worktree-name>
-	// In this case, we need to go up two levels to get to the common git dir
 	commonDir := getCommonGitDir(gitDir)
+	repoRoot := filepath.Dir(commonDir)
+
+	// 1. git-flow-specific override (avh compatibility)
+	if hooksPath, err := configLookup(repoRoot, "gitflow.path.hooks"); err == nil && hooksPath != "" {
+		return resolveHooksPath(hooksPath, repoRoot)
+	}
+
+	// 2. Git's core.hooksPath
+	if hooksPath, err := configLookup(repoRoot, "core.hooksPath"); err == nil && hooksPath != "" {
+		return resolveHooksPath(hooksPath, repoRoot)
+	}
+
+	// 3. Default: .git/hooks (worktree-aware)
 	return filepath.Join(commonDir, "hooks")
 }
 

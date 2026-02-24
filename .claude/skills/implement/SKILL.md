@@ -26,7 +26,7 @@ Specifies what to implement. Can be:
 When given a directory (or auto-detecting):
 1. If `review.md` exists → implement fixes from the review
 2. Otherwise if `plan.md` exists → implement the plan
-3. If neither exists → suggest running `/create-plan` or `/local-review` first
+3. If neither exists → suggest running `/create-plan` or `/code-review` first
 
 ### Examples
 
@@ -65,7 +65,7 @@ When given a directory (or auto-detecting):
 
    If no source file found:
    - Suggest running `/create-plan` for new work
-   - Suggest running `/local-review` if code exists but needs review
+   - Suggest running `/code-review` if code exists but needs review
 
 2. **Verify Prerequisites**
    - Confirm on correct feature branch
@@ -162,7 +162,7 @@ When given a directory (or auto-detecting):
 **For Plan Mode:**
 1. Verify all tests pass
 2. Check all checkboxes in plan.md are complete
-3. Suggest running `/local-review` before PR
+3. Suggest running `/code-review` before PR
 
 **For Review Mode:**
 1. Verify all tests pass
