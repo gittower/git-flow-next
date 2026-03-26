@@ -42,6 +42,25 @@ Our goal is to contribute back to the developer community with tools that make v
 ```bash
 brew install gittower/tap/git-flow-next
 ```
+### Manual Installation (Windows)
+
+1. Download the latest release from the [releases page](https://github.com/gittower/git-flow-next/releases)
+2. Extract the binary to a location in your PATH
+3. Change name of the binary to `git-flow.exe`
+
+#### Verifying Installation
+
+4. Open the terminal and run `git flow version`
+5. If you see message similar to the one below, there is a chance you didn't rename the binary properly
+```bash
+git: 'flow' is not a git command. See 'git --help'.
+```
+6. The clue might be in the second part of the message, but the most likely scenario is that you accidentally named it `git-flow.exe.exe` due to Windows hiding file extensions
+```bash
+
+The most similar command is
+        flow.exe
+```
 
 ### Manual Installation
 
