@@ -270,6 +270,58 @@ func TestApplyOverrides_CustomBranchNames(t *testing.T) {
 	assert.False(t, exists)
 }
 
+func TestApplyOverrides_CustomBranchNamesWithDots(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg = config.ApplyOverrides(cfg, config.ConfigOverrides{
+		MainBranch:    "custom.main",
+		DevelopBranch: "custom.dev",
+	})
+
+	// Check main branch (base branch)
+	mainConfig, exists := cfg.Branches["custom.main"]
+	assert.True(t, exists)
+	assert.Equal(t, string(config.BranchTypeBase), mainConfig.Type)
+	assert.Equal(t, "", mainConfig.Parent)
+	assert.Equal(t, "", mainConfig.StartPoint)
+
+	// Check develop branch (base branch)
+	developConfig, exists := cfg.Branches["custom.dev"]
+	assert.True(t, exists)
+	assert.Equal(t, string(config.BranchTypeBase), developConfig.Type)
+	assert.Equal(t, "custom.main", developConfig.Parent)
+	assert.Equal(t, "", developConfig.StartPoint)
+
+	// Check feature branch parent and start point
+	featureConfig, exists := cfg.Branches["feature"]
+	assert.True(t, exists)
+	assert.Equal(t, "custom.dev", featureConfig.Parent)
+	assert.Equal(t, "custom.dev", featureConfig.StartPoint)
+
+	// Check release branch parent and start point
+	releaseConfig, exists := cfg.Branches["release"]
+	assert.True(t, exists)
+	assert.Equal(t, "custom.main", releaseConfig.Parent)
+	assert.Equal(t, "custom.dev", releaseConfig.StartPoint)
+
+	// Check hotfix branch parent and start point
+	hotfixConfig, exists := cfg.Branches["hotfix"]
+	assert.True(t, exists)
+	assert.Equal(t, "custom.main", hotfixConfig.Parent)
+	assert.Equal(t, "custom.main", hotfixConfig.StartPoint)
+
+	// Check support branch parent and start point
+	supportConfig, exists := cfg.Branches["support"]
+	assert.True(t, exists)
+	assert.Equal(t, "custom.main", supportConfig.Parent)
+	assert.Equal(t, "custom.main", supportConfig.StartPoint)
+
+	// Check old names don't exist
+	_, exists = cfg.Branches["main"]
+	assert.False(t, exists)
+	_, exists = cfg.Branches["develop"]
+	assert.False(t, exists)
+}
+
 func TestApplyOverrides_CustomPrefixes(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg = config.ApplyOverrides(cfg, config.ConfigOverrides{

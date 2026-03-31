@@ -234,8 +234,8 @@ func LoadConfig() (*Config, error) {
 				continue
 			}
 
-			branchName := strings.ToLower(keyParts[2])
-			property := strings.ToLower(keyParts[3])
+			branchName := strings.ToLower(strings.Join(keyParts[2:len(keyParts)-1], "."))
+			property := strings.ToLower(keyParts[len(keyParts)-1])
 
 			// Initialize branch map if needed
 			if _, ok := branchMap[branchName]; !ok {
