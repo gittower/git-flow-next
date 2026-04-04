@@ -43,6 +43,12 @@ Our goal is to contribute back to the developer community with tools that make v
 brew install gittower/tap/git-flow-next
 ```
 
+### WinGet (Windows)
+
+```bash
+winget install GitTower.GitFlowNext
+```
+
 ### Manual Installation
 
 1. Download the latest release from the [releases page](https://github.com/gittower/git-flow-next/releases)
@@ -97,7 +103,7 @@ git checkout feature/my-awesome-feature
 git flow finish  # Executes: git flow feature finish my-awesome-feature
 git flow rebase  # Executes: git flow feature update --rebase
 
-# On a release branch  
+# On a release branch
 git checkout release/v1.2.0
 git flow publish  # Executes: git flow release publish v1.2.0
 
