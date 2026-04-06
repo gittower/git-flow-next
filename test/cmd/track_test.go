@@ -464,3 +464,32 @@ func TestTrackHotfixBranch(t *testing.T) {
 		t.Errorf("Expected to be on 'hotfix/1.0.1', got '%s'", currentBranch)
 	}
 }
+
+// TestTrackFeatureBranchNoRemoteError tests that track returns a clear error when no remote is configured.
+// Steps:
+// 1. Sets up a test repository (no remote) and initializes git-flow with defaults
+// 2. Runs 'git flow feature track some-feature'
+// 3. Verifies the command fails with an error
+// 4. Verifies the error message mentions the missing remote (contains "No remote")
+func TestTrackFeatureBranchNoRemoteError(t *testing.T) {
+	// Setup test repository without remote
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	// Attempt to track (should fail with clear error)
+	output, err := testutil.RunGitFlow(t, dir, "feature", "track", "some-feature")
+	if err == nil {
+		t.Fatalf("Expected error when tracking without remote, but command succeeded.\nOutput: %s", output)
+	}
+
+	// Verify error message mentions missing remote
+	if !strings.Contains(output, "No remote") {
+		t.Errorf("Expected error message to contain 'No remote', got: %s", output)
+	}
+}
