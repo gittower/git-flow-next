@@ -79,23 +79,6 @@ func executeDelete(branchType string, name string, force *bool, remote *bool) er
 
 // performDelete performs the actual delete operation (called within hooks wrapper)
 func performDelete(branchType, name, fullBranchName string, branchConfig config.BranchConfig, force *bool, remote *bool, cfg *config.Config) error {
-	// Check if we're currently on the branch to be deleted
-	currentBranch, err := git.GetCurrentBranch()
-	if err != nil {
-		return &errors.GitError{Operation: "get current branch", Err: err}
-	}
-	if currentBranch == fullBranchName {
-		// If we're on the branch to be deleted, try to switch to its parent
-		parentBranch := branchConfig.Parent
-		if parentBranch != "" {
-			if err := git.Checkout(parentBranch); err != nil {
-				return &errors.GitError{Operation: fmt.Sprintf("checkout parent branch '%s'", parentBranch), Err: err}
-			}
-		} else {
-			return &errors.GitError{Operation: "delete branch", Err: fmt.Errorf("cannot delete the current branch without a parent branch configured")}
-		}
-	}
-
 	// Determine if we should force delete the branch
 	forceDelete := false
 	if force != nil {
@@ -125,8 +108,26 @@ func performDelete(branchType, name, fullBranchName string, branchConfig config.
 	}
 
 	// Validate remote exists if remote deletion is requested
+	// This must happen before any state-changing operations (checkout, branch deletion)
 	if deleteRemote && !git.RemoteExists(cfg.Remote) {
 		return &errors.RemoteNotConfiguredError{Remote: cfg.Remote, Operation: "delete remote branch"}
+	}
+
+	// Check if we're currently on the branch to be deleted
+	currentBranch, err := git.GetCurrentBranch()
+	if err != nil {
+		return &errors.GitError{Operation: "get current branch", Err: err}
+	}
+	if currentBranch == fullBranchName {
+		// If we're on the branch to be deleted, try to switch to its parent
+		parentBranch := branchConfig.Parent
+		if parentBranch != "" {
+			if err := git.Checkout(parentBranch); err != nil {
+				return &errors.GitError{Operation: fmt.Sprintf("checkout parent branch '%s'", parentBranch), Err: err}
+			}
+		} else {
+			return &errors.GitError{Operation: "delete branch", Err: fmt.Errorf("cannot delete the current branch without a parent branch configured")}
+		}
 	}
 
 	// Delete the branch with appropriate flag
