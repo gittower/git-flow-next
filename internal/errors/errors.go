@@ -287,6 +287,20 @@ func lastSlashIndex(s string) int {
 	return -1
 }
 
+// RemoteNotConfiguredError indicates a required remote is not configured
+type RemoteNotConfiguredError struct {
+	Remote    string
+	Operation string
+}
+
+func (e *RemoteNotConfiguredError) Error() string {
+	return fmt.Sprintf("No remote '%s' configured. Cannot %s.", e.Remote, e.Operation)
+}
+
+func (e *RemoteNotConfiguredError) ExitCode() ExitCode {
+	return ExitCodeGitError
+}
+
 // AlreadyInitializedError indicates git-flow is already configured
 type AlreadyInitializedError struct{}
 

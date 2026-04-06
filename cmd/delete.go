@@ -56,11 +56,8 @@ func executeDelete(branchType string, name string, force *bool, remote *bool) er
 		return &errors.GitError{Operation: "get git directory", Err: err}
 	}
 
-	// Get remote name
+	// Get remote name from config
 	remoteName := cfg.Remote
-	if remoteName == "" {
-		remoteName = "origin"
-	}
 
 	// Build hook context
 	hookCtx := hooks.HookContext{
@@ -127,6 +124,11 @@ func performDelete(branchType, name, fullBranchName string, branchConfig config.
 		}
 	}
 
+	// Validate remote exists if remote deletion is requested
+	if deleteRemote && !git.RemoteExists(cfg.Remote) {
+		return &errors.RemoteNotConfiguredError{Remote: cfg.Remote, Operation: "delete remote branch"}
+	}
+
 	// Delete the branch with appropriate flag
 	deleteErr := git.DeleteBranch(fullBranchName, forceDelete)
 	if deleteErr != nil {
@@ -135,11 +137,7 @@ func performDelete(branchType, name, fullBranchName string, branchConfig config.
 
 	// Delete remote branch if requested
 	if deleteRemote {
-		// Get remote name from config
 		remoteName := cfg.Remote
-		if remoteName == "" {
-			remoteName = "origin"
-		}
 
 		// Delete remote branch
 		if err := git.DeleteRemoteBranch(remoteName, fullBranchName); err != nil {
