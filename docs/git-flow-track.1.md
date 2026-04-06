@@ -10,7 +10,7 @@ git-flow-track - Track a remote topic branch locally
 
 ## DESCRIPTION
 
-Creates a local branch that tracks a remote topic branch. This command is useful when you want to collaborate on a branch that was started by another team member.
+Creates a local branch that tracks a remote topic branch. This command is useful when you want to collaborate on a branch that was started by another team member. A configured remote is required; the command will fail with a clear error if no remote is available.
 
 The command will:
 

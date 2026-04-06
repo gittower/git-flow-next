@@ -1,6 +1,7 @@
 package cmd_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/gittower/git-flow-next/test/testutil"
@@ -817,5 +818,65 @@ func TestDeleteForceConfigAcrossBranchTypes(t *testing.T) {
 	// Verify branch is deleted
 	if testutil.BranchExists(t, dir, "release/1.0.0") {
 		t.Error("Expected release branch to be deleted")
+	}
+}
+
+// TestDeleteFeatureBranchRemoteNoRemoteError tests that delete --remote returns a clear error when no remote is configured.
+// Steps:
+// 1. Sets up a test repository (no remote) and initializes git-flow with defaults
+// 2. Creates a feature branch with 'git flow feature start test-feature'
+// 3. Adds a commit to the feature branch
+// 4. Runs 'git flow feature delete test-feature --remote'
+// 5. Verifies the command fails with an error
+// 6. Verifies the error message mentions the missing remote (contains "No remote")
+// 7. Verifies the feature branch still exists locally (not deleted despite the error)
+func TestDeleteFeatureBranchRemoteNoRemoteError(t *testing.T) {
+	// Setup test repository without remote
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	// Create a feature branch
+	_, err = testutil.RunGitFlow(t, dir, "feature", "start", "test-feature")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v", err)
+	}
+
+	// Add a commit so the branch has content
+	testutil.WriteFile(t, dir, "test.txt", "test content")
+	_, err = testutil.RunGit(t, dir, "add", "test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add test file")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Switch to develop so we can attempt to delete the feature branch
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+
+	// Attempt to delete with --remote (should fail with clear error)
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "test-feature", "--remote")
+	if err == nil {
+		t.Fatalf("Expected error when deleting with --remote without remote configured, but command succeeded.\nOutput: %s", output)
+	}
+
+	// Verify error message mentions missing remote
+	if !strings.Contains(output, "No remote") {
+		t.Errorf("Expected error message to contain 'No remote', got: %s", output)
+	}
+
+	// Verify branch still exists locally (not deleted because error occurred before deletion)
+	if !testutil.BranchExists(t, dir, "feature/test-feature") {
+		t.Error("Expected feature/test-feature branch to still exist after failed delete --remote")
 	}
 }

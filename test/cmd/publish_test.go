@@ -429,3 +429,45 @@ func TestPublishCurrentBranchWrongType(t *testing.T) {
 		t.Errorf("Expected 'not a release branch' error message, got: %s", output)
 	}
 }
+
+// TestPublishFeatureBranchNoRemoteError tests that publish returns a clear error when no remote is configured.
+// Steps:
+// 1. Sets up a test repository (no remote) and initializes git-flow with defaults
+// 2. Creates a feature branch with 'git flow feature start test-feature'
+// 3. Runs 'git flow feature publish test-feature'
+// 4. Verifies the command fails with an error
+// 5. Verifies the error message mentions the missing remote (contains "No remote")
+// 6. Verifies the feature branch still exists locally (not affected by the error)
+func TestPublishFeatureBranchNoRemoteError(t *testing.T) {
+	// Setup test repository without remote
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	// Create a feature branch
+	_, err = testutil.RunGitFlow(t, dir, "feature", "start", "test-feature")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v", err)
+	}
+
+	// Attempt to publish (should fail with clear error)
+	output, err := testutil.RunGitFlow(t, dir, "feature", "publish", "test-feature")
+	if err == nil {
+		t.Fatalf("Expected error when publishing without remote, but command succeeded.\nOutput: %s", output)
+	}
+
+	// Verify error message mentions missing remote
+	if !strings.Contains(output, "No remote") {
+		t.Errorf("Expected error message to contain 'No remote', got: %s", output)
+	}
+
+	// Verify branch still exists locally
+	if !testutil.BranchExists(t, dir, "feature/test-feature") {
+		t.Error("Expected feature/test-feature branch to still exist after failed publish")
+	}
+}

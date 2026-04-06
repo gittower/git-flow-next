@@ -33,7 +33,7 @@ The delete operation removes the specified topic branch from the local repositor
 : Don't force delete the branch even if configured (overrides config)
 
 **--remote**, **-r**
-: Delete the remote tracking branch in addition to the local branch
+: Delete the remote tracking branch in addition to the local branch. Requires a configured remote; the command will fail with a clear error if no remote is available.
 
 **--no-remote**
 : Don't delete the remote tracking branch (default behavior)

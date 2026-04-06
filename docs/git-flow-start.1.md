@@ -28,7 +28,7 @@ The new branch is created from the configured starting point for the topic branc
 ## OPTIONS
 
 **--fetch**
-: Fetch from remote before creating branch to ensure latest state
+: Fetch from remote before creating branch to ensure latest state. If no remote is configured, the fetch is automatically skipped.
 
 **--no-fetch**
 : Don't fetch from remote before creating branch (default behavior)

@@ -136,11 +136,8 @@ func executeUpdate(branchType string, name string, useRebase bool) error {
 			return &errors.GitError{Operation: "get git directory", Err: err}
 		}
 
-		// Get remote name
+		// Get remote name from config
 		remoteName := cfg.Remote
-		if remoteName == "" {
-			remoteName = "origin"
-		}
 
 		// Build hook context
 		hookCtx := hooks.HookContext{

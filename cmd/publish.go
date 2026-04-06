@@ -88,10 +88,12 @@ func publish(branchType string, name string, cliPushOptions []string, noPushOpti
 		return &errors.LocalBranchNotFoundError{BranchName: fullBranchName}
 	}
 
-	// Determine remote (from config or default to "origin")
+	// Determine remote from config
 	remote := cfg.Remote
-	if remote == "" {
-		remote = "origin"
+
+	// Validate remote exists
+	if !git.RemoteExists(remote) {
+		return &errors.RemoteNotConfiguredError{Remote: remote, Operation: "publish branch"}
 	}
 
 	// Get git directory for hooks

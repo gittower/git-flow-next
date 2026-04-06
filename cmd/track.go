@@ -67,10 +67,12 @@ func track(branchType string, name string) error {
 		return &errors.BranchExistsError{BranchName: fullBranchName}
 	}
 
-	// Determine remote (from config or default to "origin")
+	// Determine remote from config
 	remote := cfg.Remote
-	if remote == "" {
-		remote = "origin"
+
+	// Validate remote exists
+	if !git.RemoteExists(remote) {
+		return &errors.RemoteNotConfiguredError{Remote: remote, Operation: "track branch"}
 	}
 
 	// Get git directory for hooks

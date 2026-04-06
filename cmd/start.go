@@ -120,10 +120,11 @@ func executeStart(branchType string, name string, base string, shouldFetch *bool
 	// Perform fetch if requested
 	remoteName := cfg.Remote
 	if shouldFetch != nil && *shouldFetch || shouldFetch == nil && fetchFromConfig {
-		// Fetch from remote
-		fmt.Printf("Fetching from %s...\n", remoteName)
-		if err := git.Fetch(remoteName); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		if git.RemoteExists(remoteName) {
+			fmt.Printf("Fetching from %s...\n", remoteName)
+			if err := git.Fetch(remoteName); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+			}
 		}
 	}
 

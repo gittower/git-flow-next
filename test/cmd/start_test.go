@@ -423,18 +423,13 @@ func TestStartWithoutFetch(t *testing.T) {
 
 // TestStartWithFetchFlag tests that the --fetch flag works
 func TestStartWithFetchFlag(t *testing.T) {
-	// Setup test repo
-	dir := testutil.SetupTestRepo(t)
+	// Setup test repo with remote (includes git-flow init)
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
-
-	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
-	if err != nil {
-		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
-	}
+	defer testutil.CleanupTestRepo(t, remoteDir)
 
 	// Run git-flow feature start with the fetch flag
-	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "fetch-test", "--fetch")
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "fetch-test", "--fetch")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
 	}
@@ -447,24 +442,19 @@ func TestStartWithFetchFlag(t *testing.T) {
 
 // TestStartWithFetchConfig tests that the gitflow.<topic>.start.fetch config works
 func TestStartWithFetchConfig(t *testing.T) {
-	// Setup test repo
-	dir := testutil.SetupTestRepo(t)
+	// Setup test repo with remote (includes git-flow init)
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
-
-	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
-	if err != nil {
-		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
-	}
+	defer testutil.CleanupTestRepo(t, remoteDir)
 
 	// Set the config to enable fetch
-	_, err = testutil.RunGit(t, dir, "config", "gitflow.feature.start.fetch", "true")
+	_, err := testutil.RunGit(t, dir, "config", "gitflow.feature.start.fetch", "true")
 	if err != nil {
 		t.Fatalf("Failed to set config: %v", err)
 	}
 
 	// Run git-flow feature start without explicit fetch flag
-	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "config-fetch-test")
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "config-fetch-test")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
 	}
@@ -517,8 +507,15 @@ func TestStartWithCustomRemote(t *testing.T) {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
-	// Set custom remote name
+	// Add a remote with custom name
 	customRemote := "custom-remote"
+	remoteDir, err := testutil.AddRemote(t, dir, customRemote, true)
+	if err != nil {
+		t.Fatalf("Failed to add custom remote: %v", err)
+	}
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Set custom remote name in gitflow config
 	_, err = testutil.RunGit(t, dir, "config", "gitflow.origin", customRemote)
 	if err != nil {
 		t.Fatalf("Failed to set custom remote: %v", err)
@@ -585,5 +582,50 @@ func TestStartStoresBaseBranch(t *testing.T) {
 	expectedReleaseBase := "develop"
 	if strings.TrimSpace(releaseBaseConfig) != expectedReleaseBase {
 		t.Errorf("Expected release base branch to be '%s', got '%s'", expectedReleaseBase, strings.TrimSpace(releaseBaseConfig))
+	}
+}
+
+// TestStartFeatureBranchNoRemoteFetchSkipped tests that start skips fetch silently when no remote exists.
+// Steps:
+// 1. Sets up a test repository (no remote) and initializes git-flow with defaults
+// 2. Enables fetch for start via git config gitflow.feature.start.fetch true
+// 3. Runs 'git flow feature start no-remote-test'
+// 4. Verifies output does NOT contain "Fetching" (fetch skipped silently)
+// 5. Verifies output does NOT contain "does not appear to be a git repository"
+// 6. Verifies feature/no-remote-test branch is created successfully
+func TestStartFeatureBranchNoRemoteFetchSkipped(t *testing.T) {
+	// Setup test repository without remote
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	// Enable fetch for start
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.feature.start.fetch", "true")
+	if err != nil {
+		t.Fatalf("Failed to set fetch config: %v", err)
+	}
+
+	// Start a feature branch (fetch should be silently skipped)
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "no-remote-test")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify fetch was skipped silently
+	if strings.Contains(output, "Fetching") {
+		t.Error("Expected fetch to be skipped silently, but output contains 'Fetching'")
+	}
+	if strings.Contains(output, "does not appear to be a git repository") {
+		t.Error("Expected no confusing error messages about missing remote")
+	}
+
+	// Verify branch was created
+	if !testutil.BranchExists(t, dir, "feature/no-remote-test") {
+		t.Error("Expected feature/no-remote-test branch to exist")
 	}
 }
