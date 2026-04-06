@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-06
+
+### Added
+
+- Push-option support for publish command (`--push-option` / `-o`)
+- Support for configurable hooks directory via `gitflow.path.hooks` and `core.hooksPath`
+
+### Fixed
+
+- Validate remote exists before any state-changing delete operations
+- Validate remote before remote operations (publish, track, finish sync)
+- Check if remote exists before attempting to delete remote branch
+- Skip fetch when no remote is configured
+- Use empty commit instead of README.md when initializing empty repositories
+- Default to empty version tag prefix during init
+- Thread config correctly into tag creation step during finish
+
 ## [1.0.0] - 2026-02-08
 
 ### Added
@@ -79,7 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic updates to child branches (e.g., develop syncs from main)
 - Compatibility with existing git-flow-avh repositories
 
-[Unreleased]: https://github.com/gittower/git-flow-next/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/gittower/git-flow-next/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/gittower/git-flow-next/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gittower/git-flow-next/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/gittower/git-flow-next/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/gittower/git-flow-next/compare/v0.1.1...v0.2.0
