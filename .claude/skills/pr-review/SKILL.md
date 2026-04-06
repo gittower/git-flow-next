@@ -95,13 +95,13 @@ Create a GitHub PR review with summary and inline diff comments. Writes to a fil
    <Opening paragraph: 1-3 sentences. Overall verdict — what's good,
    what the PR does well. Professional, concise tone.>
 
-   ### Must Fix
+   **Must Fix**
    - <finding> — `file:line` — <brief explanation>
 
-   ### Should Fix
+   **Should Fix**
    - <finding> — `file:line` — <brief explanation>
 
-   ### Nit
+   **Nit**
    - <finding> — `file:line` — <brief explanation>
 
    ## Inline Comments
@@ -117,6 +117,7 @@ Create a GitHub PR review with summary and inline diff comments. Writes to a fil
    - Only include severity sections that have items
    - No checkboxes, no emoji
    - Opening paragraph has no heading — it IS the top-level content
+   - Severity sections use bold text (`**Must Fix**`), not headings
    - Inline comment headers use the exact format `### \`file:line\`` for parseability
    - Keep everything concise — this gets posted publicly
 

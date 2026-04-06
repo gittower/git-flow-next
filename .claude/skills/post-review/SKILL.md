@@ -56,13 +56,13 @@ event: <APPROVE|COMMENT|REQUEST_CHANGES>
 
 <summary text>
 
-### Must Fix
+**Must Fix**
 - ...
 
-### Should Fix
+**Should Fix**
 - ...
 
-### Nit
+**Nit**
 - ...
 
 ## Inline Comments
