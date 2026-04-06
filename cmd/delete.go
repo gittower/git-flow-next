@@ -141,11 +141,20 @@ func performDelete(branchType, name, fullBranchName string, branchConfig config.
 			remoteName = "origin"
 		}
 
-		// Delete remote branch
-		if err := git.DeleteRemoteBranch(remoteName, fullBranchName); err != nil {
-			return &errors.GitError{Operation: fmt.Sprintf("delete remote branch '%s'", fullBranchName), Err: err}
+		deletedRemote := false
+		if git.RemoteBranchExists(remoteName, fullBranchName) {
+			// Delete remote branch
+			if err := git.DeleteRemoteBranch(remoteName, fullBranchName); err != nil {
+				return &errors.GitError{Operation: fmt.Sprintf("delete remote branch '%s'", fullBranchName), Err: err}
+			} else {
+				deletedRemote = true
+			}
 		}
-		fmt.Printf("Deleted branch %s and its remote tracking branch\n", fullBranchName)
+		if deletedRemote {
+			fmt.Printf("Deleted branch %s and its remote tracking branch\n", fullBranchName)
+		} else {
+			fmt.Printf("Deleted branch %s (no remote tracking branch found)\n", fullBranchName)
+		}
 	} else {
 		fmt.Printf("Deleted branch %s\n", fullBranchName)
 	}
