@@ -327,6 +327,13 @@ func DeleteRemoteBranch(remote, branch string) error {
 	return nil
 }
 
+// RemoteExists checks if a remote is configured in the local git config.
+// This is a local-only check (no network call).
+func RemoteExists(remote string) bool {
+	cmd := exec.Command("git", "remote", "get-url", remote)
+	return cmd.Run() == nil
+}
+
 // RemoteBranchExists checks if a remote branch exists
 func RemoteBranchExists(remote, branch string) bool {
 	// Check if the remote tracking branch exists

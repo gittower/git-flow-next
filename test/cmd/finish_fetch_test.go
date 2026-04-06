@@ -547,3 +547,75 @@ func TestFinishFeatureBranchContinueDoesNotFetch(t *testing.T) {
 		t.Error("Expected resolved changes to be in develop branch")
 	}
 }
+
+// TestFinishFeatureBranchNoRemote tests that finish skips fetch silently when no remote exists.
+// Steps:
+// 1. Sets up a test repository (no remote) and initializes git-flow with defaults
+// 2. Creates a feature branch and adds a commit
+// 3. Runs 'git flow feature finish' (default fetch=true, but no remote configured)
+// 4. Verifies output does NOT contain "Fetching from remote" (fetch skipped silently)
+// 5. Verifies output does NOT contain "does not appear to be a git repository" (no confusing error)
+// 6. Verifies finish completes successfully (branch merged and deleted)
+func TestFinishFeatureBranchNoRemote(t *testing.T) {
+	// Setup test repository without remote
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	// Create a feature branch
+	_, err = testutil.RunGitFlow(t, dir, "feature", "start", "no-remote-test")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+
+	// Create a test file and commit
+	testutil.WriteFile(t, dir, "no-remote-test.txt", "test content")
+	_, err = testutil.RunGit(t, dir, "add", "no-remote-test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add no-remote test file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Finish the feature branch (fetch defaults to true, but no remote exists)
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "no-remote-test")
+	if err != nil {
+		t.Fatalf("Failed to finish feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify fetch was skipped silently (no fetch output at all)
+	if strings.Contains(output, "Fetching from remote") {
+		t.Error("Expected fetch to be skipped silently when no remote exists")
+	}
+
+	// Verify no confusing error messages about missing remote
+	if strings.Contains(output, "does not appear to be a git repository") {
+		t.Error("Expected no confusing error about missing remote")
+	}
+
+	// Verify finish completed successfully
+	if !strings.Contains(output, "Successfully finished") {
+		t.Error("Expected successful finish message")
+	}
+
+	// Verify feature branch is deleted
+	if testutil.BranchExists(t, dir, "feature/no-remote-test") {
+		t.Error("Expected feature branch to be deleted")
+	}
+
+	// Verify changes are merged into develop
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	if !testutil.FileExists(t, dir, "no-remote-test.txt") {
+		t.Error("Expected no-remote-test.txt to exist in develop branch")
+	}
+}

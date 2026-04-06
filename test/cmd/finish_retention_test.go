@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gittower/git-flow-next/test/testutil"
@@ -324,5 +325,97 @@ func TestFinishFeatureBranchKeepRemote(t *testing.T) {
 	content := testutil.ReadFile(t, dir, "test.txt")
 	if content != "feature content" {
 		t.Errorf("Expected file content to be 'feature content', got '%s'", content)
+	}
+}
+
+// TestFinishDeleteBranchUsesConfiguredRemote tests that branch deletion uses the configured remote name.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds a remote named "upstream" (not "origin")
+// 3. Configures gitflow.origin=upstream so git-flow uses the custom remote
+// 4. Creates a feature branch and adds a commit
+// 5. Publishes the feature branch to "upstream"
+// 6. Runs 'git flow feature finish'
+// 7. Verifies the remote branch is deleted from "upstream"
+// 8. Verifies finish completes successfully
+func TestFinishDeleteBranchUsesConfiguredRemote(t *testing.T) {
+	// Setup test repository
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	// Add a remote named "upstream" (not "origin")
+	remoteDir, err := testutil.AddRemote(t, dir, "upstream", true)
+	if err != nil {
+		t.Fatalf("Failed to add upstream remote: %v", err)
+	}
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Configure git-flow to use "upstream" as the remote
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.origin", "upstream")
+	if err != nil {
+		t.Fatalf("Failed to configure gitflow.origin: %v", err)
+	}
+
+	// Create a feature branch
+	_, err = testutil.RunGitFlow(t, dir, "feature", "start", "custom-remote-test")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+
+	// Create a test file and commit
+	testutil.WriteFile(t, dir, "custom-remote-test.txt", "test content")
+	_, err = testutil.RunGit(t, dir, "add", "custom-remote-test.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add custom remote test file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Publish the feature branch to "upstream"
+	_, err = testutil.RunGitFlow(t, dir, "feature", "publish", "custom-remote-test")
+	if err != nil {
+		t.Fatalf("Failed to publish feature branch: %v", err)
+	}
+
+	// Verify the remote branch exists on "upstream" before finish
+	_, err = testutil.RunGit(t, dir, "fetch", "upstream")
+	if err != nil {
+		t.Fatalf("Failed to fetch from upstream: %v", err)
+	}
+	if !testutil.RemoteBranchExists(t, dir, "upstream", "feature/custom-remote-test") {
+		t.Fatal("Expected remote branch to exist on upstream before finish")
+	}
+
+	// Finish the feature branch
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "custom-remote-test")
+	if err != nil {
+		t.Fatalf("Failed to finish feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify finish completed successfully
+	if !strings.Contains(output, "Successfully finished") {
+		t.Error("Expected successful finish message")
+	}
+
+	// Verify local branch is deleted
+	if testutil.BranchExists(t, dir, "feature/custom-remote-test") {
+		t.Error("Expected local feature branch to be deleted")
+	}
+
+	// Fetch from upstream and verify remote branch is deleted
+	_, err = testutil.RunGit(t, dir, "fetch", "upstream", "--prune")
+	if err != nil {
+		t.Fatalf("Failed to fetch from upstream: %v", err)
+	}
+	if testutil.RemoteBranchExists(t, dir, "upstream", "feature/custom-remote-test") {
+		t.Error("Expected remote branch to be deleted from upstream")
 	}
 }
