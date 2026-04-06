@@ -10,7 +10,7 @@ git-flow-publish - Publish a topic branch to the remote repository
 
 ## DESCRIPTION
 
-Publishes a local topic branch to the configured remote repository. This command pushes the branch and sets up tracking between the local and remote branches.
+Publishes a local topic branch to the configured remote repository. This command pushes the branch and sets up tracking between the local and remote branches. A configured remote is required; the command will fail with a clear error if no remote is available.
 
 After publishing, other team members can track this branch using `git flow <type> track`.
 
