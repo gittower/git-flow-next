@@ -3,6 +3,7 @@ package hooks_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -110,6 +111,9 @@ func TestVersionFilterNonExistentReturnsOriginal(t *testing.T) {
 
 // TestVersionFilterNonExecutableSkipped tests that non-executable filter is skipped.
 func TestVersionFilterNonExecutableSkipped(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not distinguish executable permissions via file mode bits")
+	}
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -278,6 +282,9 @@ func TestTagMessageFilterNonExistentReturnsOriginal(t *testing.T) {
 
 // TestTagMessageFilterNonExecutableSkipped tests that non-executable filter is skipped.
 func TestTagMessageFilterNonExecutableSkipped(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not distinguish executable permissions via file mode bits")
+	}
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 

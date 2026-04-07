@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -71,10 +72,16 @@ func RunTagMessageFilter(gitDir string, branchType string, ctx FilterContext) (s
 }
 
 // isExecutable checks if a file exists and is executable.
+// On Windows, NTFS doesn't store Unix permission bits, so any existing
+// non-directory file is considered executable (matching Git for Windows behavior).
 func isExecutable(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {
 		return false
+	}
+
+	if runtime.GOOS == "windows" {
+		return !info.IsDir()
 	}
 
 	// Check if file is executable (any execute bit set)

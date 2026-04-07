@@ -294,8 +294,10 @@ fi
 ## CREATING HOOK SCRIPTS
 
 1. Create the script in the hooks directory (default: `.git/hooks/`) with the appropriate name
-2. Make the script executable: `chmod +x <hooks-dir>/<script-name>`
+2. Make the script executable: `chmod +x <hooks-dir>/<script-name>` (Unix/macOS only — not needed on Windows)
 3. Test the script manually before relying on it
+
+**Windows note:** On Windows, NTFS does not track Unix permission bits. Git-flow considers any existing hook file as executable, matching Git for Windows behavior. No `chmod` step is needed.
 
 ### Tips
 

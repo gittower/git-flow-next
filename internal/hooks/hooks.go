@@ -120,7 +120,7 @@ func runHook(gitDir string, phase HookPhase, branchType string, action HookActio
 	hookPath := filepath.Join(hooksDir, hookName)
 
 	// Check if hook exists
-	info, err := os.Stat(hookPath)
+	_, err := os.Stat(hookPath)
 	if os.IsNotExist(err) {
 		return HookResult{Executed: false}
 	}
@@ -129,8 +129,7 @@ func runHook(gitDir string, phase HookPhase, branchType string, action HookActio
 	}
 
 	// Check if executable
-	if info.Mode()&0111 == 0 {
-		// Not executable, skip silently
+	if !isExecutable(hookPath) {
 		return HookResult{Executed: false}
 	}
 
