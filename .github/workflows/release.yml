@@ -66,10 +66,10 @@ jobs:
             dist/*.zip
             dist/*-checksums.txt
           draft: false
-          prerelease: ${{ steps.check_preview.outputs.is_preview }}
+          prerelease: ${{ steps.check_preview.outputs.is_preview == 'true' }}
           generate_release_notes: false
           body: |
-            ${{ steps.check_preview.outputs.is_preview && '⚠️ This is a preview release and may not be stable.' || '' }}
+            ${{ steps.check_preview.outputs.is_preview == 'true' && '⚠️ This is a preview release and may not be stable.' || '' }}
 
             ${{ steps.changelog.outputs.notes }}
 
