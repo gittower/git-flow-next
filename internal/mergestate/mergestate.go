@@ -153,7 +153,9 @@ func IsMergeInProgress() bool {
 	state, err := LoadMergeState()
 	if err != nil {
 		// Corrupted or unreadable state file — clear it
-		if clearErr := ClearMergeState(); clearErr == nil {
+		if clearErr := ClearMergeState(); clearErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to clear stale merge state: %v\n", clearErr)
+		} else {
 			fmt.Fprintf(os.Stderr, "Note: Cleared stale merge state from a previous operation\n")
 		}
 		return false
@@ -162,7 +164,9 @@ func IsMergeInProgress() bool {
 		return false
 	}
 	if !isStateValid(state) {
-		if err := ClearMergeState(); err == nil {
+		if err := ClearMergeState(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to clear stale merge state: %v\n", err)
+		} else {
 			fmt.Fprintf(os.Stderr, "Note: Cleared stale merge state from a previous operation\n")
 		}
 		return false
