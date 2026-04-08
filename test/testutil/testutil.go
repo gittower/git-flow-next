@@ -92,7 +92,7 @@ func GitFlowMergeStateExists(t *testing.T, dir string) bool {
 	t.Helper()
 	gitDir, err := getGitDirForRepo(dir)
 	if err != nil {
-		return false
+		t.Fatalf("Failed to determine git directory for repo %s: %v", dir, err)
 	}
 	_, err = os.Stat(filepath.Join(gitDir, "gitflow", "state", "merge.json"))
 	return err == nil

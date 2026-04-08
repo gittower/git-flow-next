@@ -321,8 +321,14 @@ func TestFinishDetectsStaleStateEmptyFields(t *testing.T) {
 		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
 	}
 	testutil.WriteFile(t, dir, "new.txt", "content")
-	testutil.RunGit(t, dir, "add", "new.txt")
-	testutil.RunGit(t, dir, "commit", "-m", "New feature commit")
+	_, err = testutil.RunGit(t, dir, "add", "new.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "New feature commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
 
 	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "new-feature")
 	if err != nil {
@@ -368,8 +374,14 @@ func TestFinishDetectsStaleStateMergeStepNoConflict(t *testing.T) {
 		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
 	}
 	testutil.WriteFile(t, dir, "fresh.txt", "content")
-	testutil.RunGit(t, dir, "add", "fresh.txt")
-	testutil.RunGit(t, dir, "commit", "-m", "Fresh feature commit")
+	_, err = testutil.RunGit(t, dir, "add", "fresh.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Fresh feature commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
 
 	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "fresh-feature")
 	if err != nil {
@@ -414,8 +426,14 @@ func TestFinishDetectsStaleStateDeleteStepBranchGone(t *testing.T) {
 		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
 	}
 	testutil.WriteFile(t, dir, "another.txt", "content")
-	testutil.RunGit(t, dir, "add", "another.txt")
-	testutil.RunGit(t, dir, "commit", "-m", "Another feature commit")
+	_, err = testutil.RunGit(t, dir, "add", "another.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Another feature commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
 
 	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "another-feature")
 	if err != nil {
@@ -449,17 +467,35 @@ func TestFinishValidStateMergeStepWithConflict(t *testing.T) {
 		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
 	}
 	testutil.WriteFile(t, dir, "conflict.txt", "feature content")
-	testutil.RunGit(t, dir, "add", "conflict.txt")
-	testutil.RunGit(t, dir, "commit", "-m", "Feature commit")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Feature commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
 
 	// Add conflicting content on develop
-	testutil.RunGit(t, dir, "checkout", "develop")
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
 	testutil.WriteFile(t, dir, "conflict.txt", "develop content")
-	testutil.RunGit(t, dir, "add", "conflict.txt")
-	testutil.RunGit(t, dir, "commit", "-m", "Develop commit")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Develop commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
 
 	// Switch back and finish — will produce conflict
-	testutil.RunGit(t, dir, "checkout", "feature/conflict-test")
+	_, err = testutil.RunGit(t, dir, "checkout", "feature/conflict-test")
+	if err != nil {
+		t.Fatalf("Failed to checkout feature branch: %v", err)
+	}
 	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "conflict-test")
 
 	// Finish should fail with conflict
