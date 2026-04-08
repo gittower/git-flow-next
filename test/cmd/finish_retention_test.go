@@ -2,6 +2,7 @@ package cmd_test
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -417,5 +418,80 @@ func TestFinishDeleteBranchUsesConfiguredRemote(t *testing.T) {
 	}
 	if testutil.RemoteBranchExists(t, dir, "upstream", "feature/custom-remote-test") {
 		t.Error("Expected remote branch to be deleted from upstream")
+	}
+}
+
+// TestFinishClearsMergeStateWhenBranchDeletionFails tests that merge state is cleared even when
+// remote branch deletion fails during finish.
+// Steps:
+// 1. Sets up a test repository with a remote and initializes git-flow
+// 2. Creates a feature branch with changes and pushes to remote
+// 3. Makes the remote repository read-only so branch deletion will fail
+// 4. Finishes the feature branch (merge succeeds, remote deletion fails)
+// 5. Verifies the merge state file does not exist (cleared despite deletion error)
+// 6. Verifies the merge completed successfully (changes are on develop)
+func TestFinishClearsMergeStateWhenBranchDeletionFails(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Add a remote repository
+	remoteDir, err := testutil.AddRemote(t, dir, "origin", true)
+	if err != nil {
+		t.Fatalf("Failed to add remote: %v", err)
+	}
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Create a feature branch with changes
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "delete-fail-test")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
+	}
+
+	testutil.WriteFile(t, dir, "feature-file.txt", "feature content")
+	_, err = testutil.RunGit(t, dir, "add", "feature-file.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add feature file")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Push feature branch to remote
+	_, err = testutil.RunGit(t, dir, "push", "origin", "feature/delete-fail-test")
+	if err != nil {
+		t.Fatalf("Failed to push feature branch: %v", err)
+	}
+
+	// Make the remote bare repo read-only so git push --delete will fail
+	if err := os.Chmod(remoteDir, 0444); err != nil {
+		t.Fatalf("Failed to make remote read-only: %v", err)
+	}
+	defer os.Chmod(remoteDir, 0755) // Restore for cleanup
+
+	// Finish the feature branch — merge should succeed but remote deletion should fail
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "delete-fail-test")
+	// We expect an error from the failed remote branch deletion
+	if err == nil {
+		t.Log("Note: finish succeeded despite expected remote deletion failure")
+	}
+
+	// KEY ASSERTION: merge state must be cleared even though deletion failed
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected merge state to be cleared after finish, but merge.json still exists")
+	}
+
+	// Verify the merge itself completed — feature changes should be on develop
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	if !testutil.FileExists(t, dir, "feature-file.txt") {
+		t.Error("Expected feature-file.txt to exist on develop after merge")
 	}
 }

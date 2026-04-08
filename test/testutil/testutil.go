@@ -86,3 +86,14 @@ func FileExists(t *testing.T, dir string, path string) bool {
 	_, err := os.Stat(fullPath)
 	return err == nil
 }
+
+// GitFlowMergeStateExists checks if the git-flow merge state file exists
+func GitFlowMergeStateExists(t *testing.T, dir string) bool {
+	t.Helper()
+	gitDir, err := getGitDirForRepo(dir)
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(filepath.Join(gitDir, "gitflow", "state", "merge.json"))
+	return err == nil
+}

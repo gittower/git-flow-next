@@ -747,6 +747,14 @@ func handleDeleteBranchStep(cfg *config.Config, state *mergestate.MergeState, re
 		return &errors.GitError{Operation: fmt.Sprintf("checkout parent branch '%s'", state.ParentBranch), Err: err}
 	}
 
+	// Clear the merge state before branch deletion. By this point all merges,
+	// tags, and child updates are complete — the state is only needed for conflict
+	// recovery which is no longer possible. Clearing early ensures a failed branch
+	// deletion (e.g. remote permission error) doesn't leave stale merge state.
+	if err := mergestate.ClearMergeState(); err != nil {
+		return &errors.GitError{Operation: "clear merge state", Err: err}
+	}
+
 	// Apply keep logic: if keep is set, it overrides individual settings
 	keepRemote := resolvedOptions.KeepRemote
 	keepLocal := resolvedOptions.KeepLocal
@@ -768,11 +776,6 @@ func handleDeleteBranchStep(cfg *config.Config, state *mergestate.MergeState, re
 		if err := git.UnsetConfig(configKey); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Failed to clean up base config: %v\n", err)
 		}
-	}
-
-	// Clear the merge state
-	if err := mergestate.ClearMergeState(); err != nil {
-		return &errors.GitError{Operation: "clear merge state", Err: err}
 	}
 
 	fmt.Printf("Successfully finished branch '%s' and updated %d child base branches\n", state.FullBranchName, len(state.UpdatedBranches))
