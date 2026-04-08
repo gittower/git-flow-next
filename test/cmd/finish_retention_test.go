@@ -425,7 +425,7 @@ func TestFinishDeleteBranchUsesConfiguredRemote(t *testing.T) {
 // Steps:
 // 1. Sets up a test repository with a remote and initializes git-flow
 // 2. Creates a feature branch with changes and pushes to remote
-// 3. Makes the remote repository read-only so branch deletion will fail
+// 3. Configures the remote repository to reject branch deletions so deletion will fail
 // 4. Finishes the feature branch (merge succeeds, remote deletion fails)
 // 5. Verifies the merge state file does not exist (cleared despite deletion error)
 // 6. Verifies the merge completed successfully (changes are on develop)
