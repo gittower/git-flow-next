@@ -119,17 +119,15 @@ func runHook(gitDir string, phase HookPhase, branchType string, action HookActio
 	hooksDir := getHooksDir(gitDir)
 	hookPath := filepath.Join(hooksDir, hookName)
 
-	// Check if hook exists
-	_, err := os.Stat(hookPath)
+	// Check if hook exists and is executable
+	info, err := os.Stat(hookPath)
 	if os.IsNotExist(err) {
 		return HookResult{Executed: false}
 	}
 	if err != nil {
 		return HookResult{Executed: false, Error: err}
 	}
-
-	// Check if executable
-	if !isExecutable(hookPath) {
+	if !isExecutableFileInfo(info) {
 		return HookResult{Executed: false}
 	}
 
@@ -140,7 +138,7 @@ func runHook(gitDir string, phase HookPhase, branchType string, action HookActio
 	args := BuildHookArgs(action, ctx)
 
 	// Execute hook with arguments
-	cmd := exec.Command(hookPath, args...)
+	cmd := scriptCommand(hookPath, args...)
 	cmd.Env = env
 	cmd.Dir = filepath.Dir(gitDir) // Repository root
 
