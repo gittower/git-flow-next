@@ -33,6 +33,7 @@ applyTo: "cmd/**/*.go"
 
 ## Flag Design
 
+- MUST: Use `getBoolFlag(positive, negative)` helper for `--flag/--no-flag` pairs — do not duplicate the conversion logic manually
 - SHOULD: Group related flags into option structs (e.g., `TagOptions`, `BranchRetentionOptions`)
 - SHOULD: Use consistent command function signatures: `func CommandName(branchType, name string, options...)`
 - NIT: Include both long and short flag variants for frequently used flags
