@@ -2,7 +2,6 @@ package cmd_test
 
 import (
 	"bytes"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -468,17 +467,23 @@ func TestFinishClearsMergeStateWhenBranchDeletionFails(t *testing.T) {
 		t.Fatalf("Failed to push feature branch: %v", err)
 	}
 
-	// Make the remote bare repo read-only so git push --delete will fail
-	if err := os.Chmod(remoteDir, 0444); err != nil {
-		t.Fatalf("Failed to make remote read-only: %v", err)
+	// Configure the remote bare repo to reject branch deletions
+	_, err = testutil.RunGit(t, remoteDir, "config", "receive.denyDeletes", "true")
+	if err != nil {
+		t.Fatalf("Failed to configure receive.denyDeletes: %v", err)
 	}
-	defer os.Chmod(remoteDir, 0755) // Restore for cleanup
 
 	// Finish the feature branch — merge should succeed but remote deletion should fail
 	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "delete-fail-test")
-	// We expect an error from the failed remote branch deletion
-	if err == nil {
-		t.Log("Note: finish succeeded despite expected remote deletion failure")
+	_ = output // finish may or may not return an error depending on how deletion failure is handled
+
+	// Verify remote branch still exists (confirms deletion was actually rejected)
+	remoteRefs, err := testutil.RunGit(t, dir, "ls-remote", "--heads", "origin", "feature/delete-fail-test")
+	if err != nil {
+		t.Fatalf("Failed to list remote refs: %v", err)
+	}
+	if remoteRefs == "" {
+		t.Fatal("Expected remote branch feature/delete-fail-test to still exist, but it was deleted")
 	}
 
 	// KEY ASSERTION: merge state must be cleared even though deletion failed
