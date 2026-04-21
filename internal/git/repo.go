@@ -30,6 +30,17 @@ func IsGitRepo() bool {
 	return err == nil
 }
 
+// GetRepoTopLevel returns the top-level directory of the current Git repository.
+// Returns an error if not in a Git repository or the command fails.
+func GetRepoTopLevel() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get repository top level: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 // GetGitDir returns the path to the git directory for the current repository.
 // For regular repositories, this returns ".git".
 // For worktrees, this returns the actual git directory path (e.g., "/repo/.git/worktrees/work1").

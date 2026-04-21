@@ -331,19 +331,24 @@ type InitializedStatus struct {
 }
 
 // IsGitFlowNextInitializedWithScope checks if git-flow-next is initialized at a specific scope.
-// - ConfigScopeDefault: checks merged config, returns the scope where config was found
+// - ConfigScopeDefault: checks merged config (includes include.path files), returns the scope where config was found
 // - Specific scope: checks only that scope
 func IsGitFlowNextInitializedWithScope(scope git.ConfigScope, filePath string) (InitializedStatus, error) {
 	if scope == git.ConfigScopeDefault {
-		// Check scopes in order: local > global > system
-		// Return the first scope where gitflow.version is found
+		// First, check the merged config (this picks up config from include.path files like .gitflow)
+		mergedVersion, mergedErr := git.GetConfigWithScope("gitflow.version", git.ConfigScopeDefault, "")
+		if mergedErr != nil || mergedVersion == "" {
+			return InitializedStatus{Initialized: false}, nil
+		}
+		// Config found via merged read — determine which explicit scope it lives in for messaging
 		for _, checkScope := range []git.ConfigScope{git.ConfigScopeLocal, git.ConfigScopeGlobal, git.ConfigScopeSystem} {
 			version, err := git.GetConfigWithScope("gitflow.version", checkScope, "")
 			if err == nil && version != "" {
 				return InitializedStatus{Initialized: true, SourceScope: checkScope}, nil
 			}
 		}
-		return InitializedStatus{Initialized: false}, nil
+		// Config found only via an included file (e.g., .gitflow via include.path) — treat as local
+		return InitializedStatus{Initialized: true, SourceScope: git.ConfigScopeLocal}, nil
 	}
 
 	// Check only the specified scope

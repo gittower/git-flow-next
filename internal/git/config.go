@@ -62,6 +62,40 @@ func GetConfigAllValuesInDir(dir, key string) ([]string, error) {
 	return values, nil
 }
 
+// GetLocalConfigAllValues gets all values for a multi-value key from the local git config only.
+// Useful for inspecting multi-value keys like include.path without inheriting global/system values.
+func GetLocalConfigAllValues(key string) ([]string, error) {
+	cmd := exec.Command("git", "config", "--local", "--get-all", key)
+	output, err := cmd.Output()
+	if err != nil {
+		// exit status 1 means no values found — not an error
+		if strings.Contains(err.Error(), "exit status 1") {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("failed to get local git config %s: %w", key, err)
+	}
+	var values []string
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		if line != "" {
+			values = append(values, line)
+		}
+	}
+	return values, nil
+}
+
+// AddLocalConfigValue adds a value to a multi-value key in the local git config.
+// Unlike SetConfig which replaces the value, this appends a new entry.
+// Useful for multi-value keys like include.path.
+func AddLocalConfigValue(key, value string) error {
+	cmd := exec.Command("git", "config", "--local", "--add", key, value)
+	_, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to add local git config %s: %w", key, err)
+	}
+	return nil
+}
+
 // GetConfigInDir gets a Git config value in the specified directory
 func GetConfigInDir(dir, key string) (string, error) {
 	cmd := exec.Command("git", "config", "--get", key)

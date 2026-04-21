@@ -6,7 +6,7 @@ git-flow-init - Initialize git-flow in a repository
 
 ## SYNOPSIS
 
-**git-flow init** [**-f**|**--force**] [**--preset**=*preset*] [**--custom**] [**--defaults**] [**--local**|**--global**|**--system**|**--file**=*path*] [*options*]
+**git-flow init** [**-f**|**--force**] [**--preset**=*preset*] [**--custom**] [**--defaults**] [**--local**|**--global**|**--system**|**--shared**|**--file**=*path*] [*options*]
 
 ## DESCRIPTION
 
@@ -51,6 +51,9 @@ These options control where git-flow configuration is stored. Only one scope opt
 
 **--system**
 : Read and write configuration in the system-wide **/etc/gitconfig** file. Typically requires administrator privileges.
+
+**--shared**
+: Write configuration to a **.gitflow** file in the repository root instead of **.git/config**. The file is a standard Git config file that can be committed to the repository and shared with the team. After writing, an `include.path = ../.gitflow` entry is automatically added to the local **.git/config** so git-flow reads from it immediately. Any teammate who clones the repository benefits from auto-detection: the first git-flow command they run will detect **.gitflow** and wire the include automatically — no manual `git flow init` required. Mutually exclusive with **--local**, **--global**, **--system**, and **--file**.
 
 **--file**=*path*
 : Read and write configuration in the specified file. The parent directory must exist and be writable. Paths may be absolute or relative to the current working directory. Useful for managing shared configuration files.
@@ -217,6 +220,13 @@ Initialize with local scope (repository-specific):
 git flow init --defaults --local
 ```
 
+Initialize shared configuration for team use:
+```bash
+git flow init --preset=classic --shared
+git add .gitflow
+git commit -m "chore: add shared git-flow configuration"
+```
+
 Initialize with configuration file:
 ```bash
 git flow init --defaults --file=/path/to/custom-gitflow.config
@@ -272,6 +282,7 @@ By default, git-flow stores configuration in the repository's **.git/config** fi
 - Existing branches are preserved during initialization
 - When initializing a repository with no existing commits, **git-flow init** creates an empty initial commit to enable branch creation. No files are added to the working directory
 - Compatible with repositories previously initialized with git-flow-avh
-- Configuration scope options (**--local**, **--global**, **--system**, **--file**) only affect the **init** command. All other git-flow commands (start, finish, update, etc.) always read from merged config using Git's standard precedence (local > global > system)
+- Configuration scope options (**--local**, **--global**, **--system**, **--shared**, **--file**) only affect the **init** command. All other git-flow commands (start, finish, update, etc.) always read from merged config using Git's standard precedence (local > global > system > include files)
 - When checking initialization status without an explicit scope flag, git-flow checks merged config and reports which scope the configuration was found in
 - When initialized via global or system config, attempting to initialize again without a scope flag will suggest using **--local** to create repository-specific config
+- When **--shared** is used, the resulting **.gitflow** file should be committed to the repository so teammates can benefit from it. Upon cloning, the first git-flow command automatically detects **.gitflow** and wires the include — no manual initialization needed
