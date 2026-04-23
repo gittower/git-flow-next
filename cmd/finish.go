@@ -556,7 +556,7 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 }
 
 func handleAbort(state *mergestate.MergeState) error {
-	// Abort the merge based on strategy
+	// Abort the merge based on strategy.
 	var err error
 	switch state.MergeStrategy {
 	case strategyMerge:
@@ -567,18 +567,34 @@ func handleAbort(state *mergestate.MergeState) error {
 		err = git.MergeAbort() // Default to merge abort
 	}
 
-	if err != nil {
-		return &errors.GitError{Operation: "abort merge", Err: err}
+	// Git returns exit 128 from `merge --abort` when there's no MERGE_HEAD
+	// (user resolved the conflict manually with a commit, bypassing
+	// --continue). The stale merge.json state file then blocked every
+	// future `feature finish` call. Treat abort failures as warnings and
+	// continue cleaning up so ClearMergeState is always reached. See
+	// gittower/git-flow-next#110.
+	abortErr := err
+
+	// Checkout the original branch. This may also no-op / fail when
+	// already on that branch; propagate any actual error only if we
+	// can't also clear state below.
+	if checkoutErr := git.Checkout(state.FullBranchName); checkoutErr != nil && abortErr == nil {
+		// If the abort itself succeeded but the checkout failed, that's
+		// a genuine problem the caller should see.
+		return &errors.GitError{Operation: fmt.Sprintf("checkout original branch '%s'", state.FullBranchName), Err: checkoutErr}
 	}
 
-	// Checkout the original branch
-	if err := git.Checkout(state.FullBranchName); err != nil {
-		return &errors.GitError{Operation: fmt.Sprintf("checkout original branch '%s'", state.FullBranchName), Err: err}
-	}
-
-	// Clear the merge state
+	// Always clear the merge state so the repository is unblocked for
+	// the next feature finish, regardless of whether the underlying
+	// git abort believed there was anything to abort.
 	if err := mergestate.ClearMergeState(); err != nil {
 		return &errors.GitError{Operation: "clear merge state", Err: err}
+	}
+
+	if abortErr != nil {
+		// Surface the git abort failure for visibility but don't return
+		// an error — state has been cleared and the user is unblocked.
+		fmt.Fprintf(os.Stderr, "git-flow: git abort reported no active merge/rebase; cleared stale merge state anyway (%v)\n", abortErr)
 	}
 
 	return nil
