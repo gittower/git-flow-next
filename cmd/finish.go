@@ -593,7 +593,7 @@ func handleAbort(state *mergestate.MergeState) error {
 
 	if abortErr != nil {
 		// Surface the git abort failure for visibility but don't return
-		// an error — state has been cleared and the user is unblocked.
+		// an error, state has been cleared and the user is unblocked.
 		fmt.Fprintf(os.Stderr, "git-flow: git abort reported no active merge/rebase; cleared stale merge state anyway (%v)\n", abortErr)
 	}
 
