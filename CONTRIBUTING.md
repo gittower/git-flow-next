@@ -14,6 +14,7 @@ The end-to-end development process is described in [DEV_WORKFLOW.md](DEV_WORKFLO
 
 | Skill | Purpose |
 |-------|---------|
+| `/scan-repo` | Weekly activity scan producing an ordered action list |
 | `/triage` | Triage an external issue or discussion and propose a verdict |
 | `/create-spec` | Create an implementation-ready spec issue |
 | `/resolve-issue` | Resolve a spec issue end-to-end, from plan to PR |

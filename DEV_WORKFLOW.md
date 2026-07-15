@@ -17,6 +17,7 @@ There are four entry points, each driven by a single high-level skill (see
 
 | Incoming | Entry point | Pipeline |
 |----------|------------|----------|
+| Weekly check-in (nothing specific) | `/scan-repo` | gather activity → classify by effort → ordered action list |
 | External issue / discussion | `/triage` | classify → duplicate check → verdict → reply |
 | Accepted report / own idea / concept | `/create-spec` | draft → Codex gate → acceptance → spec issue |
 | Spec issue ready to build | `/resolve-issue` | analyze → test-first plan → gate → implement → review → PR |
@@ -436,6 +437,8 @@ Keep it concise. The checklist in the template is for author verification only �
 ├── pr-91/                              # Incoming PR reviews
 │   ├── review-pr91-<sha>.md
 │   └── pr-review-<sha>.md
+├── scans/                              # Weekly activity scans
+│   └── scan-2026-07-15.md              # Also anchors the next scan's window
 └── feature-custom-branch-types/        # Feature-based work
     ├── concept.md                      # Feature concept/design
     ├── plan.md
@@ -491,6 +494,7 @@ Skills come in two tiers:
 
 | Skill | Purpose | Gate(s) |
 |-------|---------|---------|
+| `/scan-repo` | Weekly activity scan — new discussions/issues/PRs as an ordered action list | None (read-only) |
 | `/triage` | Classify + analyze an external issue/discussion, propose verdict | Reply & labels |
 | `/create-spec` | Draft, Codex-gate, and publish a spec issue | Acceptance, posting |
 | `/resolve-issue` | Resolve a spec issue end-to-end (plan → gate → implement → review) | Publish (push + PR) |
@@ -525,6 +529,9 @@ The shared Codex gate procedure used by several skills is defined once in
 ### End-to-End (High-Level Skills)
 
 ```bash
+# Weekly: what happened, where to act, in which order
+/scan-repo                # quick wins → one-command pipelines → needs thinking
+
 # External report arrives
 /triage 42                # classify, dedup, verdict, reply
 
