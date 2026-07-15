@@ -32,3 +32,4 @@ Thumbs.db
 # AI workflow artifacts (local working documents)
 /.ai
 /.claude/settings.local.json
+/REPO_STATUS.md
