@@ -326,7 +326,15 @@ The final stage before code reaches the main branch.
    - Address feedback
    - Iterate until approved
 
-6. **Merge**
+6. **Address Review Feedback**
+   - `/address-review <pr-number>` - Evaluate reviewer comments, implement valid ones
+   - Writes the evaluation to `.ai/<folder>/review-plan-<sha>.md` (one per PR revision)
+   - Implements accepted changes and commits locally without confirmation
+   - Public actions (push, PR comment, description update) wait for user confirmation
+   - Use `--plan-only` to stop after the evaluation and implement later via
+     `/implement .ai/<folder>/review-plan-<sha>.md`
+
+7. **Merge**
    - Squash and merge (preferred) or merge commit
    - Delete feature branch after merge
    - Close related issues
@@ -388,6 +396,7 @@ The following skills are used throughout this workflow:
 | `/code-review` | Review code against guidelines | Review notes |
 | `/commit` | Commit following guidelines | Git commit |
 | `/pr-summary` | Generate PR summary | `.ai/*/pr_summary.md` |
+| `/address-review` | Evaluate PR review feedback, implement valid items | `.ai/*/review-plan-<sha>.md` + commits |
 
 ---
 
