@@ -13,8 +13,8 @@ The end-to-end development process is described in [DEV_WORKFLOW.md](DEV_WORKFLO
 | Skill | Purpose |
 |-------|---------|
 | `/analyze-issue` | Analyze a GitHub issue and produce a structured analysis |
-| `/create-plan` | Generate an implementation plan from analysis or concept |
-| `/validate-tests` | Validate and improve the test approach in a plan |
+| `/create-plan` | Generate a test-first implementation plan from a spec, analysis, or concept |
+| `/validate-tests` | Codex-gate the test plan before implementation |
 | `/implement` | Execute an implementation plan |
 | `/code-review` | Review changes or PRs against project guidelines |
 | `/pr-summary` | Generate a PR summary |
@@ -63,6 +63,13 @@ By participating in this project, you agree to:
 4. **Describe Implementation** - If possible, outline how it might be implemented
 
 ### Pull Requests
+
+**One PR, one concern.** Each pull request must address exactly one issue,
+feature, or fix. PRs that bundle multiple unrelated changes (e.g., a bug fix
+plus a refactoring, or two independent features) will be asked to split — or
+rejected. This keeps reviews focused and the history traceable. Mechanical
+changes required by the main change (e.g., updating tests and docs for the
+code you touched) belong in the same PR; anything else doesn't.
 
 1. **Fork the Repository**
 2. **Create a Branch**
@@ -186,6 +193,23 @@ For a detailed overview of our end-to-end development process — from issue ana
 Code changes are reviewed using `/code-review`, which checks architecture, code style, testing, documentation, and security against project guidelines (see `.claude/skills/code-review/REVIEW_CRITERIA.md`).
 
 Please review your changes against these criteria before submitting a pull request.
+
+### Review Response Window
+
+We aim to keep pull requests moving. When a maintainer requests changes on
+your PR:
+
+- Please respond within **7 days** — either by pushing updates or by
+  commenting (even "I need more time" is fine and resets the window).
+- If there is no response after 7 days, maintainers may close the PR and
+  land the change themselves in a successor PR that includes the requested
+  changes on top of your work.
+- In that case you will be **credited for your contribution**: your commits
+  are preserved with original authorship where possible, or attributed via
+  `Co-authored-by` trailers, and the successor PR links back to yours.
+
+This is not a penalty — it's how we keep the project healthy while making
+sure your work still lands and you get credit for it.
 
 ## Getting Help
 

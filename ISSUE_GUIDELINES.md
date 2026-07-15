@@ -26,6 +26,7 @@ Apply one of these labels when creating an issue:
 
 - `bug` — something isn't working as expected
 - `enhancement` — improvement to existing functionality or new feature
+- `spec` — an accepted, implementation-ready specification (see [Spec Issues](#spec-issues))
 
 ## Body Structure
 
@@ -112,6 +113,77 @@ A well-structured enhancement issue — brief intro, h3 sections, a priority tab
 >
 > No changes were made (dry-run mode).
 > ```
+
+## Spec Issues
+
+A spec issue is the accepted, implementation-ready form of a feature or bug
+fix. It is the single source of truth for what will be built: implementation
+starts from a spec issue, and the resulting PR is verified against it. Specs
+live in GitHub issues so they are public, linkable, and reviewable; working
+artifacts (analysis, plans, reports) stay local in `.ai/`.
+
+A spec describes the change at **concept level** — what to achieve and what
+changes, with technical detail only where it's required to remove ambiguity.
+How to implement it belongs to the implementation phase, not the spec. The
+goal is a readable concept that a maintainer can verify and accept as good.
+
+**Test scenarios are the centerpiece.** Every spec must spell out the
+scenarios that exercise the new or changed behavior and the expected outcome
+of each. If the test scenarios are complete and correct, the rest of the spec
+follows from them.
+
+### Structure
+
+Start with a brief summary, then use these `###` sections. Goal, expected
+behavior, and test scenarios are required; the rest only when relevant.
+
+```
+<Brief summary: what this spec covers and why. Link the originating
+user report with "Refs #N" if one exists.>
+
+### Goal
+<What we want to achieve, in one short paragraph>
+
+### Expected Behavior
+<Concrete description of the behavior after the change — example
+commands, expected output, before/after comparisons>
+
+### Test Scenarios
+<The heart of the spec. One entry per scenario:>
+
+1. <Setup / precondition> — <action> — <expected outcome>
+2. ...
+
+<Cover the happy path, error conditions, and edge cases. Each scenario
+must be concrete enough to be turned into a test without guessing.>
+
+### Out of Scope
+<What this spec deliberately does not cover>
+
+### Technical Notes
+<Only what's needed to remove ambiguity: affected components, config
+keys, compatibility constraints. Not an implementation plan.>
+```
+
+### Sub-Issues
+
+Break a spec into sub-issues when it can't be delivered as a single
+reviewable PR. Each sub-issue is itself a complete spec (own goal, behavior,
+test scenarios) and independently implementable. The parent spec keeps the
+overall goal and a task list linking the sub-issues:
+
+```
+### Breakdown
+- [ ] #<n> — <sub-issue title>
+- [ ] #<n> — <sub-issue title>
+```
+
+### Relation to User Reports
+
+User-reported issues stay open as the conversation with the reporter. When a
+report is accepted, the spec is created as a **separate issue** with the
+full detail, cross-linked in both directions ("Refs #N"). The user issue is
+closed when the spec ships.
 
 ## What to Avoid
 
