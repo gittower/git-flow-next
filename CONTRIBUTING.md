@@ -8,18 +8,35 @@ This project is developed primarily with **AI-assisted coding tools** (such as C
 
 ### AI-Assisted Workflow
 
-The end-to-end development process is described in [DEV_WORKFLOW.md](DEV_WORKFLOW.md). It covers the full lifecycle from issue analysis through planning, implementation, and PR creation — each stage driven by dedicated skills in `.claude/skills/`:
+The end-to-end development process is described in [DEV_WORKFLOW.md](DEV_WORKFLOW.md). It covers the full lifecycle from issue triage through spec, planning, implementation, and PR handling — driven by skills in `.claude/skills/`, organized in two tiers:
+
+**High-level skills** run an entire workflow from one command (autonomous, with confirmation gates before public actions):
+
+| Skill | Purpose |
+|-------|---------|
+| `/triage` | Triage an external issue or discussion and propose a verdict |
+| `/create-spec` | Create an implementation-ready spec issue |
+| `/resolve-issue` | Resolve a spec issue end-to-end, from plan to PR |
+| `/handle-pr` | Review an incoming PR and post a GitHub review |
+| `/address-review` | Evaluate and address review feedback on a PR |
+| `/check-prs` | Report open PRs against the review response window |
+| `/takeover-pr` | Supersede a stale PR, crediting the original author |
+
+**Plumbing skills** perform one step each and are composed by the high-level skills (individually invocable too):
 
 | Skill | Purpose |
 |-------|---------|
 | `/analyze-issue` | Analyze a GitHub issue and produce a structured analysis |
 | `/create-plan` | Generate a test-first implementation plan from a spec, analysis, or concept |
 | `/validate-tests` | Codex-gate the test plan before implementation |
-| `/implement` | Execute an implementation plan |
+| `/implement` | Execute an implementation plan, tests first |
 | `/code-review` | Review changes or PRs against project guidelines |
+| `/pr-review` / `/post-review` | Draft and post GitHub PR reviews |
 | `/pr-summary` | Generate a PR summary |
 | `/commit` | Create a commit following project conventions |
 | `/gh-issue` | Create a GitHub issue following project guidelines |
+
+See the [Skills Reference in DEV_WORKFLOW.md](DEV_WORKFLOW.md#skills-reference) for the full list with outputs and gates.
 
 ### Key Documentation
 

@@ -43,6 +43,7 @@ go run main.go                            # Run directly
 ## Additional Documentation
 
 For comprehensive development information, see:
+- **[DEV_WORKFLOW.md](DEV_WORKFLOW.md)** - Development lifecycle, workflow pipelines, and skills reference
 - **[CODE_REFERENCE.md](CODE_REFERENCE.md)** - Quick codebase reference and navigation guide
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture and design overview
 - **[CODING_GUIDELINES.md](CODING_GUIDELINES.md)** - Coding standards and conventions

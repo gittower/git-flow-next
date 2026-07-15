@@ -9,8 +9,18 @@ This document describes our structured approach to development tasks, from issue
 Our workflow follows a consistent pattern that ensures quality, traceability, and thorough documentation at each stage:
 
 ```
-Issue/Concept → Planning → Implementation → Review → PR → Merge
+Triage → Spec → Planning (test-first) → Implementation → Review → PR → Merge
 ```
+
+There are four entry points, each driven by a single high-level skill (see
+[Skills Reference](#skills-reference)):
+
+| Incoming | Entry point | Pipeline |
+|----------|------------|----------|
+| External issue / discussion | `/triage` | classify → duplicate check → verdict → reply |
+| Accepted report / own idea / concept | `/create-spec` | draft → Codex gate → acceptance → spec issue |
+| Spec issue ready to build | `/resolve-issue` | analyze → test-first plan → gate → implement → review → PR |
+| Incoming pull request | `/handle-pr` | strict review → drafted GitHub review → post |
 
 Key artifacts are stored in `.ai/`, organized by issue or feature:
 
@@ -30,14 +40,41 @@ Key artifacts are stored in `.ai/`, organized by issue or feature:
 
 ---
 
-## 1. Issues (Bugs, Improvements, Smaller Features)
+## 1. Issues & Incoming Reports
 
-For bug fixes, improvements, and smaller features that don't require extensive upfront design.
+### External Reports (Issues & Discussions)
 
-### Process
+Reports from users — bug reports, feature requests, questions — go through
+triage before any work starts:
+
+1. **Triage**
+   - `/triage <number>` - Classify (bug / feature / question / support),
+     search open and closed issues for duplicates, analyze against the
+     codebase, and propose a verdict with a draft reply
+   - Verdicts: duplicate of #N, accept as bug/feature, reject, answer,
+     needs info
+   - The reply and any labeling/closing wait for user confirmation
+
+2. **Spec** (for accepted bugs and features)
+   - `/create-spec <number>` - Create the implementation-ready spec issue
+     per [ISSUE_GUIDELINES.md](ISSUE_GUIDELINES.md): concept level, test
+     scenarios as the centerpiece, sub-issues for larger work
+   - Drafted locally, Codex-gated, posted after user acceptance
+   - Cross-linked with the user report; the report stays open until the
+     spec ships
+
+3. **Implement**
+   - `/resolve-issue <spec-number>` end-to-end, or the manual chain in
+     [Implementation](#3-implementing)
+
+### Internal Issues
+
+For our own bug fixes and smaller improvements that don't need triage:
 
 1. **Create Issue**
    - `/gh-issue` - Create GitHub issue following our issue guidelines
+   - For anything that warrants a spec (features, non-trivial fixes), use
+     `/create-spec` instead — it creates the issue in spec form
    - Use appropriate labels (bug, enhancement, etc.)
    - Reference related issues if applicable
 
@@ -113,8 +150,15 @@ For significant new functionality that requires upfront design and planning.
    - Iterate on design based on feedback
    - Resolve open questions
 
-3. **Proceed to Planning**
-   - Once concept is approved, move to [Implementation](#3-implementing)
+3. **Create Spec Issue**
+   - `/create-spec` - Turn the approved concept into a public spec issue
+     (Codex-gated, user-accepted; sub-issues for work that can't land as
+     one PR)
+   - The spec issue is the source of truth for implementation and review
+
+4. **Proceed to Planning**
+   - Move to [Implementation](#3-implementing), or run
+     `/resolve-issue <spec-number>` end-to-end
 
 ### Concept Template
 
@@ -332,6 +376,30 @@ The final stage before code reaches the main branch.
    - Delete feature branch after merge
    - Close related issues
 
+### Incoming Pull Requests
+
+PRs from contributors (external or team) are reviewed strictly and treated
+the same:
+
+1. **Review**
+   - `/handle-pr <number>` - Full review pipeline: strict local review
+     against all REVIEW_CRITERIA.md areas (including scope — one PR, one
+     concern — and spec satisfaction), distilled into a GitHub review
+     draft, posted after user confirmation
+
+2. **Follow-up rounds**
+   - `/address-review <number>` - When we authored the PR and received
+     feedback
+   - Re-review via `/handle-pr` when the contributor pushes updates
+
+3. **Stale PRs**
+   - `/check-prs` - Run manually to see where every open PR stands against
+     the review response window (CONTRIBUTING.md: 7 days)
+   - `/takeover-pr <number>` - When the window has lapsed: supersede the PR
+     with the requested changes applied on top, crediting the original
+     author. Eligibility is verified strictly; all public actions are
+     confirmed first
+
 ### PR Summary Format
 
 Follow the format defined in [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md):
@@ -355,18 +423,29 @@ Keep it concise. The checklist in the template is for author verification only �
 ```
 .ai/                              # Not committed to git
 ├── issue-42-squash-merge/              # Issue-based work
-│   ├── analysis.md                     # Issue analysis
-│   ├── plan.md                         # Implementation plan
+│   ├── triage.md                       # Triage verdict (external reports)
+│   ├── spec.md                         # Spec draft (posted as spec issue)
+│   ├── codex-spec.md                   # Codex gate log: spec
+│   ├── analysis.md                     # Codebase analysis
+│   ├── plan.md                         # Test-first implementation plan
+│   ├── codex-test-plan.md              # Codex gate log: test plan
+│   ├── review-<sha>.md                 # Local code review
+│   ├── codex-code-review.md            # Codex gate log: code
+│   ├── review-plan-<sha>.md            # Review feedback evaluation (per revision)
 │   └── pr_summary.md                   # PR summary
-├── issue-57-branch-validation/
-│   ├── analysis.md
-│   ├── plan.md
-│   └── pr_summary.md
+├── pr-91/                              # Incoming PR reviews
+│   ├── review-pr91-<sha>.md
+│   └── pr-review-<sha>.md
 └── feature-custom-branch-types/        # Feature-based work
     ├── concept.md                      # Feature concept/design
-    ├── plan.md                         # Implementation plan
-    └── pr_summary.md                   # PR summary
+    ├── plan.md
+    └── pr_summary.md
 ```
+
+Not every folder has every file — external reports start with `triage.md`,
+internal features with `concept.md`; Codex gate logs appear when the
+corresponding gate runs. Specs are published as GitHub issues (the public
+source of truth); these local files are working artifacts and audit trail.
 
 ### Naming Convention
 
@@ -375,27 +454,95 @@ Keep it concise. The checklist in the template is for author verification only �
 
 ---
 
+## Autonomy & Human Gates
+
+The workflows are designed to run as autonomously as possible with a small,
+predictable set of decision points.
+
+**Autonomous** (no confirmation needed):
+- All analysis, triage research, planning, and spec drafting
+- Writing code and tests, running builds and tests
+- Local reviews and Codex gates (findings applied per
+  `.claude/skills/_shared/CODEX_GATE.md`)
+- Commits on feature branches
+
+**Gated** (preview + user confirmation required):
+- Anything public: issue comments and replies, creating issues, posting PR
+  reviews and comments, pushing branches, creating/closing PRs
+- Spec acceptance before implementation starts
+- Abort conditions: the 3-revision test plan abort, failed verification
+  steps, genuine design questions the AI cannot decide alone
+
+---
+
 ## Skills Reference
 
-The following skills are used throughout this workflow:
+Skills come in two tiers:
+
+- **High-level skills** run an entire workflow from a single command. They
+  orchestrate plumbing skills (often in fresh subagent contexts), proceed
+  autonomously, and stop only at the gates above. These are the everyday
+  entry points.
+- **Plumbing skills** perform one step and produce one artifact. High-level
+  skills compose them; they remain individually invocable for manual,
+  step-by-step work or reruns of a single stage.
+
+### High-Level Skills
+
+| Skill | Purpose | Gate(s) |
+|-------|---------|---------|
+| `/triage` | Classify + analyze an external issue/discussion, propose verdict | Reply & labels |
+| `/create-spec` | Draft, Codex-gate, and publish a spec issue | Acceptance, posting |
+| `/resolve-issue` | Resolve a spec issue end-to-end (plan → gate → implement → review) | Publish (push + PR) |
+| `/handle-pr` | Strictly review an incoming PR and post a GitHub review | Posting |
+| `/address-review` | Evaluate review feedback on our PR, implement valid items | Push & PR comment |
+| `/check-prs` | Report all open PRs vs the review response window | Reminders (optional) |
+| `/takeover-pr` | Supersede a stale PR with requested changes, crediting the author | Push, PR, closing |
+
+### Plumbing Skills
 
 | Skill | Purpose | Output |
 |-------|---------|--------|
 | `/gh-issue` | Create GitHub issue following guidelines | GitHub issue |
-| `/analyze-issue` | Analyze issue, create workflow folder | `.ai/issue-*/analysis.md` |
+| `/analyze-issue` | Analyze issue against the codebase | `.ai/issue-*/analysis.md` |
 | `/create-plan` | Generate test-first implementation plan | `.ai/*/plan.md` |
 | `/validate-tests` | Codex-gate the test plan (required before implementing) | Updates `plan.md` + `codex-test-plan.md` |
-| `/implement` | Execute plan, commit properly | Code + commits |
-| `/code-review` | Review code against guidelines | Review notes |
-| `/commit` | Commit following guidelines | Git commit |
+| `/implement` | Execute plan tests-first, commit properly | Code + commits |
+| `/code-review` | Review code against REVIEW_CRITERIA.md | `.ai/*/review-*.md` |
+| `/pr-review` | Draft a GitHub review file from findings | `.ai/*/pr-review-*.md` |
+| `/post-review` | Post a written review file to GitHub | GitHub review |
 | `/pr-summary` | Generate PR summary | `.ai/*/pr_summary.md` |
-| `/address-review` | Evaluate PR review feedback, implement valid items | `.ai/*/review-plan-<sha>.md` + commits |
+| `/commit` | Commit following guidelines | Git commit |
+| `/release` | Update changelog and version from git history | Release commit |
+
+The shared Codex gate procedure used by several skills is defined once in
+[`.claude/skills/_shared/CODEX_GATE.md`](.claude/skills/_shared/CODEX_GATE.md).
 
 ---
 
 ## Quick Reference
 
-### Starting Work on an Issue
+### End-to-End (High-Level Skills)
+
+```bash
+# External report arrives
+/triage 42                # classify, dedup, verdict, reply
+
+# Accepted → create the spec issue
+/create-spec 42           # drafts, Codex-gates, posts as #43
+
+# Build it
+/resolve-issue 43         # analyze → plan → gate → implement → review → PR
+
+# Incoming PR from a contributor
+/handle-pr 44             # strict review, posted after confirmation
+
+# Periodic PR hygiene
+/check-prs                # who's waiting on whom
+/takeover-pr 45           # if the response window lapsed
+```
+
+### Starting Work on an Issue (Manual Chain)
 
 ```bash
 # 1. Create GitHub issue (optional, if not exists)
