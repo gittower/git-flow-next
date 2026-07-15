@@ -173,26 +173,32 @@ The implementation phase transforms issues or concepts into working code.
      - Example: `feature/custom-branch-types`
    - Use `git flow feature start` for branch creation
 
-2. **Create Implementation Plan**
-   - `/create-plan` - Generate implementation plan from issue analysis or concept
+2. **Create Implementation Plan (Test-First)**
+   - `/create-plan` - Generate a test-first plan from the spec issue, analysis, or concept
    - Writes to `plan.md` in the workflow folder
-   - Include:
-     - Step-by-step implementation tasks
-     - File-by-file changes
-     - Dependencies between tasks
-     - Checkpoints for testing
+   - **Phase 1 is the test plan**: detailed scenarios (setup, action,
+     expected outcome) exercising the code that does not yet exist — in the
+     spirit of TDD, this is where the design and edge cases are found
+   - Phase 2 outlines the implementation tasks that make those tests pass
 
-3. **Validate Test Approach**
-   - `/validate-tests` - Review plan against [TESTING_GUIDELINES.md](TESTING_GUIDELINES.md)
-   - Ensures adequate test coverage is planned
-   - Adds/refines test cases in the plan
-   - Considers:
-     - Unit tests for new functions
-     - Integration tests for command behavior
-     - Edge cases and error conditions
+3. **Gate the Test Plan**
+   - `/validate-tests` - Required gate between planning and implementation
+   - Local check against [TESTING_GUIDELINES.md](TESTING_GUIDELINES.md) and
+     [GIT_TEST_SCENARIOS.md](GIT_TEST_SCENARIOS.md)
+   - External Codex review of the test plan, per the shared convention in
+     `.claude/skills/_shared/CODEX_GATE.md` — findings are applied only with
+     high confidence, and all verdicts are logged to
+     `.ai/<folder>/codex-test-plan.md`
+   - After this gate, the test plan is authoritative
 
 4. **Implement**
-   - Execute the implementation plan (Claude or `/implement`)
+   - Execute the implementation plan with `/implement`
+   - Tests are written first, verified to fail for the right reason, and
+     committed before production code
+   - **Tests are never changed to make the implementation pass.** If plan
+     and implementation conflict, the test plan is revised explicitly and
+     re-gated via `/validate-tests`; after 3 such revisions the workflow
+     aborts for human review
    - Follow [CODING_GUIDELINES.md](CODING_GUIDELINES.md)
    - Commit incrementally using `/commit`
    - Run tests frequently: `go test ./...`
@@ -206,45 +212,32 @@ The implementation phase transforms issues or concepts into working code.
    - Update tests if needed
    - Ensure all tests pass
 
-### Implementation Plan Template
+### Implementation Plan Structure
+
+The plan leads with the test plan — the authoritative section — followed by
+the implementation tasks derived from it. See the full template in
+[`.claude/skills/create-plan/SKILL.md`](.claude/skills/create-plan/SKILL.md).
 
 ```markdown
 # Implementation Plan: <branch-name>
 
 ## Source
-- Issue: #<number> (link)
-- Concept: <name> (if applicable)
+- Spec: #<number> (link) — or analysis/concept document
 
-## Overview
-<Brief summary of what will be implemented>
+## Test Plan                    ← authoritative, written first
 
-## Tasks
+### Scenario 1: <name>
+- Test: `TestXxx` in `test/cmd/<file>_test.go`
+- Setup / Action / Expected outcome
 
-### 1. <Task Name>
-- [ ] <Subtask>
-- [ ] <Subtask>
-- Files: `path/to/file.go`
+## Implementation Tasks         ← derived from the test plan
 
-### 2. <Task Name>
-- [ ] <Subtask>
-- Files: `path/to/file.go`, `path/to/other.go`
-
-## Test Plan
-
-### Unit Tests
-- [ ] `TestFunctionName` - <what it tests>
-- [ ] `TestOtherFunction` - <what it tests>
-
-### Integration Tests
-- [ ] `TestCommandBehavior` - <scenario>
-
-## Checkpoints
-1. After Task 1: <what should work>
-2. After Task 2: <what should work>
+### Task 1: Write failing tests
+### Task 2..N: <changes that make them pass>
 
 ## Documentation Updates
-- [ ] Update `docs/<relevant>.md`
-- [ ] Update command help text
+## Checkpoints
+## Test Plan Revisions          ← appended by /implement when the plan changes
 ```
 
 ---
@@ -390,8 +383,8 @@ The following skills are used throughout this workflow:
 |-------|---------|--------|
 | `/gh-issue` | Create GitHub issue following guidelines | GitHub issue |
 | `/analyze-issue` | Analyze issue, create workflow folder | `.ai/issue-*/analysis.md` |
-| `/create-plan` | Generate implementation plan | `.ai/*/plan.md` |
-| `/validate-tests` | Check test approach against guidelines | Updates `plan.md` |
+| `/create-plan` | Generate test-first implementation plan | `.ai/*/plan.md` |
+| `/validate-tests` | Codex-gate the test plan (required before implementing) | Updates `plan.md` + `codex-test-plan.md` |
 | `/implement` | Execute plan, commit properly | Code + commits |
 | `/code-review` | Review code against guidelines | Review notes |
 | `/commit` | Commit following guidelines | Git commit |

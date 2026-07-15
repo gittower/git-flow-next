@@ -81,6 +81,16 @@ When given a directory (or auto-detecting):
 
    ### For Plan Mode (implementing from plan.md)
 
+   **Tests come first.** The plan's Test Plan section was gated by
+   `/validate-tests` and is authoritative:
+
+   1. Confirm the plan was gated: `.ai/<folder>/codex-test-plan.md` exists.
+      If not, stop and run `/validate-tests` first
+   2. Implement all Test Plan scenarios as tests before any production code
+   3. Verify they fail for the right reason — missing behavior, not setup
+      bugs — then commit the tests
+   4. Only then work through the remaining implementation tasks
+
    For each task in the plan:
 
    **Before Each Task:**
@@ -96,6 +106,26 @@ When given a directory (or auto-detecting):
    - Verify build: `go build ./...`
    - Run tests: `go test ./...`
    - Review changes: `git diff`
+
+   ### Test Immutability Rule (Plan Mode)
+
+   **Tests MUST NOT be changed to make the implementation pass.** If the
+   implementation and a test disagree, the test plan is challenged — not
+   quietly edited:
+
+   1. Stop implementing. Re-read the spec/analysis and the Test Plan and
+      determine which is wrong: the implementation approach (usual case —
+      fix the implementation) or genuinely the test plan
+   2. If the test plan must change: revise the Test Plan section, re-run
+      the `/validate-tests` Codex gate on the revised plan, and append an
+      entry to the plan's **Test Plan Revisions** section: what changed,
+      why, revision count
+   3. Then update the affected tests to match the revised plan and continue
+
+   **Abort rule**: if this happens more than **3 times** in one
+   implementation, error out — stop all work, leave the branch as-is, and
+   report to the user that the plan and implementation are fundamentally at
+   odds and need human review. Do not attempt a fourth revision.
 
    ### For Review Mode (implementing from review.md)
 
