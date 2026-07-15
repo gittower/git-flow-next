@@ -94,8 +94,16 @@ func GitFlowMergeStateExists(t *testing.T, dir string) bool {
 	if err != nil {
 		t.Fatalf("Failed to determine git directory for repo %s: %v", dir, err)
 	}
-	_, err = os.Stat(filepath.Join(gitDir, "gitflow", "state", "merge.json"))
-	return err == nil
+	stateFile := filepath.Join(gitDir, "gitflow", "state", "merge.json")
+	_, err = os.Stat(stateFile)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	t.Fatalf("Failed to stat git-flow merge state file %s: %v", stateFile, err)
+	return false
 }
 
 // WriteMergeState writes a merge state file directly to the test repository.
