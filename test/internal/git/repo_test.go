@@ -667,3 +667,199 @@ func TestFetchBranchNonExistent(t *testing.T) {
 		}
 	})
 }
+
+// TestIsGitMergeInProgressTrue tests detection of an active git merge conflict.
+// Steps:
+// 1. Sets up a test repository with two branches containing conflicting changes
+// 2. Starts a merge that produces a conflict
+// 3. Verifies IsGitMergeInProgress returns true
+func TestIsGitMergeInProgressTrue(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Create a branch with content
+	_, err := testutil.RunGit(t, dir, "checkout", "-b", "feature")
+	if err != nil {
+		t.Fatalf("Failed to create branch: %v", err)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "feature content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Feature commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Add conflicting content on main
+	_, err = testutil.RunGit(t, dir, "checkout", "main")
+	if err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "main content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Main commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Start merge that will conflict
+	_, _ = testutil.RunGit(t, dir, "merge", "feature")
+
+	withGitRepo(t, dir, func() {
+		if !git.IsGitMergeInProgress() {
+			t.Error("Expected IsGitMergeInProgress to return true during merge conflict")
+		}
+	})
+}
+
+// TestIsGitMergeInProgressFalse tests that clean repos are not detected as merging.
+// Steps:
+// 1. Sets up a clean test repository
+// 2. Verifies IsGitMergeInProgress returns false
+func TestIsGitMergeInProgressFalse(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	withGitRepo(t, dir, func() {
+		if git.IsGitMergeInProgress() {
+			t.Error("Expected IsGitMergeInProgress to return false on clean repo")
+		}
+	})
+}
+
+// TestIsGitRebaseInProgressTrue tests detection of an active git rebase conflict.
+// Steps:
+// 1. Sets up a test repository with two branches containing conflicting changes
+// 2. Starts a rebase that produces a conflict
+// 3. Verifies IsGitRebaseInProgress returns true
+func TestIsGitRebaseInProgressTrue(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Create a branch with content
+	_, err := testutil.RunGit(t, dir, "checkout", "-b", "feature")
+	if err != nil {
+		t.Fatalf("Failed to create branch: %v", err)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "feature content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Feature commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Add conflicting content on main
+	_, err = testutil.RunGit(t, dir, "checkout", "main")
+	if err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "main content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Main commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Switch to feature and rebase onto main (will conflict)
+	_, err = testutil.RunGit(t, dir, "checkout", "feature")
+	if err != nil {
+		t.Fatalf("Failed to checkout feature: %v", err)
+	}
+	_, _ = testutil.RunGit(t, dir, "rebase", "main")
+
+	withGitRepo(t, dir, func() {
+		if !git.IsGitRebaseInProgress() {
+			t.Error("Expected IsGitRebaseInProgress to return true during rebase conflict")
+		}
+	})
+}
+
+// TestIsGitRebaseInProgressFalse tests that clean repos are not detected as rebasing.
+// Steps:
+// 1. Sets up a clean test repository
+// 2. Verifies IsGitRebaseInProgress returns false
+func TestIsGitRebaseInProgressFalse(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	withGitRepo(t, dir, func() {
+		if git.IsGitRebaseInProgress() {
+			t.Error("Expected IsGitRebaseInProgress to return false on clean repo")
+		}
+	})
+}
+
+// TestIsGitSquashMergeInProgressTrue tests detection of an active squash merge conflict.
+// Steps:
+// 1. Sets up a test repository with two branches containing conflicting changes
+// 2. Starts a squash merge that produces a conflict
+// 3. Verifies IsGitSquashMergeInProgress returns true
+func TestIsGitSquashMergeInProgressTrue(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Create a branch with content
+	_, err := testutil.RunGit(t, dir, "checkout", "-b", "feature")
+	if err != nil {
+		t.Fatalf("Failed to create branch: %v", err)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "feature content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Feature commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Add conflicting content on main
+	_, err = testutil.RunGit(t, dir, "checkout", "main")
+	if err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "main content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Main commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Start squash merge that will conflict
+	_, _ = testutil.RunGit(t, dir, "merge", "--squash", "feature")
+
+	withGitRepo(t, dir, func() {
+		if !git.IsGitSquashMergeInProgress() {
+			t.Error("Expected IsGitSquashMergeInProgress to return true during squash merge conflict")
+		}
+	})
+}
+
+// TestIsGitSquashMergeInProgressFalse tests that clean repos are not detected as squash merging.
+// Steps:
+// 1. Sets up a clean test repository
+// 2. Verifies IsGitSquashMergeInProgress returns false
+func TestIsGitSquashMergeInProgressFalse(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	withGitRepo(t, dir, func() {
+		if git.IsGitSquashMergeInProgress() {
+			t.Error("Expected IsGitSquashMergeInProgress to return false on clean repo")
+		}
+	})
+}

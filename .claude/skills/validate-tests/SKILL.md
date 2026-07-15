@@ -1,12 +1,19 @@
 ---
 name: validate-tests
-description: Validate and improve the test approach in an implementation plan
-allowed-tools: Read, Grep, Glob, Edit
+description: Codex-gate the test plan in an implementation plan before implementation starts
+allowed-tools: Read, Grep, Glob, Edit, Write, Bash, Agent
 ---
 
-# Validate Test Approach
+# Validate Tests (Codex Gate)
 
-Review and improve the test plan in an implementation plan against TESTING_GUIDELINES.md.
+Gate the test plan of an implementation plan before any implementation
+starts. Combines a local check against the testing guidelines with an
+external Codex review, following the shared convention in
+[../_shared/CODEX_GATE.md](../_shared/CODEX_GATE.md).
+
+This is a **required step** between `/create-plan` and `/implement`. Once
+the plan passes this gate, the test plan is authoritative — `/implement`
+treats it as immutable.
 
 ## Instructions
 
@@ -15,31 +22,45 @@ Review and improve the test plan in an implementation plan against TESTING_GUIDE
    - Read `.ai/<folder>/plan.md`
    - If no plan exists, suggest running `/create-plan` first
 
-2. **Read Testing Guidelines**
-   - Load TESTING_GUIDELINES.md for all test rules and conventions
-   - Load GIT_TEST_SCENARIOS.md (required for setting up Git test scenarios)
+2. **Local Validation**
 
-3. **Validate Against Guidelines**
-   - Check each test in the plan against TESTING_GUIDELINES.md requirements
-   - Pay special attention to rules marked as CRITICAL in the guidelines
+   Load TESTING_GUIDELINES.md and GIT_TEST_SCENARIOS.md, then check the
+   Test Plan section:
+   - Each scenario follows the guidelines (setup patterns, assertions that
+     verify behavior rather than just "no error", proper Git scenario setup)
+   - Pay special attention to rules marked CRITICAL in the guidelines
+   - All code paths, error conditions, and edge cases have scenarios
+   - Scenarios are concrete enough to implement without guessing
 
-4. **Identify Missing Tests**
-   - Check if all code paths have tests
-   - Identify error conditions that need testing
-   - Look for edge cases not covered
+   Fix what you find directly in the plan.
 
-5. **Update the Plan**
-   - Add missing tests to the Test Plan section
-   - Improve test descriptions
-   - Add specific test comments following the guidelines pattern
-   - Note any testing challenges
+3. **Codex Gate**
 
-6. **Generate Test Skeletons** (Optional)
-   If requested, provide test function templates following the patterns in TESTING_GUIDELINES.md.
+   Run a Codex gate per [../_shared/CODEX_GATE.md](../_shared/CODEX_GATE.md):
 
-7. **Report Findings**
+   - **Artifact**: the Test Plan section of `.ai/<folder>/plan.md`
+   - **Task for Codex**: find missing scenarios, wrong or underspecified
+     expected outcomes, and scenarios that don't match the source of truth.
+     TDD framing: these tests define the design — gaps found now are cheap,
+     gaps found during implementation are expensive
+   - **Source of truth**: the spec issue or `analysis.md`/`concept.md` the
+     plan was created from (pass its content or path)
+   - **Guidelines**: TESTING_GUIDELINES.md, GIT_TEST_SCENARIOS.md
+
+4. **Evaluate and Apply**
+
+   Evaluate every Codex finding per the convention: apply only with high
+   confidence, reject over-engineering and hypothetical scenarios, when in
+   doubt leave it out. Update the plan's Test Plan section with applied
+   findings.
+
+   Log all findings — applied, partial, and rejected with reasons — to
+   `.ai/<folder>/codex-test-plan.md`.
+
+5. **Report Findings**
+
    Summarize:
-   - Tests that pass validation
-   - Issues found and fixes made
-   - Tests added to the plan
-   - Any concerns or recommendations
+   - Local validation: issues found and fixed
+   - Codex gate: findings applied / rejected (with the log path)
+   - Open questions that need the user (genuine design decisions only)
+   - Confirmation that the plan is gated and ready for `/implement`

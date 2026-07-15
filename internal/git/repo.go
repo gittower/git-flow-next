@@ -2,7 +2,9 @@ package git
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -273,6 +275,50 @@ func HasConflicts() bool {
 		return false
 	}
 	return len(output) > 0
+}
+
+// IsGitMergeInProgress checks if git is in a merge state by looking for MERGE_HEAD
+func IsGitMergeInProgress() bool {
+	gitDir, err := GetGitDir()
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(filepath.Join(gitDir, "MERGE_HEAD"))
+	return err == nil
+}
+
+// IsGitRebaseInProgress checks if git is in a rebase state by looking for
+// rebase-merge/ (merge backend, including interactive) or rebase-apply/ (legacy apply backend)
+func IsGitRebaseInProgress() bool {
+	gitDir, err := GetGitDir()
+	if err != nil {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(gitDir, "rebase-merge")); err == nil {
+		return true
+	}
+	if _, err := os.Stat(filepath.Join(gitDir, "rebase-apply")); err == nil {
+		return true
+	}
+	return false
+}
+
+// IsGitSquashMergeInProgress checks if git is in a squash merge state.
+// Squash merges create SQUASH_MSG but not MERGE_HEAD. However, SQUASH_MSG also
+// appears during interactive rebase squash steps, so we exclude that case.
+func IsGitSquashMergeInProgress() bool {
+	gitDir, err := GetGitDir()
+	if err != nil {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(gitDir, "SQUASH_MSG")); err != nil {
+		return false
+	}
+	// Exclude interactive rebase squash steps
+	if _, err := os.Stat(filepath.Join(gitDir, "rebase-merge")); err == nil {
+		return false
+	}
+	return true
 }
 
 // MergeAbort aborts the current merge

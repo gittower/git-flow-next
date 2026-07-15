@@ -28,4 +28,5 @@ Create a new GitHub issue for the gittower/git-flow-next repository.
 
 5. **Report Result**
    - Show the created issue URL
-   - Suggest next step: `/analyze-issue <number>` to start working on it
+   - Suggest next step: `/create-spec <number>` if the work warrants a spec
+     issue, or `/analyze-issue <number>` to start working on it directly

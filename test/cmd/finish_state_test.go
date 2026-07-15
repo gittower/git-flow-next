@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gittower/git-flow-next/internal/mergestate"
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
@@ -288,5 +289,230 @@ func TestFinishStateBackwardCompatibility(t *testing.T) {
 	testutil.RunGit(t, dir, "checkout", "develop")
 	if !testutil.FileExists(t, dir, "feature.txt") {
 		t.Error("Feature changes not found in develop branch")
+	}
+}
+
+// TestFinishDetectsStaleStateEmptyFields tests that stale state with empty critical fields is auto-cleared.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Writes a merge state file with empty BranchType
+// 3. Creates and finishes a feature branch normally
+// 4. Verifies the stale state was cleared and finish succeeded
+func TestFinishDetectsStaleStateEmptyFields(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Write stale state with empty BranchType
+	testutil.WriteMergeState(t, dir, &mergestate.MergeState{
+		Action:         "finish",
+		BranchType:     "", // empty — should be detected as stale
+		FullBranchName: "feature/old-branch",
+		CurrentStep:    "merge",
+	})
+
+	// Create and finish a new feature — should succeed because stale state is cleared
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "new-feature")
+	if err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
+	}
+	testutil.WriteFile(t, dir, "new.txt", "content")
+	_, err = testutil.RunGit(t, dir, "add", "new.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "New feature commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "new-feature")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed after clearing stale state, got error: %v\nOutput: %s", err, output)
+	}
+
+	// Verify stale state was cleared
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected merge state to be cleared")
+	}
+}
+
+// TestFinishDetectsStaleStateMergeStepNoConflict tests that state at merge step is cleared when
+// git is not actually in a merge or rebase state.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Writes a merge state file at the merge step
+// 3. Runs feature finish which checks for merge in progress
+// 4. Verifies stale state is cleared and a new finish can proceed
+func TestFinishDetectsStaleStateMergeStepNoConflict(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Write stale state claiming merge step but git is not in merge state
+	testutil.WriteMergeState(t, dir, &mergestate.MergeState{
+		Action:         "finish",
+		BranchType:     "feature",
+		BranchName:     "old-branch",
+		FullBranchName: "feature/old-branch",
+		CurrentStep:    "merge",
+		ParentBranch:   "develop",
+		MergeStrategy:  "merge",
+	})
+
+	// Create and finish a new feature — stale state should be auto-cleared
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "fresh-feature")
+	if err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
+	}
+	testutil.WriteFile(t, dir, "fresh.txt", "content")
+	_, err = testutil.RunGit(t, dir, "add", "fresh.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Fresh feature commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "fresh-feature")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed after clearing stale state, got error: %v\nOutput: %s", err, output)
+	}
+
+	if strings.Contains(output, "merge in progress") {
+		t.Error("Expected stale state to be cleared, but got merge in progress error")
+	}
+}
+
+// TestFinishDetectsStaleStateDeleteStepBranchGone tests that state at delete_branch step is
+// cleared when the topic branch no longer exists.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Writes a merge state file at delete_branch step referencing a non-existent branch
+// 3. Runs feature finish to verify stale state is cleared
+// 4. Verifies a new finish can proceed normally
+func TestFinishDetectsStaleStateDeleteStepBranchGone(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Write stale state at delete_branch step for a branch that doesn't exist
+	testutil.WriteMergeState(t, dir, &mergestate.MergeState{
+		Action:         "finish",
+		BranchType:     "feature",
+		BranchName:     "deleted-branch",
+		FullBranchName: "feature/deleted-branch",
+		CurrentStep:    "delete_branch",
+		ParentBranch:   "develop",
+		MergeStrategy:  "merge",
+	})
+
+	// Create and finish a new feature — stale state should be auto-cleared
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "another-feature")
+	if err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
+	}
+	testutil.WriteFile(t, dir, "another.txt", "content")
+	_, err = testutil.RunGit(t, dir, "add", "another.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Another feature commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "another-feature")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed after clearing stale state, got error: %v\nOutput: %s", err, output)
+	}
+
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected merge state to be cleared after finish")
+	}
+}
+
+// TestFinishValidStateMergeStepWithConflict tests that legitimate merge state is NOT cleared
+// when git is actually in a merge conflict state.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch with conflicting changes
+// 3. Attempts to finish (produces merge conflict, creating valid state)
+// 4. Verifies the merge state is preserved (not cleared as stale)
+func TestFinishValidStateMergeStepWithConflict(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create feature with content
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "conflict-test")
+	if err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "feature content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Feature commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Add conflicting content on develop
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "develop content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Develop commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Switch back and finish — will produce conflict
+	_, err = testutil.RunGit(t, dir, "checkout", "feature/conflict-test")
+	if err != nil {
+		t.Fatalf("Failed to checkout feature branch: %v", err)
+	}
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "conflict-test")
+
+	// Finish should fail with conflict
+	if err == nil {
+		t.Fatal("Expected finish to fail with merge conflict")
+	}
+
+	// The merge state should be preserved — this is a legitimate conflict
+	if !testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected merge state to be preserved during legitimate conflict")
+	}
+
+	state, stateErr := testutil.LoadMergeState(t, dir)
+	if stateErr != nil {
+		t.Fatalf("Failed to load merge state: %v", stateErr)
+	}
+	if state.CurrentStep != "merge" {
+		t.Errorf("Expected state step 'merge', got '%s'", state.CurrentStep)
 	}
 }

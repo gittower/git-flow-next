@@ -8,18 +8,36 @@ This project is developed primarily with **AI-assisted coding tools** (such as C
 
 ### AI-Assisted Workflow
 
-The end-to-end development process is described in [DEV_WORKFLOW.md](DEV_WORKFLOW.md). It covers the full lifecycle from issue analysis through planning, implementation, and PR creation — each stage driven by dedicated skills in `.claude/skills/`:
+The end-to-end development process is described in [DEV_WORKFLOW.md](DEV_WORKFLOW.md). It covers the full lifecycle from issue triage through spec, planning, implementation, and PR handling — driven by skills in `.claude/skills/`, organized in two tiers:
+
+**High-level skills** run an entire workflow from one command (autonomous, with confirmation gates before public actions):
+
+| Skill | Purpose |
+|-------|---------|
+| `/scan-repo` | Weekly activity scan producing an ordered action list |
+| `/triage` | Triage an external issue or discussion and propose a verdict |
+| `/create-spec` | Create an implementation-ready spec issue |
+| `/resolve-issue` | Resolve a spec issue end-to-end, from plan to PR |
+| `/handle-pr` | Review an incoming PR and post a GitHub review |
+| `/address-review` | Evaluate and address review feedback on a PR |
+| `/check-prs` | Report open PRs against the review response window |
+| `/takeover-pr` | Supersede a stale PR, crediting the original author |
+
+**Plumbing skills** perform one step each and are composed by the high-level skills (individually invocable too):
 
 | Skill | Purpose |
 |-------|---------|
 | `/analyze-issue` | Analyze a GitHub issue and produce a structured analysis |
-| `/create-plan` | Generate an implementation plan from analysis or concept |
-| `/validate-tests` | Validate and improve the test approach in a plan |
-| `/implement` | Execute an implementation plan |
+| `/create-plan` | Generate a test-first implementation plan from a spec, analysis, or concept |
+| `/validate-tests` | Codex-gate the test plan before implementation |
+| `/implement` | Execute an implementation plan, tests first |
 | `/code-review` | Review changes or PRs against project guidelines |
+| `/pr-review` / `/post-review` | Draft and post GitHub PR reviews |
 | `/pr-summary` | Generate a PR summary |
 | `/commit` | Create a commit following project conventions |
 | `/gh-issue` | Create a GitHub issue following project guidelines |
+
+See the [Skills Reference in DEV_WORKFLOW.md](DEV_WORKFLOW.md#skills-reference) for the full list with outputs and gates.
 
 ### Key Documentation
 
@@ -63,6 +81,13 @@ By participating in this project, you agree to:
 4. **Describe Implementation** - If possible, outline how it might be implemented
 
 ### Pull Requests
+
+**One PR, one concern.** Each pull request must address exactly one issue,
+feature, or fix. PRs that bundle multiple unrelated changes (e.g., a bug fix
+plus a refactoring, or two independent features) will be asked to split — or
+rejected. This keeps reviews focused and the history traceable. Mechanical
+changes required by the main change (e.g., updating tests and docs for the
+code you touched) belong in the same PR; anything else doesn't.
 
 1. **Fork the Repository**
 2. **Create a Branch**
@@ -186,6 +211,23 @@ For a detailed overview of our end-to-end development process — from issue ana
 Code changes are reviewed using `/code-review`, which checks architecture, code style, testing, documentation, and security against project guidelines (see `.claude/skills/code-review/REVIEW_CRITERIA.md`).
 
 Please review your changes against these criteria before submitting a pull request.
+
+### Review Response Window
+
+We aim to keep pull requests moving. When a maintainer requests changes on
+your PR:
+
+- Please respond within **7 days** — either by pushing updates or by
+  commenting (even "I need more time" is fine and resets the window).
+- If there is no response after 7 days, maintainers may close the PR and
+  land the change themselves in a successor PR that includes the requested
+  changes on top of your work.
+- In that case you will be **credited for your contribution**: your commits
+  are preserved with original authorship where possible, or attributed via
+  `Co-authored-by` trailers, and the successor PR links back to yours.
+
+This is not a penalty — it's how we keep the project healthy while making
+sure your work still lands and you get credit for it.
 
 ## Getting Help
 

@@ -105,3 +105,25 @@ func GitFlowMergeStateExists(t *testing.T, dir string) bool {
 	t.Fatalf("Failed to stat git-flow merge state file %s: %v", stateFile, err)
 	return false
 }
+
+// WriteMergeState writes a merge state file directly to the test repository.
+// This is used for testing stale state detection without going through the
+// normal git-flow operations.
+func WriteMergeState(t *testing.T, dir string, state *mergestate.MergeState) {
+	t.Helper()
+	gitDir, err := getGitDirForRepo(dir)
+	if err != nil {
+		t.Fatalf("Failed to determine git directory: %v", err)
+	}
+	stateDir := filepath.Join(gitDir, "gitflow", "state")
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		t.Fatalf("Failed to create state directory: %v", err)
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("Failed to marshal merge state: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "merge.json"), data, 0644); err != nil {
+		t.Fatalf("Failed to write merge state file: %v", err)
+	}
+}
