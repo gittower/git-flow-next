@@ -516,3 +516,209 @@ func TestFinishValidStateMergeStepWithConflict(t *testing.T) {
 		t.Errorf("Expected state step 'merge', got '%s'", state.CurrentStep)
 	}
 }
+
+// TestFinishAfterManualConflictResolution tests that re-running finish completes the full
+// operation after the user resolved a merge conflict with a plain `git commit` instead of
+// `--continue`. The manual commit finishes the merge at the git level but leaves the state
+// file behind; the re-run must detect the stale state, clear it, and finish the branch
+// end-to-end (tag, child update, branch deletion). Regression test for issue #114.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a hotfix branch with changes conflicting with main
+// 3. Attempts to finish (produces merge conflict, creating valid state)
+// 4. Resolves the conflict manually with `git commit`, bypassing --continue
+// 5. Verifies the state is stale: MERGE_HEAD is gone, state file still present
+// 6. Re-runs finish and verifies it completes: state cleared, tag created, branch deleted
+func TestFinishAfterManualConflictResolution(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create hotfix with content
+	output, err = testutil.RunGitFlow(t, dir, "hotfix", "start", "1.0.1")
+	if err != nil {
+		t.Fatalf("Failed to start hotfix: %v\nOutput: %s", err, output)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "hotfix content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Hotfix commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Add conflicting content on main
+	_, err = testutil.RunGit(t, dir, "checkout", "main")
+	if err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "main content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Main commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Switch back and finish — will produce conflict
+	_, err = testutil.RunGit(t, dir, "checkout", "hotfix/1.0.1")
+	if err != nil {
+		t.Fatalf("Failed to checkout hotfix branch: %v", err)
+	}
+	output, err = testutil.RunGitFlow(t, dir, "hotfix", "finish", "1.0.1")
+	if err == nil {
+		t.Fatal("Expected finish to fail with merge conflict")
+	}
+
+	// Resolve the conflict manually with a plain git commit, bypassing --continue.
+	// This clears MERGE_HEAD but leaves the git-flow state file behind.
+	testutil.WriteFile(t, dir, "conflict.txt", "resolved content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add resolved file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Manual conflict resolution")
+	if err != nil {
+		t.Fatalf("Failed to commit resolution: %v", err)
+	}
+
+	// The state is now stale: the git-level merge is complete but the
+	// git-flow state file is still there
+	if testutil.FileExists(t, dir, ".git/MERGE_HEAD") {
+		t.Fatal("Expected MERGE_HEAD to be gone after manual resolution commit")
+	}
+	if !testutil.GitFlowMergeStateExists(t, dir) {
+		t.Fatal("Expected merge state to still exist after manual resolution")
+	}
+
+	// Re-run finish — must clear the stale state and complete the operation
+	output, err = testutil.RunGitFlow(t, dir, "hotfix", "finish", "1.0.1")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed after manual resolution, got error: %v\nOutput: %s", err, output)
+	}
+
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected merge state to be cleared after finish")
+	}
+
+	tags, err := testutil.RunGit(t, dir, "tag", "-l", "1.0.1")
+	if err != nil {
+		t.Fatalf("Failed to list tags: %v", err)
+	}
+	if !strings.Contains(tags, "1.0.1") {
+		t.Error("Expected tag '1.0.1' to be created on finish")
+	}
+
+	branches, err := testutil.RunGit(t, dir, "branch", "--list", "hotfix/1.0.1")
+	if err != nil {
+		t.Fatalf("Failed to list branches: %v", err)
+	}
+	if strings.TrimSpace(branches) != "" {
+		t.Error("Expected hotfix branch to be deleted after finish")
+	}
+
+	// Child update ran: develop must contain the resolved content from main
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	if content := testutil.ReadFile(t, dir, "conflict.txt"); content != "resolved content" {
+		t.Errorf("Expected develop to contain resolved content, got %q", content)
+	}
+}
+
+// TestAbortClearsStaleMergeState tests that --abort does not leave a stale state file behind
+// when the git-level merge is already gone (user resolved the conflict with a plain
+// `git commit` instead of `--continue`). The exit status of --abort in this situation is
+// deliberately not asserted; only the cleanup matters. Regression test for issue #110.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch with conflicting changes and attempts to finish
+// 3. Resolves the conflict manually with `git commit`, bypassing --continue
+// 4. Verifies the state is stale: MERGE_HEAD is gone, state file still present
+// 5. Runs finish --abort and verifies the state file is gone afterwards
+func TestAbortClearsStaleMergeState(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create feature with content
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "stale-abort")
+	if err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "feature content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Feature commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Add conflicting content on develop
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "develop content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Develop commit")
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Switch back and finish — will produce conflict
+	_, err = testutil.RunGit(t, dir, "checkout", "feature/stale-abort")
+	if err != nil {
+		t.Fatalf("Failed to checkout feature branch: %v", err)
+	}
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "stale-abort")
+	if err == nil {
+		t.Fatal("Expected finish to fail with merge conflict")
+	}
+
+	// Resolve the conflict manually with a plain git commit, bypassing --continue.
+	// This clears MERGE_HEAD but leaves the git-flow state file behind.
+	testutil.WriteFile(t, dir, "conflict.txt", "resolved content")
+	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
+	if err != nil {
+		t.Fatalf("Failed to add resolved file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Manual conflict resolution")
+	if err != nil {
+		t.Fatalf("Failed to commit resolution: %v", err)
+	}
+
+	// The state is now stale: the git-level merge is complete but the
+	// git-flow state file is still there
+	if testutil.FileExists(t, dir, ".git/MERGE_HEAD") {
+		t.Fatal("Expected MERGE_HEAD to be gone after manual resolution commit")
+	}
+	if !testutil.GitFlowMergeStateExists(t, dir) {
+		t.Fatal("Expected merge state to still exist after manual resolution")
+	}
+
+	// Abort — regardless of exit status, no stale state file may remain
+	_, _ = testutil.RunGitFlow(t, dir, "feature", "finish", "--abort", "stale-abort")
+
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected merge state to be cleared after --abort on stale state")
+	}
+}
