@@ -125,8 +125,51 @@ func ClearMergeState() error {
 	return nil
 }
 
-// IsMergeInProgress checks if there's a merge in progress
+// isStateValid checks whether a loaded merge state is still meaningful by
+// validating it against the actual git repository state. This detects stale
+// state files left by manual intervention, crashes, or interrupted operations.
+func isStateValid(state *MergeState) bool {
+	// Critical fields must be non-empty
+	if state.BranchType == "" || state.FullBranchName == "" || state.CurrentStep == "" {
+		return false
+	}
+
+	switch state.CurrentStep {
+	case "merge", "update_children":
+		// Git must actually be in a merge, rebase, or squash merge state
+		return git.IsGitMergeInProgress() || git.IsGitRebaseInProgress() || git.IsGitSquashMergeInProgress()
+	case "create_tag", "delete_branch":
+		// The topic branch must still exist
+		return git.BranchExists(state.FullBranchName) == nil
+	default:
+		return false
+	}
+}
+
+// IsMergeInProgress checks if there's a valid merge in progress. If a state
+// file exists but is stale (e.g., manual resolution, crash, or missing branch),
+// it is automatically cleared and false is returned.
 func IsMergeInProgress() bool {
 	state, err := LoadMergeState()
-	return err == nil && state != nil
+	if err != nil {
+		// Corrupted or unreadable state file — clear it
+		if clearErr := ClearMergeState(); clearErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to clear stale merge state: %v\n", clearErr)
+		} else {
+			fmt.Fprintf(os.Stderr, "Note: Cleared stale merge state from a previous operation\n")
+		}
+		return false
+	}
+	if state == nil {
+		return false
+	}
+	if !isStateValid(state) {
+		if err := ClearMergeState(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to clear stale merge state: %v\n", err)
+		} else {
+			fmt.Fprintf(os.Stderr, "Note: Cleared stale merge state from a previous operation\n")
+		}
+		return false
+	}
+	return true
 }

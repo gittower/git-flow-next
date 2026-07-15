@@ -93,15 +93,16 @@ func TestMergeStateSaveLoadInWorktree(t *testing.T) {
 
 	// Change to worktree and test merge state operations
 	withGitRepo(t, worktreePath, func() {
-		// Create test state
+		// Create test state using delete_branch step with an existing branch so that
+		// IsMergeInProgress validation passes (it checks branch existence for non-conflict steps)
 		state := &mergestate.MergeState{
 			Action:         "finish",
 			BranchType:     "feature",
 			BranchName:     "test-feature",
-			CurrentStep:    "merge",
-			ParentBranch:   "develop",
+			CurrentStep:    "delete_branch",
+			ParentBranch:   "main",
 			MergeStrategy:  "merge",
-			FullBranchName: "feature/test-feature",
+			FullBranchName: "worktree-branch",
 		}
 
 		// Test save
@@ -184,12 +185,16 @@ func TestMergeStateNotSharedBetweenWorktrees(t *testing.T) {
 		t.Fatalf("Failed to create worktree2: %v", err)
 	}
 
-	// Save state in worktree1
+	// Save state in worktree1 using delete_branch step with an existing branch
+	// so that IsMergeInProgress validation passes
 	withGitRepo(t, worktree1, func() {
 		state := &mergestate.MergeState{
-			Action:     "finish",
-			BranchType: "feature",
-			BranchName: "worktree1-feature",
+			Action:         "finish",
+			BranchType:     "feature",
+			BranchName:     "worktree1-feature",
+			CurrentStep:    "delete_branch",
+			FullBranchName: "worktree1-branch",
+			ParentBranch:   "main",
 		}
 		err := mergestate.SaveMergeState(state)
 		if err != nil {
