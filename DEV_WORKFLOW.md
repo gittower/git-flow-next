@@ -502,6 +502,7 @@ Skills come in two tiers:
 | `/address-review` | Evaluate review feedback on our PR, implement valid items | Push & PR comment |
 | `/check-prs` | Report all open PRs vs the review response window | Reminders (optional) |
 | `/takeover-pr` | Supersede a stale PR with requested changes, crediting the author | Push, PR, closing |
+| `/full-release` | Release end-to-end (prep → tag → CI → Homebrew tap → website sync) | Push & tag |
 
 ### Plumbing Skills
 
@@ -547,6 +548,9 @@ The shared Codex gate procedure used by several skills is defined once in
 # Periodic PR hygiene
 /check-prs                # who's waiting on whom
 /takeover-pr 45           # if the response window lapsed
+
+# Ship a release
+/full-release             # prep → confirm → tag → CI → Homebrew → website
 ```
 
 ### Starting Work on an Issue (Manual Chain)
