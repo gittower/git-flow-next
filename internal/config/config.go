@@ -36,6 +36,23 @@ type BranchConfig struct {
 	TagPrefix          string // prefix to use for tag names
 }
 
+// ResolveBranchName resolves a branch reference to its canonical (stored) name
+// by matching case-insensitively against the configured branch identities.
+// It returns the canonical name and true on a match, or ("", false) if no
+// configured branch folds to name. An exact-case match is preferred; otherwise
+// the first case-insensitive match is returned.
+func (c *Config) ResolveBranchName(name string) (canonical string, found bool) {
+	if _, ok := c.Branches[name]; ok {
+		return name, true
+	}
+	for branchName := range c.Branches {
+		if strings.EqualFold(branchName, name) {
+			return branchName, true
+		}
+	}
+	return "", false
+}
+
 // MergeStrategy represents the strategy for merging branches
 type MergeStrategy string
 
@@ -210,8 +227,19 @@ func LoadConfig() (*Config, error) {
 	cmd.Dir = currentDir
 	output, err := cmd.Output()
 
-	// Process branch configurations from command output
+	// Process branch configurations from command output.
+	//
+	// Branch subsection names (gitflow.branch.<name>) are treated
+	// case-insensitively for identity but their original case is preserved
+	// as canonical (mirrors core.ignorecase semantics). The first-seen
+	// casing of a branch name wins as the canonical key; later properties of
+	// the same branch fold into that entry. Property names (the last segment)
+	// are legitimately case-insensitive in git config and are lowercased so
+	// the BranchConfig field lookups below match regardless of stored case.
 	branchMap := make(map[string]map[string]string)
+	// canonicalNames maps a lowercased fold key to the canonical (first-seen)
+	// branch name used as the branchMap key.
+	canonicalNames := make(map[string]string)
 
 	if err == nil {
 		lines := strings.Split(string(output), "\n")
@@ -234,7 +262,16 @@ func LoadConfig() (*Config, error) {
 				continue
 			}
 
-			branchName := strings.ToLower(keyParts[2])
+			// Preserve the original branch-name case as canonical, folding
+			// case-insensitively so all properties of the same branch land in
+			// one entry keyed by the first-seen case.
+			rawBranchName := keyParts[2]
+			foldKey := strings.ToLower(rawBranchName)
+			branchName, ok := canonicalNames[foldKey]
+			if !ok {
+				branchName = rawBranchName
+				canonicalNames[foldKey] = branchName
+			}
 			property := strings.ToLower(keyParts[3])
 
 			// Initialize branch map if needed
