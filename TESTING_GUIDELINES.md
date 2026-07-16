@@ -465,6 +465,16 @@ For detailed examples of these anti-patterns and their solutions, see [GIT_TEST_
 
 ## Test Execution Methods
 
+### Test Binary
+
+The `test/cmd` integration tests execute the git-flow binary as a subprocess. `TestMain` (in `test/cmd/main_test.go`) builds a fresh binary into a temporary directory via `testutil.BuildGitFlow()` before any test runs, so `go test ./...` is self-sufficient — no manual build step is required, and tests can never silently run against a stale binary.
+
+To test a specific prebuilt binary instead (e.g. a release artifact), set the `GIT_FLOW_PATH` environment variable:
+
+```bash
+GIT_FLOW_PATH=/path/to/git-flow go test ./test/cmd/
+```
+
 ### CRITICAL: Use Test Helpers, Not Bash Piping
 
 **IMPORTANT**: When running git-flow commands that require interactive input, always use the `runGitFlowWithInput` helper function instead of bash piping.
@@ -501,9 +511,8 @@ output, err := runGitFlowWithInput(t, dir, input, "init")
 All test helper functions must set `cmd.Dir` to the test repository directory:
 
 ```go
-func runGitFlow(t *testing.T, dir string, args ...string) (string, error) {
-    gitFlowPath, _ := filepath.Abs(filepath.Join("..", "..", "git-flow"))
-    cmd := exec.Command(gitFlowPath, args...)
+func RunGitFlow(t *testing.T, dir string, args ...string) (string, error) {
+    cmd := exec.Command(gitFlowPath, args...)  // Binary built by TestMain
     cmd.Dir = dir  // CRITICAL: Always set working directory
     // ...
 }

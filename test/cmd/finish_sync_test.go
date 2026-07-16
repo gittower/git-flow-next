@@ -50,6 +50,7 @@ func TestFinishFeatureBranchBehindRemote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to clone: %v", err)
 	}
+	testutil.ConfigureGitIdentity(t, secondDir)
 
 	_, err = testutil.RunGit(t, secondDir, "checkout", "feature/test-behind")
 	if err != nil {
@@ -221,6 +222,7 @@ func TestFinishFeatureBranchDivergedFromRemote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to clone: %v", err)
 	}
+	testutil.ConfigureGitIdentity(t, secondDir)
 
 	_, err = testutil.RunGit(t, secondDir, "checkout", "feature/test-diverged")
 	if err != nil {
@@ -376,6 +378,7 @@ func TestFinishFeatureBranchForceBypassesRemoteCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to clone: %v", err)
 	}
+	testutil.ConfigureGitIdentity(t, secondDir)
 
 	_, err = testutil.RunGit(t, secondDir, "checkout", "feature/test-force")
 	if err != nil {
@@ -509,6 +512,7 @@ func TestFinishContinueSkipsRemoteCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to clone: %v", err)
 	}
+	testutil.ConfigureGitIdentity(t, secondDir)
 
 	_, err = testutil.RunGit(t, secondDir, "checkout", "feature/test-continue-remote")
 	if err != nil {
@@ -665,6 +669,7 @@ func TestFinishFetchFailsButSyncCheckStillRuns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to clone: %v", err)
 	}
+	testutil.ConfigureGitIdentity(t, secondDir)
 
 	_, err = testutil.RunGit(t, secondDir, "checkout", "feature/test-fetch-fail")
 	if err != nil {

@@ -49,11 +49,7 @@ func setupGitFlowAVH(t *testing.T, dir string) {
 
 // runGitFlow runs the git-flow command with the given arguments
 func runGitFlow(t *testing.T, dir string, args ...string) (string, error) {
-	// Get path to the git-flow binary
-	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
+	gitFlowPath := testutil.GitFlowPath()
 
 	// Run the git-flow command
 	cmd := exec.Command(gitFlowPath, args...)
@@ -61,7 +57,7 @@ func runGitFlow(t *testing.T, dir string, args ...string) (string, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err = cmd.Run()
+	err := cmd.Run()
 
 	// Return the combined output
 	return stdout.String() + stderr.String(), err
@@ -69,11 +65,7 @@ func runGitFlow(t *testing.T, dir string, args ...string) (string, error) {
 
 // runGitFlowWithInput runs the git-flow command with the given arguments and input
 func runGitFlowWithInput(t *testing.T, dir string, input string, args ...string) (string, error) {
-	// Get path to the git-flow binary
-	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
+	gitFlowPath := testutil.GitFlowPath()
 
 	// Run the git-flow command
 	cmd := exec.Command(gitFlowPath, args...)
@@ -147,17 +139,14 @@ func getGitConfigFromFile(t *testing.T, filePath string, key string) string {
 
 // runGitFlowWithEnv runs git-flow with custom environment variables.
 func runGitFlowWithEnv(t *testing.T, dir string, env []string, args ...string) (string, error) {
-	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
+	gitFlowPath := testutil.GitFlowPath()
 	cmd := exec.Command(gitFlowPath, args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), env...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err = cmd.Run()
+	err := cmd.Run()
 	return stdout.String() + stderr.String(), err
 }
 
