@@ -120,6 +120,27 @@ Branch configuration uses the pattern: **gitflow.branch.*name*.*property***
 
 These properties define the branch type's identity and process characteristics (Layer 1). They describe *what the branch type is*, not how individual commands behave.
 
+### Branch Name Case Sensitivity
+
+Branch identities (the *name* subsection of **gitflow.branch.*name***) are matched **case-insensitively**, following the same principle as Git's own **core.ignorecase**. The original case you use when a branch is first added is preserved as its **canonical** form and written back verbatim; git-flow always operates on that canonical name — including the underlying Git ref — so operations behave correctly on case-sensitive filesystems.
+
+Any later reference to that branch may be given in any case. For example, after `git flow config add base V9_Release`, all of the following resolve to the single canonical `V9_Release` entry:
+
+```
+git flow config add base V10_Release v9_release   # parent given in lowercase
+git flow config edit base v9_RELEASE --upstream-strategy rebase
+git flow config delete base V9_release
+```
+
+Adding or renaming to a name that differs only in case from a *different* existing branch is rejected as an "already exists" condition, naming the existing canonical form. Renaming a branch to a case-only variant of *itself* (e.g., `V9_Release` → `v9_release`) is allowed and re-canonicalizes the entry in place.
+
+Property names (the last segment, e.g., **upstreamStrategy**) are case-insensitive in Git config and are always read regardless of the case they were stored in.
+
+**Limitations**:
+
+- Two branch types whose names differ only in case cannot coexist as distinct entities — they are treated as one branch identity.
+- Branch names containing dots (`.`) in the subsection (e.g., `V10.5`) are not supported, because Git splits the subsection on the dot.
+
 ### Structural Properties
 
 Define where the branch type fits in the hierarchy:
