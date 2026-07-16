@@ -4,6 +4,7 @@
 <!-- GitHub keywords: On their own line (Resolves/Relates/Closes #ISSUE) -->
 <!-- Remarks section: Optional - design decisions, scope boundaries, caveats -->
 <!-- Review focus: Optional - specific files/lines reviewers should inspect -->
+<!-- No AI attribution: Never add lines like "Generated with Claude Code" - AI contributions are credited via Co-Authored-By commit trailers only -->
 
 <!-- EXAMPLE:
 Adds `--merge-message` flag to customize merge commit messages during finish operations.
