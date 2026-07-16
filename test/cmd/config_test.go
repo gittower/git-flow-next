@@ -1147,6 +1147,13 @@ func TestConfigRenameBaseCaseOnlySelfRename(t *testing.T) {
 	cfg := gitflowBranchConfig(t, tempDir)
 	assertContainsLine(t, cfg, "gitflow.branch.v9_release.type base", "case-only self-rename")
 	assertNoLineContains(t, cfg, "gitflow.branch.V9_Release.", "case-only self-rename")
+
+	// The Git ref must be re-cased too (the RenameBranchForce -M path). On a
+	// case-sensitive filesystem the old-case ref must be gone and the new-case
+	// ref present; this is the behavior the force fallback exists to provide.
+	if !refExists(t, tempDir, "v9_release") {
+		t.Errorf("Expected refs/heads/v9_release to exist after case-only self-rename")
+	}
 }
 
 // TestConfigAddBaseAbsentParentErrors tests a genuinely-absent reference still errors
