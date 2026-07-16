@@ -3,7 +3,6 @@ package cmd_test
 import (
 	"bytes"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -170,10 +169,7 @@ func TestFinishFeatureBranchKeepLocal(t *testing.T) {
 	}
 
 	// Get path to the git-flow binary
-	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
+	gitFlowPath := testutil.GitFlowPath()
 
 	// Finish the feature branch with keeplocal option
 	cmd := exec.Command(gitFlowPath, "feature", "finish", "keep-local-test", "--keeplocal")
@@ -270,10 +266,7 @@ func TestFinishFeatureBranchKeepRemote(t *testing.T) {
 	}
 
 	// Get path to the git-flow binary
-	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
+	gitFlowPath := testutil.GitFlowPath()
 
 	// Finish the feature branch with keepremote option
 	cmd := exec.Command(gitFlowPath, "feature", "finish", "keep-remote-test", "--keepremote")

@@ -46,11 +46,7 @@ func TestFinishFeatureWithTag(t *testing.T) {
 		t.Fatalf("Failed to commit file: %v", err)
 	}
 
-	// Get path to the git-flow binary
-	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
+	gitFlowPath := testutil.GitFlowPath()
 
 	// Run git-flow directly with exec.Command to get full control over arguments
 	cmd := exec.Command(gitFlowPath, "feature", "finish", "tagged-feature", "--tag")
@@ -111,11 +107,7 @@ func TestFinishReleaseWithCustomTag(t *testing.T) {
 		t.Fatalf("Failed to commit file: %v", err)
 	}
 
-	// Get path to the git-flow binary
-	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
+	gitFlowPath := testutil.GitFlowPath()
 
 	// Run git-flow directly
 	cmd := exec.Command(gitFlowPath, "release", "finish", "1.2.0", "--tagname", "v1.2.0-beta")
@@ -188,11 +180,7 @@ func TestFinishReleaseWithCustomMessage(t *testing.T) {
 	// Custom message for the tag
 	customMessage := "This is release 1.3.0"
 
-	// Get path to the git-flow binary
-	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
+	gitFlowPath := testutil.GitFlowPath()
 
 	// Run git-flow directly
 	cmd := exec.Command(gitFlowPath, "release", "finish", "1.3.0", "--message", customMessage)
@@ -253,11 +241,7 @@ func TestFinishReleaseWithNoTag(t *testing.T) {
 		t.Fatalf("Failed to commit file: %v", err)
 	}
 
-	// Get path to the git-flow binary
-	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
+	gitFlowPath := testutil.GitFlowPath()
 
 	// Run git-flow directly
 	cmd := exec.Command(gitFlowPath, "release", "finish", "1.4.0", "--notag")
@@ -333,11 +317,7 @@ func TestFinishReleaseWithMessageFile(t *testing.T) {
 		t.Fatalf("Failed to create tag message file: %v", err)
 	}
 
-	// Get path to the git-flow binary
-	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
+	gitFlowPath := testutil.GitFlowPath()
 
 	// Run git-flow directly
 	cmd := exec.Command(gitFlowPath, "release", "finish", "1.5.0", "--messagefile", tagMessageFilePath)
@@ -581,11 +561,7 @@ func TestFinishNotagFromCLI(t *testing.T) {
 		t.Fatalf("Failed to commit file: %v", err)
 	}
 
-	// Get path to the git-flow binary
-	gitFlowPath, err := filepath.Abs(filepath.Join("..", "..", "git-flow"))
-	if err != nil {
-		t.Fatalf("Failed to get absolute path to git-flow: %v", err)
-	}
+	gitFlowPath := testutil.GitFlowPath()
 
 	// Finish with --notag to override the config
 	cmd := exec.Command(gitFlowPath, "release", "finish", "2.1.0", "--notag")

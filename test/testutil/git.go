@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -28,6 +29,46 @@ func init() {
 		wd = filepath.Join(wd, "..", "..")
 	}
 	gitFlowPath = filepath.Join(wd, "git-flow")
+}
+
+// BuildGitFlow compiles the git-flow binary into a temporary directory and
+// points RunGitFlow at it, so tests never execute a stale or missing binary.
+// If the GIT_FLOW_PATH environment variable is set, no build is performed and
+// that binary is used instead. The returned cleanup function removes the
+// temporary directory. Intended to be called from TestMain in packages that
+// execute the git-flow binary.
+func BuildGitFlow() (func(), error) {
+	if os.Getenv("GIT_FLOW_PATH") != "" {
+		return func() {}, nil
+	}
+
+	tmpDir, err := os.MkdirTemp("", "git-flow-test-bin-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
+	}
+
+	binary := filepath.Join(tmpDir, "git-flow")
+	if runtime.GOOS == "windows" {
+		binary += ".exe"
+	}
+
+	// Build by module path so this works from any package directory
+	cmd := exec.Command("go", "build", "-o", binary, "github.com/gittower/git-flow-next")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		return nil, fmt.Errorf("failed to build git-flow: %w\nOutput: %s", err, output)
+	}
+
+	gitFlowPath = binary
+	return func() { os.RemoveAll(tmpDir) }, nil
+}
+
+// GitFlowPath returns the path of the git-flow binary under test. Use this
+// instead of resolving the binary path manually, so tests run the binary
+// built by TestMain (or the GIT_FLOW_PATH override).
+func GitFlowPath() string {
+	return gitFlowPath
 }
 
 // RunGit runs a git command in the specified directory and returns its output
