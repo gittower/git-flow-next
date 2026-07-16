@@ -343,7 +343,24 @@ func RebaseAbort() error {
 // RenameBranch renames a branch. If oldBranch is provided, it renames that branch to newBranch.
 // If oldBranch is not provided, it renames the current branch to newBranch.
 func RenameBranch(oldBranch, newBranch string) error {
-	args := []string{"branch", "-m", oldBranch, newBranch}
+	return renameBranch(oldBranch, newBranch, false)
+}
+
+// RenameBranchForce renames a Git branch using the force flag (-M). This is
+// required for a case-only rename on case-insensitive filesystems, where the
+// destination name folds to the same existing ref and the non-forcing -m
+// refuses with "a branch named '…' already exists". Callers must confirm the
+// rename does not clobber a genuinely different branch before forcing.
+func RenameBranchForce(oldBranch, newBranch string) error {
+	return renameBranch(oldBranch, newBranch, true)
+}
+
+func renameBranch(oldBranch, newBranch string, force bool) error {
+	flag := "-m"
+	if force {
+		flag = "-M"
+	}
+	args := []string{"branch", flag, oldBranch, newBranch}
 
 	cmd := exec.Command("git", args...)
 	output, err := cmd.CombinedOutput()

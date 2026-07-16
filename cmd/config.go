@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/gittower/git-flow-next/internal/config"
 	"github.com/gittower/git-flow-next/internal/errors"
@@ -388,16 +389,20 @@ func executeConfigAddBase(name, parent, upstreamStrategy, downstreamStrategy str
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
 
-	// Check if branch name already exists
-	if _, exists := cfg.Branches[name]; exists {
-		return &errors.BranchExistsError{BranchName: name}
+	// Check if branch name already exists (case-insensitively); report the
+	// existing canonical name on collision.
+	if canonical, exists := cfg.ResolveBranchName(name); exists {
+		return &errors.BranchExistsError{BranchName: canonical}
 	}
 
-	// Validate parent exists if specified
+	// Validate parent exists if specified, resolving it to its canonical name
+	// so config and git operations use the case-preserved identity.
 	if parent != "" {
-		if _, exists := cfg.Branches[parent]; !exists {
+		canonicalParent, exists := cfg.ResolveBranchName(parent)
+		if !exists {
 			return &errors.BranchNotFoundError{BranchName: parent}
 		}
+		parent = canonicalParent
 
 		// Check for circular dependencies
 		if err := validateNoCycle(cfg, name, parent); err != nil {
@@ -472,17 +477,19 @@ func executeConfigAddTopic(name, parent, prefix, startingPoint, upstreamStrategy
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
 
-	// Check if branch name already exists
-	if _, exists := cfg.Branches[name]; exists {
-		return &errors.BranchExistsError{BranchName: name}
+	// Check if branch name already exists (case-insensitively)
+	if canonical, exists := cfg.ResolveBranchName(name); exists {
+		return &errors.BranchExistsError{BranchName: canonical}
 	}
 
-	// Validate parent exists
-	if _, exists := cfg.Branches[parent]; !exists {
+	// Validate parent exists and resolve it to its canonical name
+	canonicalParent, exists := cfg.ResolveBranchName(parent)
+	if !exists {
 		return &errors.BranchNotFoundError{BranchName: parent}
 	}
+	parent = canonicalParent
 
-	// Set defaults
+	// Set defaults (start point defaults to the canonical parent)
 	if prefix == "" {
 		prefix = name + "/"
 	}
@@ -504,10 +511,12 @@ func executeConfigAddTopic(name, parent, prefix, startingPoint, upstreamStrategy
 		return &errors.InvalidMergeStrategyError{Strategy: downstreamStrategy}
 	}
 
-	// Validate starting point exists
-	if _, exists := cfg.Branches[startingPoint]; !exists {
+	// Validate starting point exists and resolve it to its canonical name
+	canonicalStartingPoint, exists := cfg.ResolveBranchName(startingPoint)
+	if !exists {
 		return &errors.BranchNotFoundError{BranchName: startingPoint}
 	}
+	startingPoint = canonicalStartingPoint
 
 	// Create branch configuration
 	branchConfig := config.BranchConfig{
@@ -548,11 +557,13 @@ func executeConfigEditBase(name, upstreamStrategy, downstreamStrategy string, au
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
 
-	// Check if branch exists
-	branchConfig, exists := cfg.Branches[name]
+	// Resolve the branch name case-insensitively to its canonical form
+	canonicalName, exists := cfg.ResolveBranchName(name)
 	if !exists {
 		return &errors.BranchNotFoundError{BranchName: name}
 	}
+	name = canonicalName
+	branchConfig := cfg.Branches[name]
 
 	// Check if it's a base branch
 	if branchConfig.Type != string(config.BranchTypeBase) {
@@ -605,11 +616,13 @@ func executeConfigEditTopic(name, prefix, startingPoint, upstreamStrategy, downs
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
 
-	// Check if branch exists
-	branchConfig, exists := cfg.Branches[name]
+	// Resolve the branch name case-insensitively to its canonical form
+	canonicalName, exists := cfg.ResolveBranchName(name)
 	if !exists {
 		return &errors.BranchNotFoundError{BranchName: name}
 	}
+	name = canonicalName
+	branchConfig := cfg.Branches[name]
 
 	// Check if it's a topic branch
 	if branchConfig.Type != string(config.BranchTypeTopic) {
@@ -622,10 +635,11 @@ func executeConfigEditTopic(name, prefix, startingPoint, upstreamStrategy, downs
 	}
 
 	if startingPoint != "" {
-		if _, exists := cfg.Branches[startingPoint]; !exists {
+		canonicalStartingPoint, exists := cfg.ResolveBranchName(startingPoint)
+		if !exists {
 			return &errors.BranchNotFoundError{BranchName: startingPoint}
 		}
-		branchConfig.StartPoint = startingPoint
+		branchConfig.StartPoint = canonicalStartingPoint
 	}
 
 	if upstreamStrategy != "" {
@@ -677,26 +691,39 @@ func executeConfigRenameBase(oldName, newName string) error {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
 
-	// Check if old branch exists
-	branchConfig, exists := cfg.Branches[oldName]
+	// Resolve the old branch name case-insensitively to its canonical form
+	canonicalOld, exists := cfg.ResolveBranchName(oldName)
 	if !exists {
 		return &errors.BranchNotFoundError{BranchName: oldName}
 	}
+	oldName = canonicalOld
+	branchConfig := cfg.Branches[oldName]
 
 	// Check if it's a base branch
 	if branchConfig.Type != string(config.BranchTypeBase) {
 		return &errors.InvalidBranchTypeError{BranchType: branchConfig.Type}
 	}
 
-	// Check if new name already exists
-	if _, exists := cfg.Branches[newName]; exists {
-		return &errors.BranchExistsError{BranchName: newName}
+	// Reject only when the new name collides case-insensitively with a
+	// different existing branch. A case-only self-rename (newName folds to
+	// oldName) is allowed and re-canonicalizes the stored key in place.
+	if canonical, exists := cfg.ResolveBranchName(newName); exists && canonical != oldName {
+		return &errors.BranchExistsError{BranchName: canonical}
 	}
 
-	// Rename Git branch if it exists
+	// Rename Git branch if it exists (using the resolved canonical old name).
+	// A case-only rename (same fold, different case) needs the force flag on
+	// case-insensitive filesystems, where the destination folds to the same
+	// existing ref; it is safe here because we already confirmed newName does
+	// not collide with a *different* branch.
 	if err := git.BranchExists(oldName); err == nil {
-		if err := git.RenameBranch(oldName, newName); err != nil {
-			return &errors.GitError{Operation: fmt.Sprintf("rename branch '%s' to '%s'", oldName, newName), Err: err}
+		caseOnlyRename := oldName != newName && strings.EqualFold(oldName, newName)
+		renameErr := git.RenameBranch(oldName, newName)
+		if renameErr != nil && caseOnlyRename {
+			renameErr = git.RenameBranchForce(oldName, newName)
+		}
+		if renameErr != nil {
+			return &errors.GitError{Operation: fmt.Sprintf("rename branch '%s' to '%s'", oldName, newName), Err: renameErr}
 		}
 		fmt.Printf("✓ Renamed Git branch: %s → %s\n", oldName, newName)
 	}
@@ -710,13 +737,13 @@ func executeConfigRenameBase(oldName, newName string) error {
 	delete(cfg.Branches, oldName)
 	cfg.Branches[newName] = branchConfig
 
-	// Update all references to the old name
+	// Update all references to the old name (case-insensitively)
 	for name, branch := range cfg.Branches {
-		if branch.Parent == oldName {
+		if strings.EqualFold(branch.Parent, oldName) {
 			branch.Parent = newName
 			cfg.Branches[name] = branch
 		}
-		if branch.StartPoint == oldName {
+		if strings.EqualFold(branch.StartPoint, oldName) {
 			branch.StartPoint = newName
 			cfg.Branches[name] = branch
 		}
@@ -752,20 +779,31 @@ func executeConfigRenameTopic(oldName, newName string) error {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
 
-	// Check if old branch exists
-	branchConfig, exists := cfg.Branches[oldName]
+	// Resolve the old branch name case-insensitively to its canonical form
+	canonicalOld, exists := cfg.ResolveBranchName(oldName)
 	if !exists {
 		return &errors.BranchNotFoundError{BranchName: oldName}
 	}
+	oldName = canonicalOld
+	branchConfig := cfg.Branches[oldName]
 
 	// Check if it's a topic branch
 	if branchConfig.Type != string(config.BranchTypeTopic) {
 		return &errors.InvalidBranchTypeError{BranchType: branchConfig.Type}
 	}
 
-	// Check if new name already exists
-	if _, exists := cfg.Branches[newName]; exists {
-		return &errors.BranchExistsError{BranchName: newName}
+	// Reject only when the new name collides case-insensitively with a
+	// different existing branch; a case-only self-rename is allowed and
+	// re-canonicalizes the stored key in place.
+	if canonical, exists := cfg.ResolveBranchName(newName); exists && canonical != oldName {
+		return &errors.BranchExistsError{BranchName: canonical}
+	}
+
+	// Remove the old branch config section from git config (topic renames
+	// only touch config, not refs), so the old canonical subsection does not
+	// linger after the save writes the new one.
+	if err := git.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", oldName)); err != nil {
+		return &errors.GitError{Operation: fmt.Sprintf("remove old branch config for '%s'", oldName), Err: err}
 	}
 
 	// Update configuration
@@ -797,23 +835,25 @@ func executeConfigDeleteBase(name string) error {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
 
-	// Check if branch exists
-	branchConfig, exists := cfg.Branches[name]
+	// Resolve the branch name case-insensitively to its canonical form
+	canonicalName, exists := cfg.ResolveBranchName(name)
 	if !exists {
 		return &errors.BranchNotFoundError{BranchName: name}
 	}
+	name = canonicalName
+	branchConfig := cfg.Branches[name]
 
 	// Check if it's a base branch
 	if branchConfig.Type != string(config.BranchTypeBase) {
 		return &errors.InvalidBranchTypeError{BranchType: branchConfig.Type}
 	}
 
-	// Check if other branches depend on this branch
+	// Check if other branches depend on this branch (case-insensitively)
 	for branchName, branch := range cfg.Branches {
-		if branch.Parent == name {
+		if strings.EqualFold(branch.Parent, name) {
 			return &errors.BranchHasDependentsError{BranchName: name, Dependent: branchName}
 		}
-		if branch.StartPoint == name {
+		if strings.EqualFold(branch.StartPoint, name) {
 			return &errors.BranchHasDependentsError{BranchName: name, Dependent: branchName}
 		}
 	}
@@ -852,11 +892,13 @@ func executeConfigDeleteTopic(name string) error {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
 
-	// Check if branch exists
-	branchConfig, exists := cfg.Branches[name]
+	// Resolve the branch name case-insensitively to its canonical form
+	canonicalName, exists := cfg.ResolveBranchName(name)
 	if !exists {
 		return &errors.BranchNotFoundError{BranchName: name}
 	}
+	name = canonicalName
+	branchConfig := cfg.Branches[name]
 
 	// Check if it's a topic branch
 	if branchConfig.Type != string(config.BranchTypeTopic) {
