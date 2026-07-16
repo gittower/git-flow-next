@@ -445,6 +445,7 @@ func TestCompareBranchWithRemoteBehind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to clone: %v", err)
 	}
+	testutil.ConfigureGitIdentity(t, secondDir)
 
 	_, err = testutil.RunGit(t, secondDir, "checkout", "feature/test")
 	if err != nil {
@@ -531,6 +532,7 @@ func TestCompareBranchWithRemoteDiverged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to clone: %v", err)
 	}
+	testutil.ConfigureGitIdentity(t, secondDir)
 
 	_, err = testutil.RunGit(t, secondDir, "checkout", "feature/test")
 	if err != nil {
@@ -611,6 +613,7 @@ func TestFetchBranch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to clone: %v", err)
 	}
+	testutil.ConfigureGitIdentity(t, secondDir)
 
 	testutil.WriteFile(t, secondDir, "remote-change.txt", "remote content")
 	_, err = testutil.RunGit(t, secondDir, "add", "remote-change.txt")

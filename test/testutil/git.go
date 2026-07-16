@@ -71,6 +71,22 @@ func GitFlowPath() string {
 	return gitFlowPath
 }
 
+// ConfigureGitIdentity sets the git user identity in a repository so commits
+// work on machines without a global git configuration (e.g. CI runners).
+// SetupTestRepo does this automatically; call this for repositories created
+// by other means, such as clones.
+func ConfigureGitIdentity(t *testing.T, dir string) {
+	t.Helper()
+	_, err := RunGit(t, dir, "config", "user.name", "Test User")
+	if err != nil {
+		t.Fatalf("Failed to configure Git user name: %v", err)
+	}
+	_, err = RunGit(t, dir, "config", "user.email", "test@example.com")
+	if err != nil {
+		t.Fatalf("Failed to configure Git user email: %v", err)
+	}
+}
+
 // RunGit runs a git command in the specified directory and returns its output
 func RunGit(t *testing.T, dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
