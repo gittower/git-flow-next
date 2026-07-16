@@ -41,6 +41,7 @@ Use the following structure for commit messages:
 
 - **References**: Link to issues, pull requests, or breaking changes
 - **Format**: `Resolves #123`, `Closes #456`, `Refs #789`
+- **AI co-authorship**: Commits created with AI agent support must include a `Co-Authored-By` trailer crediting the agent (see [AI-Assisted Commits](#ai-assisted-commits))
 
 ## Commit Types
 
@@ -120,6 +121,7 @@ Adds comprehensive documentation about git-flow default branches and settings to
 - **Focus on impact**: Explain the user-facing or system-level benefits
 - **Group related changes**: Combine logically related changes in single commits
 - **Test before committing**: Ensure all tests pass and code compiles
+- **Credit AI assistance**: Add a `Co-Authored-By` trailer when an AI agent contributed to the commit
 
 ### Don'ts
 
@@ -129,9 +131,29 @@ Adds comprehensive documentation about git-flow default branches and settings to
 - **Don't include file lists**: Git tracks files automatically
 - **Don't exceed 72 characters per line**: Hard wrap the body at 72 columns
 - **Don't commit broken code**: Each commit should represent a working state
-- **Don't include AI attribution**: Avoid "Generated with Claude Code" or similar AI-generated footers
+- **Don't use free-form AI attribution**: Credit AI agents only via the structured `Co-Authored-By` trailer, not prose footers like "Generated with Claude Code"
 
 ## Special Cases
+
+### AI-Assisted Commits
+
+When an AI agent contributed to a commit, always credit it with a
+`Co-Authored-By` trailer in the footer, using the agent's name and a
+contact address identifying the tool:
+
+```
+test: Add stale merge state regression tests
+
+Adds end-to-end tests for the stale state scenarios where a conflict
+is resolved with a plain git commit instead of --continue.
+
+Refs #110
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+```
+
+The trailer is the only place AI involvement should appear — do not add
+prose attribution to the subject or body.
 
 ### Breaking Changes
 

@@ -32,7 +32,7 @@ git-flow-next is a modern Go CLI implementing the git-flow branching model. It m
 - Scope: single lowercase word (e.g., finish, config, init) — omit when the subject already makes it obvious
 - Body wrapped at 72 characters — explain "what" and "why", not "how"
 - Reference issues in footers: `Resolves #123`, `Closes #456`
-- Never include AI attribution footers (e.g., "Generated with Claude Code")
+- Credit AI agent contributions with a `Co-Authored-By` footer trailer (e.g., `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`); never use free-form attribution like "Generated with Claude Code"
 
 ## Mandatory Change Requirements
 
