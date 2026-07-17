@@ -230,6 +230,11 @@ For significant new functionality that requires upfront design and planning.
 
 The implementation phase transforms issues or concepts into working code.
 
+> **Scope:** this branch-and-worktree workflow is for product code (the Go
+> codebase). Changes to skills (`.claude/skills/**`) and documentation
+> (`*.md`, `docs/**`) are committed **directly on `main`** — no feature branch,
+> no worktree.
+
 ### Process
 
 1. **Create Feature Branch + Worktree**
