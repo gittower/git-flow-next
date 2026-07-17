@@ -102,11 +102,19 @@ After acceptance:
    `spec` plus `bug` or `enhancement`
 2. For breakdowns: create sub-issues first, then the parent with the
    Breakdown task list referencing their numbers
-3. Cross-link the originating user report, if any:
+3. Cross-link and close the originating user report, if any:
    - The spec body already carries `Refs #<n>`
-   - Comment on the user report linking the spec ("planned in #<spec>"),
-     via `mcp__github__add_issue_comment`
-   - The user report stays open until the spec ships
+   - Comment on the user report via `mcp__github__add_issue_comment`,
+     addressing the reporter: the work is now tracked in the spec issue
+     (link it) and this report is being closed in its favor so there is a
+     single source of truth
+   - Close the originating report
+     (`gh issue close <n> --reason "not planned"`) — it is superseded by
+     the spec issue, which is where the fix will land. If a maintainer wants
+     a specific report kept open, they can say so at the acceptance gate.
+   - When the spec later ships, the fix's own `Refs`/`Resolves` trailers and
+     a closing note on the spec issue record completion; the original report
+     is already consolidated.
 
 ### 7. Report
 
