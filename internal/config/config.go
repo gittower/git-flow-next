@@ -233,9 +233,12 @@ func LoadConfig() (*Config, error) {
 	// case-insensitively for identity but their original case is preserved
 	// as canonical (mirrors core.ignorecase semantics). The first-seen
 	// casing of a branch name wins as the canonical key; later properties of
-	// the same branch fold into that entry. Property names (the last segment)
-	// are legitimately case-insensitive in git config and are lowercased so
-	// the BranchConfig field lookups below match regardless of stored case.
+	// the same branch fold into that entry. The name itself may contain dots
+	// (e.g. gitflow.branch.custom.main.type), so it is reconstructed from all
+	// segments between "gitflow.branch." and the final one. Property names
+	// (the last segment) are legitimately case-insensitive in git config and
+	// are lowercased so the BranchConfig field lookups below match regardless
+	// of stored case.
 	branchMap := make(map[string]map[string]string)
 	// canonicalNames maps a lowercased fold key to the canonical (first-seen)
 	// branch name used as the branchMap key.
@@ -257,6 +260,13 @@ func LoadConfig() (*Config, error) {
 			value := parts[1]
 
 			// Parse key: gitflow.branch.<branchname>.<property>
+			//
+			// The branch name is a git config subsection and may contain
+			// dots (e.g. gitflow.branch.custom.main.type), so it can span
+			// several dot-separated segments. Git keeps the section
+			// (gitflow) and the variable name (the final segment) dot-free,
+			// so the property is always the last segment and the branch name
+			// is everything between "gitflow.branch." and it.
 			keyParts := strings.Split(key, ".")
 			if len(keyParts) < 4 {
 				continue
@@ -265,14 +275,14 @@ func LoadConfig() (*Config, error) {
 			// Preserve the original branch-name case as canonical, folding
 			// case-insensitively so all properties of the same branch land in
 			// one entry keyed by the first-seen case.
-			rawBranchName := keyParts[2]
+			rawBranchName := strings.Join(keyParts[2:len(keyParts)-1], ".")
 			foldKey := strings.ToLower(rawBranchName)
 			branchName, ok := canonicalNames[foldKey]
 			if !ok {
 				branchName = rawBranchName
 				canonicalNames[foldKey] = branchName
 			}
-			property := strings.ToLower(keyParts[3])
+			property := strings.ToLower(keyParts[len(keyParts)-1])
 
 			// Initialize branch map if needed
 			if _, ok := branchMap[branchName]; !ok {

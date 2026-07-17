@@ -136,10 +136,12 @@ Adding or renaming to a name that differs only in case from a *different* existi
 
 Property names (the last segment, e.g., **upstreamStrategy**) are case-insensitive in Git config and are always read regardless of the case they were stored in.
 
+Branch names may contain dots (`.`) in the subsection (e.g., `custom.main`, `V10.5`). Git keeps the section and the variable name (the last segment) dot-free, so git-flow reads the property from the final segment and reconstructs the branch name from every segment before it — the full dotted name round-trips correctly.
+
 **Limitations**:
 
 - Two branch types whose names differ only in case cannot coexist as distinct entities — they are treated as one branch identity.
-- Branch names containing dots (`.`) in the subsection (e.g., `V10.5`) are not supported, because Git splits the subsection on the dot.
+- Names that Git itself rejects as refs are still invalid (see [VALIDATION RULES](#validation-rules)) — a leading dot, consecutive dots (`..`), or a trailing `.lock`.
 
 ### Structural Properties
 
