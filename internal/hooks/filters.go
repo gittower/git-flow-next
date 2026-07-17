@@ -9,11 +9,16 @@ import (
 	"strings"
 )
 
+// isWindows controls how hook/filter scripts are located and executed. It is a
+// package var (rather than an inline runtime.GOOS check) so tests can exercise
+// both platform branches on any host.
+var isWindows = runtime.GOOS == "windows"
+
 // scriptCommand creates an exec.Cmd for running a hook/filter script.
 // On Windows, scripts are executed via "sh" (shipped with Git for Windows),
 // since exec.Command cannot run shell scripts directly on Windows.
 func scriptCommand(path string, args ...string) *exec.Cmd {
-	if runtime.GOOS == "windows" {
+	if isWindows {
 		return exec.Command("sh", append([]string{path}, args...)...)
 	}
 	return exec.Command(path, args...)
@@ -95,7 +100,7 @@ func isExecutable(path string) bool {
 // isExecutableFileInfo checks if a file is executable given its FileInfo.
 // On Windows, any non-directory file is considered executable.
 func isExecutableFileInfo(info os.FileInfo) bool {
-	if runtime.GOOS == "windows" {
+	if isWindows {
 		return !info.IsDir()
 	}
 	return info.Mode()&0111 != 0
