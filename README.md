@@ -49,11 +49,20 @@ brew install gittower/tap/git-flow-next
 winget install GitTower.GitFlowNext
 ```
 
-### Manual Installation
+### Manual Installation (macOS and Linux)
 
 1. Download the latest release from the [releases page](https://github.com/gittower/git-flow-next/releases)
 2. Extract the binary to a location in your PATH
 3. Make it executable: `chmod +x /path/to/git-flow`
+
+### Manual Installation (Windows)
+
+1. Download the latest release from the [releases page](https://github.com/gittower/git-flow-next/releases)
+2. Extract the binary to a location in your PATH
+3. Rename the binary to `git-flow.exe`
+4. Verify the installation by running `git flow version`
+
+The binary must be named exactly `git-flow.exe` for Git to detect it as the `git flow` subcommand. If `git flow version` reports that `flow` is not a git command, check that Windows has not appended a hidden extension (for example `git-flow.exe.exe` when file extensions are hidden).
 
 ## Quick Start
 
