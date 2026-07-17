@@ -8,11 +8,17 @@ This file lists the contributors to git-flow-next.
 
 ## Contributors
 
-<!-- Add contributors in alphabetical order -->
 <!--
-### A
-- [Name](https://github.com/username) - *What they worked on*
+This list is regenerated from git history at release time — see
+"How to Get Listed" below. Ordered alphabetically by name.
 -->
+
+- [Andrea Scarpino](https://github.com/ilpianista)
+- [Bruno Brito](https://github.com/brunofbrito)
+- [Daniel Evers](https://github.com/dermojo)
+- [Filip Persson](https://github.com/FilleTP)
+- [Jannatin Naim](https://github.com/JannatinNaim)
+- [Ron Wolf](https://github.com/ron-wolf)
 
 ## Original git-flow Authors
 
@@ -23,17 +29,18 @@ We would like to acknowledge the original authors of git-flow, whose work this p
 
 ## How to Get Listed
 
-Contributors who have submitted merged pull requests will be listed here. To get listed:
+**You don't need to do anything.** Everyone with a merged pull request is
+added here automatically — the Contributors section is regenerated from git
+history as part of each release, so your commit authorship is your entry. No
+size threshold: a one-line typo fix counts the same as a feature.
 
-1. Submit a pull request
-2. After it's merged, either:
-   - Submit another PR adding yourself to this file, or
-   - Ask a maintainer to add you
+If your name or GitHub link is wrong or missing after a release, it's usually
+because your commits use an email that isn't linked to your GitHub account.
+Open an issue or PR to correct it, or link that email in your GitHub settings.
 
-Please include:
-- Your name or username
-- A link to your GitHub profile
-- A brief description of your contribution
+Bug reporters, reviewers, and discussion participants who didn't author a
+merged commit aren't listed individually — you're covered by the standing
+thanks in [Special Thanks](#special-thanks) below.
 
 ## Contribution Types
 

@@ -47,6 +47,44 @@ If HEAD is already an untagged `chore: Bump version` commit, prep was done
 in a prior run — verify its version and changelog are still correct and
 reuse it.
 
+### 2a. Sync Contributors
+
+Regenerate the `## Contributors` section of `CONTRIBUTORS.md` from git
+history so anyone whose PR merged since the last release is listed. Anyone
+with a merged commit qualifies — there is no change-size threshold.
+
+1. Collect every distinct author from commit history:
+
+   ```bash
+   git shortlog -sne HEAD | sed -E 's/^ *[0-9]+\t//'
+   ```
+
+2. Exclude:
+   - Anyone already in `## Project Maintainers` (e.g. Alexander Rinass).
+   - AI/bot co-authors — the `Co-authored-by: Claude ...
+     <noreply@anthropic.com>` trailers are attribution, not contributors,
+     and never go in this list.
+3. Collapse duplicate identities (same person, multiple emails) into one
+   entry, and resolve each to a GitHub profile link. A
+   `<id+handle@users.noreply.github.com>` email encodes the handle directly;
+   otherwise resolve via the commit author on GitHub:
+
+   ```bash
+   gh api "repos/gittower/git-flow-next/commits/<sha>/pulls" \
+     --jq '.[].user.login'
+   ```
+
+   If a handle can't be resolved, list the plain name without a link rather
+   than guessing.
+4. Write the entries alphabetically by name as `- [Name](profile-url)`,
+   preserving the explanatory comment at the top of the section. Do not add
+   per-contributor descriptions — authorship is the record.
+
+Only touch the `## Contributors` section; leave Maintainers, Original
+git-flow Authors, and the rest untouched. If nothing changed, leave the file
+as-is. This edit is part of the release prep commit from step 2 (amend it in
+if the bump commit is already made).
+
 ### 3. Verify Changelog/Tag Coupling
 
 The release workflow extracts the GitHub release notes from CHANGELOG.md by
