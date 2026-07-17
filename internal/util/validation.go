@@ -6,14 +6,12 @@ import (
 	"strings"
 )
 
-// IsValidBranchName reports whether name is a valid Git branch name.
+// IsValidBranchName reports whether name is a valid git-flow branch name.
 //
-// It delegates to `git check-ref-format` so the accepted names match Git's own
-// reference-name rules exactly. In particular, dots are allowed inside a name
-// (e.g. "custom.main", "V10.5"), while the cases Git rejects are still refused:
-// a path component beginning with ".", a double dot "..", a trailing ".lock", a
-// trailing "/", whitespace, control characters, and the special characters
-// ~ ^ : ? * [ \.
+// Validation delegates to `git check-ref-format`, so accepted names follow
+// Git's own reference-name rules — notably, dots are allowed inside a name
+// (e.g. "custom.main", "V10.5"). git-flow adds one restriction beyond Git: a
+// name may not begin with "-" (see below).
 func IsValidBranchName(name string) bool {
 	if name == "" {
 		return false

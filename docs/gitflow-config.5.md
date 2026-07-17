@@ -577,6 +577,9 @@ own reference-name rules:
 - Cannot begin a path component with a dot, or contain consecutive dots (`..`)
 - Cannot end with `/` or `.lock`
 - Cannot contain spaces, control characters, or any of `~ ^ : ? * [ \`
+- Cannot begin with `-` — a git-flow restriction beyond Git's own rules, since
+  branch names are passed as bare operands to commands like `git checkout -b` /
+  `git branch -m`, where a leading dash would be misparsed as an option
 
 ### Branch Relationships  
 - Parent branches must exist before creating children
