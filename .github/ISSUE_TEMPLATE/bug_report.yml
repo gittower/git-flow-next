@@ -1,0 +1,62 @@
+name: Bug Report
+description: Report unexpected behavior
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A brief description of what's broken and when it happens.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What happens instead.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: git-flow-next version
+      placeholder: "e.g. 1.2.0 (run: git flow version)"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "e.g. macOS 15.5, Ubuntu 24.04, Windows 11"
+    validations:
+      required: true
+
+  - type: input
+    id: git-version
+    attributes:
+      label: Git version
+      placeholder: "e.g. 2.45.0 (run: git --version)"
+    validations:
+      required: false
