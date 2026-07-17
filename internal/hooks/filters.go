@@ -5,8 +5,24 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
+
+// isWindows controls how hook/filter scripts are located and executed. It is a
+// package var (rather than an inline runtime.GOOS check) so tests can exercise
+// both platform branches on any host.
+var isWindows = runtime.GOOS == "windows"
+
+// scriptCommand creates an exec.Cmd for running a hook/filter script.
+// On Windows, scripts are executed via "sh" (shipped with Git for Windows),
+// since exec.Command cannot run shell scripts directly on Windows.
+func scriptCommand(path string, args ...string) *exec.Cmd {
+	if isWindows {
+		return exec.Command("sh", append([]string{path}, args...)...)
+	}
+	return exec.Command(path, args...)
+}
 
 // RunVersionFilter executes a version filter for the given branch type and returns the modified version.
 // The filter script name is: filter-flow-{branchType}-start-version
@@ -71,13 +87,22 @@ func RunTagMessageFilter(gitDir string, branchType string, ctx FilterContext) (s
 }
 
 // isExecutable checks if a file exists and is executable.
+// On Windows, NTFS doesn't store Unix permission bits, so any existing
+// non-directory file is considered executable (matching Git for Windows behavior).
 func isExecutable(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {
 		return false
 	}
+	return isExecutableFileInfo(info)
+}
 
-	// Check if file is executable (any execute bit set)
+// isExecutableFileInfo checks if a file is executable given its FileInfo.
+// On Windows, any non-directory file is considered executable.
+func isExecutableFileInfo(info os.FileInfo) bool {
+	if isWindows {
+		return !info.IsDir()
+	}
 	return info.Mode()&0111 != 0
 }
 
@@ -101,7 +126,7 @@ func buildFilterEnv(ctx FilterContext) []string {
 
 // runFilter executes a filter script with input as argument.
 func runFilter(scriptPath string, input string, env []string, repoRoot string) (string, error) {
-	cmd := exec.Command(scriptPath, input)
+	cmd := scriptCommand(scriptPath, input)
 
 	if env != nil {
 		cmd.Env = env
@@ -123,7 +148,7 @@ func runFilter(scriptPath string, input string, env []string, repoRoot string) (
 
 // runFilterWithArgs executes a filter script with arguments.
 func runFilterWithArgs(scriptPath string, args []string, env []string, repoRoot string) (string, error) {
-	cmd := exec.Command(scriptPath, args...)
+	cmd := scriptCommand(scriptPath, args...)
 
 	if env != nil {
 		cmd.Env = env

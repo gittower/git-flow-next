@@ -294,8 +294,10 @@ fi
 ## CREATING HOOK SCRIPTS
 
 1. Create the script in the hooks directory (default: `.git/hooks/`) with the appropriate name
-2. Make the script executable: `chmod +x <hooks-dir>/<script-name>`
+2. Make the script executable: `chmod +x <hooks-dir>/<script-name>` (Unix/macOS only — not needed on Windows)
 3. Test the script manually before relying on it
+
+**Windows note:** On Windows, NTFS does not track Unix permission bits, so no `chmod` step is needed. Hook scripts are executed via `sh` (shipped with Git for Windows), so shell scripts with a shebang work the same as on Unix/macOS.
 
 ### Tips
 

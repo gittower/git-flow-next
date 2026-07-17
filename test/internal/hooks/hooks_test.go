@@ -3,6 +3,7 @@ package hooks_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -118,6 +119,9 @@ func TestPreHookNonExistent(t *testing.T) {
 
 // TestPreHookNonExecutable tests that non-executable pre-hook is skipped.
 func TestPreHookNonExecutable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not distinguish executable permissions via file mode bits")
+	}
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
