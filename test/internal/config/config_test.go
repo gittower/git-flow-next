@@ -461,3 +461,82 @@ func TestGitFlowAVHRemoteImport(t *testing.T) {
 	// Verify git-flow-avh remote is imported
 	assert.Equal(t, "avh-remote", cfg.Remote, "git-flow-avh remote should be imported")
 }
+
+// TestLoadConfigPreservesBranchNameCase verifies LoadConfig keeps the original
+// branch-name case as the canonical key and resolves lookups case-insensitively.
+// Steps:
+//  1. Sets up a test repository
+//  2. Writes gitflow.branch.V9_Release.* config with a mixed-case subsection name
+//  3. Calls config.LoadConfig()
+//  4. Verifies the loaded config keys the branch by its exact case (V9_Release),
+//     not a lowercased variant (v9_release)
+//  5. Verifies ResolveBranchName resolves a lowercase lookup to the canonical key
+//  6. Verifies property-name lowercasing still parses (Type/UpstreamStrategy)
+func TestLoadConfigPreservesBranchNameCase(t *testing.T) {
+	// Setup
+	dir := setupTestRepo(t)
+	defer cleanupTestRepo(t, dir)
+
+	// Write a mixed-case branch subsection plus a mixed-case property name
+	configs := []struct {
+		key   string
+		value string
+	}{
+		{"gitflow.branch.V9_Release.type", "base"},
+		{"gitflow.branch.V9_Release.upstreamStrategy", "merge"},
+	}
+	for _, c := range configs {
+		cmd := exec.Command("git", "config", c.key, c.value)
+		cmd.Dir = dir
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("Failed to set git config %s: %v", c.key, err)
+		}
+	}
+
+	// Set version to mark as initialized
+	cmd := exec.Command("git", "config", "gitflow.version", "1.0")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to set gitflow version: %v", err)
+	}
+
+	// Load config
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	// The canonical key must be the exact original case, not lowercased
+	if _, exists := cfg.Branches["V9_Release"]; !exists {
+		t.Errorf("Expected canonical branch key 'V9_Release' to be preserved; branches: %v", keysOf(cfg.Branches))
+	}
+	if _, exists := cfg.Branches["v9_release"]; exists {
+		t.Errorf("Did not expect a lowercased branch key 'v9_release'; branches: %v", keysOf(cfg.Branches))
+	}
+
+	// A case-insensitive lookup for a lowercase variant must resolve to the canonical key
+	canonical, found := cfg.ResolveBranchName("v9_release")
+	if !found {
+		t.Fatalf("Expected ResolveBranchName(\"v9_release\") to resolve, got not found")
+	}
+	if canonical != "V9_Release" {
+		t.Errorf("Expected resolved canonical name 'V9_Release', got '%s'", canonical)
+	}
+
+	// Property-name lowercasing must still parse the values
+	branch := cfg.Branches[canonical]
+	if branch.Type != "base" {
+		t.Errorf("Expected Type 'base', got '%s'", branch.Type)
+	}
+	if branch.UpstreamStrategy != "merge" {
+		t.Errorf("Expected UpstreamStrategy 'merge', got '%s'", branch.UpstreamStrategy)
+	}
+}
+
+func keysOf(m map[string]config.BranchConfig) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}

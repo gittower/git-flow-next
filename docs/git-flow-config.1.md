@@ -16,6 +16,8 @@ Manage git-flow configuration for base branches and topic branch types. The **co
 
 **Topic branches** are short-living branches like feature, release, hotfix that represent units of work.
 
+Branch names are matched **case-insensitively**. The case used when a branch is first added is preserved as canonical, and any *name*, *parent*, *old-name*, or **--starting-point** argument may be given in any case to refer to it. See **gitflow-config**(5) for details and limitations.
+
 ## COMMANDS
 
 ### Listing Configuration

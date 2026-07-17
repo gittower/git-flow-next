@@ -2,6 +2,7 @@ package cmd_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/gittower/git-flow-next/internal/config"
@@ -619,4 +620,815 @@ func captureConfigDeleteTopic(t *testing.T, dir string, name string) error {
 	// Run the command
 	_, err := testutil.RunGitFlow(t, dir, args...)
 	return err
+}
+
+// gitflowBranchConfig returns the output of
+// `git config --get-regexp '^gitflow\.branch\.'` for the test repo. On no
+// matches git exits non-zero and returns an empty string; the tests treat an
+// empty result as "no branch config lines" rather than a fatal error.
+func gitflowBranchConfig(t *testing.T, dir string) string {
+	output, _ := testutil.RunGit(t, dir, "config", "--get-regexp", "^gitflow\\.branch\\.")
+	return output
+}
+
+// refExists reports whether refs/heads/<branch> resolves in the test repo.
+func refExists(t *testing.T, dir string, branch string) bool {
+	_, err := testutil.RunGit(t, dir, "rev-parse", "--verify", "refs/heads/"+branch)
+	return err == nil
+}
+
+// assertContainsLine fails if none of the lines in output contains substr.
+func assertContainsLine(t *testing.T, output, substr, context string) {
+	t.Helper()
+	if !strings.Contains(output, substr) {
+		t.Errorf("%s: expected config to contain %q, got:\n%s", context, substr, output)
+	}
+}
+
+// assertNoLineContains fails if any line in output contains substr.
+func assertNoLineContains(t *testing.T, output, substr, context string) {
+	t.Helper()
+	if strings.Contains(output, substr) {
+		t.Errorf("%s: expected config to NOT contain %q, got:\n%s", context, substr, output)
+	}
+}
+
+// TestConfigAddBaseUppercaseName tests adding a base branch with an uppercase name.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Runs 'config add base V9_Release'
+// 3. Verifies gitflow.branch.V9_Release.type base is written (exact case)
+// 4. Verifies no lowercase gitflow.branch.v9_release.* variant section exists
+// 5. Verifies refs/heads/V9_Release was created
+func TestConfigAddBaseUppercaseName(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.V9_Release.type base", "add base uppercase")
+	assertNoLineContains(t, cfg, "gitflow.branch.v9_release.", "add base uppercase")
+	if !refExists(t, tempDir, "V9_Release") {
+		t.Errorf("Expected refs/heads/V9_Release to exist")
+	}
+}
+
+// TestConfigAddBaseExactCaseParent tests adding a base branch referencing an
+// existing uppercase parent by its exact case (the core #122 regression).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base branch V9_Release
+// 3. Runs 'config add base V10_Release V9_Release'
+// 4. Verifies success (no "does not exist" error) and the stored parent is V9_Release
+// 5. Verifies refs/heads/V10_Release was created
+func TestConfigAddBaseExactCaseParent(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V10_Release", "V9_Release")
+	if err != nil {
+		t.Fatalf("Expected exact-case parent reference to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.V10_Release.parent V9_Release", "exact-case parent")
+	if !refExists(t, tempDir, "V10_Release") {
+		t.Errorf("Expected refs/heads/V10_Release to exist")
+	}
+}
+
+// TestConfigAddBaseDifferentCaseParentUsesCanonicalRef tests that a different-case
+// parent reference resolves to the canonical name and the git op uses the
+// canonical ref (guards case-sensitive filesystems / Linux CI).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base branch V9_Release
+// 3. Runs 'config add base V11_Release v9_release' (lowercase parent)
+// 4. Verifies stored parent is canonical V9_Release, no v9_release section
+// 5. Verifies refs/heads/V11_Release was created (from the canonical ref)
+func TestConfigAddBaseDifferentCaseParentUsesCanonicalRef(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V11_Release", "v9_release")
+	if err != nil {
+		t.Fatalf("Expected different-case parent reference to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.V11_Release.parent V9_Release", "different-case parent")
+	assertNoLineContains(t, cfg, "gitflow.branch.v9_release.", "different-case parent")
+	if !refExists(t, tempDir, "V11_Release") {
+		t.Errorf("Expected refs/heads/V11_Release to exist (created from canonical ref)")
+	}
+}
+
+// TestConfigAddBaseMixedCaseParentResolves tests arbitrary mixed casing on a
+// parent reference resolves to the canonical name.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base branch V9_Release
+// 3. Runs 'config add base V12_Release v9_RELEASE'
+// 4. Verifies stored parent is canonical V9_Release, no case-variant section
+func TestConfigAddBaseMixedCaseParentResolves(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V12_Release", "v9_RELEASE")
+	if err != nil {
+		t.Fatalf("Expected mixed-case parent reference to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.V12_Release.parent V9_Release", "mixed-case parent")
+	assertNoLineContains(t, cfg, "gitflow.branch.v9_release.", "mixed-case parent")
+	assertNoLineContains(t, cfg, "gitflow.branch.v9_RELEASE.", "mixed-case parent")
+}
+
+// TestConfigAddTopicStartingPointResolvesCaseInsensitively tests that a topic
+// --starting-point resolves case-insensitively to the canonical name.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base branch V9_Release
+// 3. Runs 'config add topic candidate develop --starting-point v9_release'
+// 4. Verifies the stored start point is canonical V9_Release, no v9_release section
+func TestConfigAddTopicStartingPointResolvesCaseInsensitively(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "topic", "candidate", "develop", "--starting-point", "v9_release")
+	if err != nil {
+		t.Fatalf("Expected topic add with case-insensitive starting point to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.candidate.startpoint V9_Release", "topic starting point")
+	assertNoLineContains(t, cfg, "gitflow.branch.v9_release.", "topic starting point")
+}
+
+// TestConfigAddTopicParentResolvesCaseInsensitively tests that a topic parent
+// resolves case-insensitively and the defaulted start point also reads canonical.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base branch V9_Release
+// 3. Runs 'config add topic hotpatch v9_release --prefix hp/'
+// 4. Verifies parent is canonical V9_Release
+// 5. Verifies defaulted start point (== parent) is also canonical V9_Release
+// 6. Verifies no v9_release case-variant section exists
+func TestConfigAddTopicParentResolvesCaseInsensitively(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "topic", "hotpatch", "v9_release", "--prefix", "hp/")
+	if err != nil {
+		t.Fatalf("Expected topic add with case-insensitive parent to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.hotpatch.parent V9_Release", "topic parent")
+	assertContainsLine(t, cfg, "gitflow.branch.hotpatch.startpoint V9_Release", "topic defaulted start point")
+	assertNoLineContains(t, cfg, "gitflow.branch.v9_release.", "topic parent")
+}
+
+// TestConfigAddTopicCaseOnlyReAddRejected tests that re-adding a topic whose name
+// differs only in case from an existing one is rejected.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds topic QA_Feature (prefix qa/)
+// 3. Runs 'config add topic qa_feature develop --prefix qa2/'
+// 4. Verifies the command fails with an "already exists" error naming QA_Feature
+// 5. Verifies no qa_feature section written and original QA_Feature prefix unchanged
+func TestConfigAddTopicCaseOnlyReAddRejected(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "topic", "QA_Feature", "develop", "--prefix", "qa/"); err != nil {
+		t.Fatalf("Failed to add topic QA_Feature: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "topic", "qa_feature", "develop", "--prefix", "qa2/")
+	if err == nil {
+		t.Fatalf("Expected case-only re-add to fail, got success\nOutput: %s", output)
+	}
+	if !strings.Contains(output, "QA_Feature") {
+		t.Errorf("Expected error to name existing canonical 'QA_Feature', got:\n%s", output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertNoLineContains(t, cfg, "gitflow.branch.qa_feature.", "case-only re-add rejected")
+	assertContainsLine(t, cfg, "gitflow.branch.QA_Feature.prefix qa/", "case-only re-add rejected (original unchanged)")
+}
+
+// TestConfigAddBaseCaseOnlyVariantRejected tests that adding a case-only variant
+// of an existing base name is rejected without mutating the existing entry.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base branch V9_Release
+// 3. Runs 'config add base v9_release main'
+// 4. Verifies the command fails with an "already exists" error naming V9_Release
+// 5. Verifies no v9_release section and V9_Release still type base with no main parent
+func TestConfigAddBaseCaseOnlyVariantRejected(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "v9_release", "main")
+	if err == nil {
+		t.Fatalf("Expected case-only variant add to fail, got success\nOutput: %s", output)
+	}
+	if !strings.Contains(output, "V9_Release") {
+		t.Errorf("Expected error to name existing canonical 'V9_Release', got:\n%s", output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertNoLineContains(t, cfg, "gitflow.branch.v9_release.", "case-only variant rejected")
+	assertContainsLine(t, cfg, "gitflow.branch.V9_Release.type base", "case-only variant rejected (existing intact)")
+	assertNoLineContains(t, cfg, "gitflow.branch.V9_Release.parent main", "case-only variant rejected (no partial mutation)")
+}
+
+// TestConfigEditBaseResolvesCaseInsensitively tests that editing a base branch
+// resolves the name case-insensitively to the canonical section.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base branch V9_Release
+// 3. Runs 'config edit base v9_release --upstream-strategy rebase'
+// 4. Verifies gitflow.branch.V9_Release.upstreamStrategy reads rebase
+// 5. Verifies no v9_release duplicate section
+func TestConfigEditBaseResolvesCaseInsensitively(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "edit", "base", "v9_release", "--upstream-strategy", "rebase")
+	if err != nil {
+		t.Fatalf("Expected case-insensitive edit to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.V9_Release.upstreamstrategy rebase", "edit base case-insensitive")
+	assertNoLineContains(t, cfg, "gitflow.branch.v9_release.", "edit base case-insensitive")
+}
+
+// TestConfigEditTopicResolvesCaseInsensitively tests that editing a topic type
+// resolves the name case-insensitively.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds topic QA_Feature (prefix qa/)
+// 3. Runs 'config edit topic qa_feature --upstream-strategy rebase'
+// 4. Verifies gitflow.branch.QA_Feature.upstreamStrategy reads rebase
+// 5. Verifies no qa_feature case-variant section
+func TestConfigEditTopicResolvesCaseInsensitively(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "topic", "QA_Feature", "develop", "--prefix", "qa/"); err != nil {
+		t.Fatalf("Failed to add topic QA_Feature: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "edit", "topic", "qa_feature", "--upstream-strategy", "rebase")
+	if err != nil {
+		t.Fatalf("Expected case-insensitive topic edit to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.QA_Feature.upstreamstrategy rebase", "edit topic case-insensitive")
+	assertNoLineContains(t, cfg, "gitflow.branch.qa_feature.", "edit topic case-insensitive")
+}
+
+// TestConfigDeleteBaseResolvesCaseInsensitively tests deleting a base branch by a
+// case-variant name removes the canonical section.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base branch V9_Release
+// 3. Runs 'config delete base v9_release'
+// 4. Verifies the V9_Release section is fully removed (no V9_Release or v9_release lines)
+func TestConfigDeleteBaseResolvesCaseInsensitively(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "delete", "base", "v9_release")
+	if err != nil {
+		t.Fatalf("Expected case-insensitive delete to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertNoLineContains(t, cfg, "gitflow.branch.V9_Release.", "delete base case-insensitive")
+	assertNoLineContains(t, cfg, "gitflow.branch.v9_release.", "delete base case-insensitive")
+}
+
+// TestConfigRenameBaseResolvesAndUpdatesChildren tests renaming a base branch by a
+// case-variant name resolves to canonical, updates children, and renames the ref.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base V9_Release and base V10_Release with parent V9_Release
+// 3. Runs 'config rename base v9_release V9_Stable'
+// 4. Verifies V9_Release section removed, V9_Stable section present
+// 5. Verifies V10_Release.parent now reads V9_Stable
+// 6. Verifies refs/heads/V9_Stable exists and refs/heads/V9_Release does not
+func TestConfigRenameBaseResolvesAndUpdatesChildren(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V10_Release", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V10_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "rename", "base", "v9_release", "V9_Stable")
+	if err != nil {
+		t.Fatalf("Expected case-insensitive rename to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertNoLineContains(t, cfg, "gitflow.branch.V9_Release.", "rename base resolves")
+	assertContainsLine(t, cfg, "gitflow.branch.V9_Stable.type base", "rename base resolves")
+	assertContainsLine(t, cfg, "gitflow.branch.V10_Release.parent V9_Stable", "rename base updates children")
+	if !refExists(t, tempDir, "V9_Stable") {
+		t.Errorf("Expected refs/heads/V9_Stable to exist after rename")
+	}
+	if refExists(t, tempDir, "V9_Release") {
+		t.Errorf("Expected refs/heads/V9_Release to be gone after rename")
+	}
+}
+
+// TestConfigRenameBaseCaseCollisionRejected tests renaming a base to a case-variant
+// of a *different* existing branch is rejected without touching config or refs.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base V9_Release and base Preprod
+// 3. Runs 'config rename base Preprod v9_release'
+// 4. Verifies the command fails with an "already exists" error naming V9_Release
+// 5. Verifies both original sections and both refs are unchanged, no v9_release section
+func TestConfigRenameBaseCaseCollisionRejected(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "Preprod"); err != nil {
+		t.Fatalf("Failed to add base branch Preprod: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "rename", "base", "Preprod", "v9_release")
+	if err == nil {
+		t.Fatalf("Expected case-collision rename to fail, got success\nOutput: %s", output)
+	}
+	if !strings.Contains(output, "V9_Release") {
+		t.Errorf("Expected error to name existing canonical 'V9_Release', got:\n%s", output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.V9_Release.type base", "rename collision rejected (V9 intact)")
+	assertContainsLine(t, cfg, "gitflow.branch.Preprod.type base", "rename collision rejected (Preprod intact)")
+	assertNoLineContains(t, cfg, "gitflow.branch.v9_release.", "rename collision rejected (no variant)")
+	if !refExists(t, tempDir, "V9_Release") {
+		t.Errorf("Expected refs/heads/V9_Release to still exist")
+	}
+	if !refExists(t, tempDir, "Preprod") {
+		t.Errorf("Expected refs/heads/Preprod to still exist")
+	}
+}
+
+// TestConfigRenameBaseCaseOnlySelfRename tests a case-only self-rename
+// re-canonicalizes the entry in place.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base V9_Release
+// 3. Runs 'config rename base V9_Release v9_release'
+// 4. Verifies exactly one section, now v9_release, and no V9_Release section
+func TestConfigRenameBaseCaseOnlySelfRename(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "rename", "base", "V9_Release", "v9_release")
+	if err != nil {
+		t.Fatalf("Expected case-only self-rename to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.v9_release.type base", "case-only self-rename")
+	assertNoLineContains(t, cfg, "gitflow.branch.V9_Release.", "case-only self-rename")
+
+	// The Git ref must be re-cased too (the RenameBranchForce -M path). On a
+	// case-sensitive filesystem the old-case ref must be gone and the new-case
+	// ref present; this is the behavior the force fallback exists to provide.
+	if !refExists(t, tempDir, "v9_release") {
+		t.Errorf("Expected refs/heads/v9_release to exist after case-only self-rename")
+	}
+}
+
+// TestConfigAddBaseAbsentParentErrors tests a genuinely-absent reference still errors
+// without mutating the unrelated existing entry.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base V9_Release
+// 3. Runs 'config add base X NoSuchBranch'
+// 4. Verifies the command fails with a "does not exist" error for NoSuchBranch
+// 5. Verifies no X section and existing V9_Release section intact
+func TestConfigAddBaseAbsentParentErrors(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "X", "NoSuchBranch")
+	if err == nil {
+		t.Fatalf("Expected absent-parent add to fail, got success\nOutput: %s", output)
+	}
+	if !strings.Contains(output, "NoSuchBranch") {
+		t.Errorf("Expected error to name missing 'NoSuchBranch', got:\n%s", output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertNoLineContains(t, cfg, "gitflow.branch.X.", "absent parent errors (no X section)")
+	assertContainsLine(t, cfg, "gitflow.branch.V9_Release.type base", "absent parent errors (V9 intact)")
+}
+
+// TestConfigNoDuplicateFromReloadRoundTrip tests that a load+save round trip does
+// not produce the #117 duplicate lowercase section.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base V9_Release
+// 3. Runs 'config add base V10_Release v9_release' (triggers load+save)
+// 4. Verifies success and V10_Release created with canonical parent V9_Release
+// 5. Verifies exactly one V9 section and no duplicate v9_release section
+func TestConfigNoDuplicateFromReloadRoundTrip(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V10_Release", "v9_release")
+	if err != nil {
+		t.Fatalf("Expected reload round-trip add to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.V10_Release.parent V9_Release", "reload round-trip")
+	if !refExists(t, tempDir, "V10_Release") {
+		t.Errorf("Expected refs/heads/V10_Release to exist")
+	}
+	assertContainsLine(t, cfg, "gitflow.branch.V9_Release.type base", "reload round-trip (V9 present)")
+	assertNoLineContains(t, cfg, "gitflow.branch.v9_release.", "reload round-trip (#117 no duplicate)")
+}
+
+// TestConfigListShowsCanonicalCase tests that list shows canonical case and
+// renders relationships in canonical case.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base V9_Release and base V10_Release with parent V9_Release
+// 3. Runs 'config list'
+// 4. Verifies output lists both names in original case
+// 5. Verifies V10's relationship renders as 'V10_Release → V9_Release'
+func TestConfigListShowsCanonicalCase(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V10_Release", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V10_Release: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "list")
+	if err != nil {
+		t.Fatalf("Expected config list to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(output, "V9_Release") {
+		t.Errorf("Expected list output to contain 'V9_Release', got:\n%s", output)
+	}
+	if !strings.Contains(output, "V10_Release → V9_Release") {
+		t.Errorf("Expected list output to render 'V10_Release → V9_Release', got:\n%s", output)
+	}
+}
+
+// TestConfigLowercaseNamesNoRegression tests that all-lowercase names still work
+// end-to-end (add, edit, delete).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Runs 'config add base staging main'
+// 3. Runs 'config edit base staging --upstream-strategy rebase'
+// 4. Runs 'config delete base staging'
+// 5. Verifies each step succeeds; edit sets rebase; delete removes the section
+func TestConfigLowercaseNamesNoRegression(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "staging", "main"); err != nil {
+		t.Fatalf("Expected add base staging to succeed, got error: %v", err)
+	}
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "edit", "base", "staging", "--upstream-strategy", "rebase"); err != nil {
+		t.Fatalf("Expected edit base staging to succeed, got error: %v", err)
+	}
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.staging.upstreamstrategy rebase", "lowercase no regression (edit)")
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "delete", "base", "staging"); err != nil {
+		t.Fatalf("Expected delete base staging to succeed, got error: %v", err)
+	}
+	cfg = gitflowBranchConfig(t, tempDir)
+	assertNoLineContains(t, cfg, "gitflow.branch.staging.", "lowercase no regression (delete)")
+}
+
+// TestConfigInitDefaultsUnaffected tests that default init is unaffected by the
+// case-insensitive changes.
+// Steps:
+// 1. Sets up a test repository
+// 2. Runs 'git flow init --defaults'
+// 3. Verifies standard main/develop/feature/release/hotfix config is produced
+// 4. Verifies no lowercase-variant duplicate sections appear
+func TestConfigInitDefaultsUnaffected(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.main.type base", "init defaults (main)")
+	assertContainsLine(t, cfg, "gitflow.branch.develop.type base", "init defaults (develop)")
+	assertContainsLine(t, cfg, "gitflow.branch.feature.type topic", "init defaults (feature)")
+	assertContainsLine(t, cfg, "gitflow.branch.release.type topic", "init defaults (release)")
+	assertContainsLine(t, cfg, "gitflow.branch.hotfix.type topic", "init defaults (hotfix)")
+}
+
+// TestConfigRenameTopicResolvesCaseInsensitively tests renaming a topic type by a
+// case-variant name resolves to canonical and carries over settings.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds topic QA_Feature (prefix qa/)
+// 3. Runs 'config rename topic qa_feature QA_Regression'
+// 4. Verifies QA_Feature section removed and QA_Regression present with prefix qa/
+// 5. Verifies no qa_feature case-variant section remains
+func TestConfigRenameTopicResolvesCaseInsensitively(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "topic", "QA_Feature", "develop", "--prefix", "qa/"); err != nil {
+		t.Fatalf("Failed to add topic QA_Feature: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "rename", "topic", "qa_feature", "QA_Regression")
+	if err != nil {
+		t.Fatalf("Expected case-insensitive topic rename to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertNoLineContains(t, cfg, "gitflow.branch.QA_Feature.", "rename topic resolves")
+	assertNoLineContains(t, cfg, "gitflow.branch.qa_feature.", "rename topic resolves (no variant)")
+	assertContainsLine(t, cfg, "gitflow.branch.QA_Regression.prefix qa/", "rename topic carries prefix")
+}
+
+// TestConfigDeleteTopicResolvesCaseInsensitively tests deleting a topic type by a
+// case-variant name removes the canonical section.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds topic QA_Feature (prefix qa/)
+// 3. Runs 'config delete topic qa_feature'
+// 4. Verifies the QA_Feature section is fully removed (no QA_Feature or qa_feature lines)
+func TestConfigDeleteTopicResolvesCaseInsensitively(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "topic", "QA_Feature", "develop", "--prefix", "qa/"); err != nil {
+		t.Fatalf("Failed to add topic QA_Feature: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "delete", "topic", "qa_feature")
+	if err != nil {
+		t.Fatalf("Expected case-insensitive topic delete to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertNoLineContains(t, cfg, "gitflow.branch.QA_Feature.", "delete topic resolves")
+	assertNoLineContains(t, cfg, "gitflow.branch.qa_feature.", "delete topic resolves")
+}
+
+// TestConfigEditTopicStartingPointResolvesCaseInsensitively tests that editing a
+// topic --starting-point resolves the value case-insensitively to canonical.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds base V9_Release and topic QA_Feature (prefix qa/)
+// 3. Runs 'config edit topic QA_Feature --starting-point v9_release'
+// 4. Verifies stored start point is canonical V9_Release, no v9_release section
+func TestConfigEditTopicStartingPointResolvesCaseInsensitively(t *testing.T) {
+	tempDir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, tempDir)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(tempDir)
+	defer os.Chdir(oldDir)
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "V9_Release"); err != nil {
+		t.Fatalf("Failed to add base branch V9_Release: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, tempDir, "config", "add", "topic", "QA_Feature", "develop", "--prefix", "qa/"); err != nil {
+		t.Fatalf("Failed to add topic QA_Feature: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "edit", "topic", "QA_Feature", "--starting-point", "v9_release")
+	if err != nil {
+		t.Fatalf("Expected case-insensitive edit topic starting-point to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.QA_Feature.startpoint V9_Release", "edit topic starting point")
+	assertNoLineContains(t, cfg, "gitflow.branch.v9_release.", "edit topic starting point")
 }

@@ -40,6 +40,8 @@ Branch type configuration defines the **identity and process characteristics** o
 
 These properties describe *what the branch type is* — its structural role and how it participates in the workflow. They should only contain essential branch-type-relevant configuration.
 
+Branch names (the `<branchname>` subsection) are matched **case-insensitively**, mirroring Git's `core.ignorecase`. The case used when a branch is first added is preserved as its canonical form and written back verbatim; git-flow always operates on that canonical name (including the Git ref, so it is correct on case-sensitive filesystems). Any later reference — a parent, a `--starting-point`, or the target of an `edit`/`rename`/`delete` — may be given in any case and resolves to the single canonical entry. Adding or renaming to a name that differs only in case from a *different* existing branch is rejected as "already exists"; a case-only rename of a branch to itself is allowed and re-canonicalizes it. Two branch types differing only in case cannot coexist, and dotted branch names (e.g., `V10.5`) are unsupported.
+
 ### Structural Properties
 
 Define where the branch type fits in the hierarchy:
