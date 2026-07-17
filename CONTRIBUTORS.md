@@ -5,6 +5,8 @@ This file lists the contributors to git-flow-next.
 ## Project Maintainers
 
 - [Alexander Rinass](https://github.com/alexrinass) - *Initial work, maintainer*
+- [Bruno Brito](https://github.com/brunofbrito) - *Maintainer*
+- [Filip Persson](https://github.com/FilleTP) - *Maintainer*
 
 ## Contributors
 
@@ -14,9 +16,7 @@ This list is regenerated from git history at release time — see
 -->
 
 - [Andrea Scarpino](https://github.com/ilpianista)
-- [Bruno Brito](https://github.com/brunofbrito)
 - [Daniel Evers](https://github.com/dermojo)
-- [Filip Persson](https://github.com/FilleTP)
 - [Jannatin Naim](https://github.com/JannatinNaim)
 - [Ron Wolf](https://github.com/ron-wolf)
 
