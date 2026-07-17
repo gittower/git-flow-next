@@ -2,7 +2,7 @@
 name: triage
 description: Triage an external issue or discussion — classify, check duplicates, analyze, propose a verdict, then reply
 argument-hint: <issue-number | discussion-number>
-allowed-tools: Read, Grep, Glob, Write, Bash, mcp__github__get_issue, mcp__github__search_issues, mcp__github__list_issues, mcp__github__update_issue, mcp__github__add_issue_comment
+allowed-tools: Read, Grep, Glob, Write, Bash, mcp__github__get_issue, mcp__github__search_issues, mcp__github__list_issues, mcp__github__create_issue, mcp__github__update_issue, mcp__github__add_issue_comment
 ---
 
 # Triage
@@ -72,6 +72,12 @@ fragments). Look for:
 - **Questions**: find the actual answer — in the code, docs/ manpages,
   CONFIGURATION.md. If docs don't cover it, note the docs gap
 
+While analyzing, watch for **adjacent but distinct problems** the report
+surfaces — a second bug in the same reproduction, or a feature request buried
+in a comment. Don't fold these into the main verdict. When no existing issue
+cleanly owns one, plan to split it into its own new issue so each stays a
+single source of truth. Reproduce/confirm them the same way as the main report.
+
 ### 5. Write the Triage Document
 
 Write `.ai/<folder>/triage.md`:
@@ -99,13 +105,21 @@ affected components. Question: the answer.>
 - answer — <question answered in reply>
 - needs info — <what's missing from the reporter>
 
+## Split-out Issues (if any)
+<For each adjacent-but-distinct problem: a full draft (title, body,
+labels) ready to create as its own issue. Reference the originating
+report. Omit this section if there are none.>
+
 ## Draft Reply
 <The complete reply to post, written for the reporter: friendly,
-concise, no emojis. Link related/duplicate issues. For rejections,
-explain the reasoning honestly. For answers, give the full answer.>
+concise, no emojis. Link related/duplicate issues. Reference any
+split-out issues with placeholders (#NEW, #NEW2) — real numbers are
+filled in at execution once the issues exist. For rejections, explain
+the reasoning honestly. For answers, give the full answer.>
 
 ## Actions on Confirmation
-- <post reply>
+- <create split-out issues first, if any>
+- <post reply — with split-out issue numbers filled in>
 - <apply labels: bug/enhancement>
 - <close as duplicate of #N / close as answered / leave open>
 ```
@@ -118,8 +132,12 @@ change the verdict or edit the reply.
 
 ### 7. Execute
 
-After confirmation:
+After confirmation, in this order:
 
+- **Create any split-out issues first** (`mcp__github__create_issue`), so
+  their real numbers exist before the reply references them. Substitute the
+  `#NEW`/`#NEW2` placeholders in the draft reply (and in `triage.md`) with the
+  assigned numbers.
 - Post the reply (`mcp__github__add_issue_comment`; for discussions, the
   `addDiscussionComment` GraphQL mutation with the discussion `id`)
 - Apply labels / close via `mcp__github__update_issue` as decided
