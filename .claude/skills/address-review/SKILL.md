@@ -151,14 +151,18 @@ Use the `/commit` skill pattern (read `.claude/skills/commit/SKILL.md`):
 
 ### 10. Prepare Public Actions
 
-Draft everything that will touch GitHub, but do not execute yet:
+Draft everything that will touch GitHub, but do not execute yet.
 
-1. **PR comment** summarizing the round:
-   - Accepted items with the commit SHA that addresses each
-   - Dismissed items with a brief reason
-   - Partial accepts with what was done differently
-2. **PR description update** — if a `pr_summary.md` exists in the `.ai/` folder and the changes materially alter the summary, draft the updated body
-3. The **push** of the new commit(s)
+**Route each reply by where the feedback lives:**
+
+- **Inline diff comments** (a review comment with a `path` + `diff_hunk`, i.e. anchored to a line) → reply **inline on that comment's thread**, one reply per thread, so it resolves in context. Each reply states the verdict for that specific comment (accepted + commit SHA, dismissed + reason, or partial + what differed).
+- **General review comments** (the review body, or a top-level PR conversation comment not anchored to a diff line) → collect them into **one combined PR comment** that **quotes each piece of feedback** (Markdown `>` blockquote) followed by the response. Do not open a separate comment per general item.
+
+So a review round may produce inline replies, a single combined comment, or both — depending on which kinds of feedback it contained. If there are no general comments, post no combined comment; if there are no inline comments, post no inline replies.
+
+Also draft:
+- **PR description update** — if a `pr_summary.md` exists in the `.ai/` folder and the changes materially alter the summary, draft the updated body
+- The **push** of the new commit(s)
 
 ### 11. Confirmation Gate
 
@@ -166,7 +170,7 @@ Present to the user in one block:
 
 - The verdict table (from step 6, updated with commit SHAs)
 - Commits created (`git log` oneline of the new commits)
-- The full draft PR comment
+- The full draft replies — each inline thread reply (with the file it targets) and the combined general-comment comment, whichever apply
 - Whether the PR description will be updated
 
 Then ask: **"Push and post?"**
@@ -182,7 +186,12 @@ After confirmation:
    ```bash
    gh api repos/gittower/git-flow-next/pulls/<number> -X PATCH -f body="<updated body>"
    ```
-3. Post the summary comment via `mcp__github__add_issue_comment`
+3. Post the replies:
+   - **Inline thread replies** — reply to each inline diff comment on its own thread:
+     ```bash
+     gh api repos/gittower/git-flow-next/pulls/<number>/comments/<comment-id>/replies -f body="<reply>"
+     ```
+   - **Combined general comment** — if any general feedback was collected, post the single quoted-and-answered comment via `mcp__github__add_issue_comment`
 4. Update `pr_summary.md` in `.ai/` if it exists
 
 ### 13. Report
@@ -190,7 +199,7 @@ After confirmation:
 Output a final summary:
 - How many comments were addressed, dismissed, or partially accepted
 - What commit(s) were created and pushed
-- Link to the posted comment
+- Links to the posted replies (inline threads and/or the combined comment)
 - Any remaining items that need manual attention
 
 ## Notes
