@@ -406,7 +406,10 @@ The final stage before code reaches the main branch.
    - `/address-review <pr-number>` - Evaluate reviewer comments, implement valid ones
    - Writes the evaluation to `.ai/<folder>/review-plan-<sha>.md` (one per PR revision)
    - Implements accepted changes and commits locally without confirmation
-   - Public actions (push, PR comment, description update) wait for user confirmation
+   - Replies on each inline diff thread with its verdict, then resolves the
+     threads it handled (accepted, dismissed, or partial)
+   - Public actions (push, PR comment/reply, thread resolution, description
+     update) wait for user confirmation
    - Use `--plan-only` to stop after the evaluation and implement later via
      `/implement .ai/<folder>/review-plan-<sha>.md`
 
@@ -549,7 +552,7 @@ Skills come in two tiers:
 | `/resolve-issue` | Resolve a spec issue end-to-end (plan → gate → implement → review) | Publish (push + PR) |
 | `/quick-fix` | Small fix/maintenance locally, no PR (task note → fix → review gates) | Merge into develop |
 | `/handle-pr` | Strictly review an incoming PR and post a GitHub review | Posting |
-| `/address-review` | Evaluate review feedback on our PR, implement valid items | Push & PR comment |
+| `/address-review` | Evaluate review feedback on our PR, implement valid items | Push, PR reply & thread resolve |
 | `/check-prs` | Report all open PRs vs the review response window | Reminders (optional) |
 | `/takeover-pr` | Supersede a stale PR with requested changes, crediting the author | Push, PR, closing |
 | `/full-release` | Release end-to-end (prep → tag → CI → Homebrew tap → website sync) | Push & tag |

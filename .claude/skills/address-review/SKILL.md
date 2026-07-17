@@ -155,7 +155,7 @@ Draft everything that will touch GitHub, but do not execute yet.
 
 **Route each reply by where the feedback lives:**
 
-- **Inline diff comments** (a review comment with a `path` + `diff_hunk`, i.e. anchored to a line) → reply **inline on that comment's thread**, one reply per thread, so it resolves in context. Each reply states the verdict for that specific comment (accepted + commit SHA, dismissed + reason, or partial + what differed).
+- **Inline diff comments** (a review comment with a `path` + `diff_hunk`, i.e. anchored to a line) → reply **inline on that comment's thread**, one reply per thread, so it resolves in context. Each reply states the verdict for that specific comment (accepted + commit SHA, dismissed + reason, or partial + what differed). After replying, **resolve that thread** (see step 12) — every thread we handled (accept, dismiss, or partial) gets resolved once its reply is posted. Leave a thread unresolved only if it stays genuinely open (e.g. deferred to a follow-up or awaiting the reviewer's decision); call those out at the gate.
 - **General review comments** (the review body, or a top-level PR conversation comment not anchored to a diff line) → collect them into **one combined PR comment** that **quotes each piece of feedback** (Markdown `>` blockquote) followed by the response. Do not open a separate comment per general item.
 
 So a review round may produce inline replies, a single combined comment, or both — depending on which kinds of feedback it contained. If there are no general comments, post no combined comment; if there are no inline comments, post no inline replies.
@@ -171,6 +171,7 @@ Present to the user in one block:
 - The verdict table (from step 6, updated with commit SHAs)
 - Commits created (`git log` oneline of the new commits)
 - The full draft replies — each inline thread reply (with the file it targets) and the combined general-comment comment, whichever apply
+- Which inline threads will be **resolved** after their reply posts (and any that will be left open, with why)
 - Whether the PR description will be updated
 
 Then ask: **"Push and post?"**
@@ -192,7 +193,30 @@ After confirmation:
      gh api repos/gittower/git-flow-next/pulls/<number>/comments/<comment-id>/replies -f body="<reply>"
      ```
    - **Combined general comment** — if any general feedback was collected, post the single quoted-and-answered comment via `mcp__github__add_issue_comment`
-4. Update `pr_summary.md` in `.ai/` if it exists
+4. **Resolve the handled inline threads.** A REST reply does *not* resolve the thread — resolution is a GraphQL mutation keyed by the thread's node ID (not the comment ID). Map each handled comment to its thread, then resolve it.
+
+   Fetch the thread IDs once (map `databaseId` of the first comment → thread `id`):
+   ```bash
+   gh api graphql -f query='
+   query($owner:String!,$repo:String!,$pr:Int!){
+     repository(owner:$owner,name:$repo){
+       pullRequest(number:$pr){
+         reviewThreads(first:100){
+           nodes{ id isResolved comments(first:1){ nodes{ databaseId path } } }
+         }
+       }
+     }
+   }' -f owner=gittower -f repo=git-flow-next -F pr=<number>
+   ```
+   Then resolve each thread we replied to with a verdict (accept, dismiss, or partial):
+   ```bash
+   gh api graphql -f query='
+   mutation($threadId:ID!){
+     resolveReviewThread(input:{threadId:$threadId}){ thread{ isResolved } }
+   }' -f threadId=<thread-node-id>
+   ```
+   Skip threads flagged as genuinely open at the gate, and any already `isResolved`.
+5. Update `pr_summary.md` in `.ai/` if it exists
 
 ### 13. Report
 
@@ -200,6 +224,7 @@ Output a final summary:
 - How many comments were addressed, dismissed, or partially accepted
 - What commit(s) were created and pushed
 - Links to the posted replies (inline threads and/or the combined comment)
+- Which inline threads were resolved, and any left open (with why)
 - Any remaining items that need manual attention
 
 ## Notes
