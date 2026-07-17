@@ -1,0 +1,63 @@
+name: Milestone merged PRs
+
+# When a PR merges, assign it and every issue it closes to the open "Next"
+# milestone. At release time the release process renames "Next" to the actual
+# version (see .claude/skills/full-release), so each issue ends up carrying the
+# version it shipped in. Relies on PRs using "Fixes #N" to link their issues.
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  assign:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+
+            // Find the open milestone named "Next". If none exists, there is
+            // nothing to assign to — log and exit without failing the run.
+            const milestones = await github.paginate(
+              github.rest.issues.listMilestones,
+              { owner, repo, state: 'open', per_page: 100 }
+            );
+            const next = milestones.find(m => m.title === 'Next');
+            if (!next) {
+              core.info('No open "Next" milestone found; skipping.');
+              return;
+            }
+
+            const pr = context.payload.pull_request;
+
+            // Collect the issues this PR closes via "Fixes #N" / "Closes #N".
+            const linked = await github.graphql(`
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    closingIssuesReferences(first: 50) {
+                      nodes { number }
+                    }
+                  }
+                }
+              }`,
+              { owner, repo, number: pr.number }
+            );
+            const issueNumbers =
+              linked.repository.pullRequest.closingIssuesReferences.nodes
+                .map(n => n.number);
+
+            // Tag the PR itself plus every linked issue.
+            const targets = [pr.number, ...issueNumbers];
+            for (const number of targets) {
+              await github.rest.issues.update({
+                owner, repo, issue_number: number, milestone: next.number,
+              });
+              core.info(`Assigned #${number} to milestone "Next".`);
+            }

@@ -93,7 +93,7 @@ release is exactly `## [X.Y.Z]` for tag `vX.Y.Z` — a mismatch publishes a
 release with an empty body.
 
 Also determine whether this is a preview release (version contains
-`-alpha`, `-beta`, or `-rc`). Preview releases skip steps 7 and 8.
+`-alpha`, `-beta`, or `-rc`). Preview releases skip steps 7, 8, and 9.
 
 ### 4. Confirm with User
 
@@ -130,7 +130,28 @@ already pushed — after the cause is fixed, the workflow can be re-run from
 the same tag (`gh run rerun <run-id>`); do not delete/re-push the tag
 unless the fix requires a code change.
 
-### 7. Update Homebrew Tap
+### 7. Stamp the Milestone
+
+**Skip for preview releases** — an rc/alpha must not consume the `Next`
+name; the milestone is stamped only when a real version ships.
+
+The `Next` milestone accumulates issues/PRs as they merge (via the
+`milestone-on-merge` workflow). Now that the version is known and the
+release is live, rename `Next` to the actual version, close it, and open a
+fresh empty `Next` for the following cycle. Renaming preserves every issue
+assignment, so each stamped issue now reads `vX.Y.Z` on its badge.
+
+```bash
+NEXT_ID=$(gh api repos/:owner/:repo/milestones --jq '.[]|select(.title=="Next")|.number')
+gh api --method PATCH repos/:owner/:repo/milestones/$NEXT_ID -f title="vX.Y.Z" -f state=closed
+gh api --method POST  repos/:owner/:repo/milestones -f title="Next"
+```
+
+If no open `Next` milestone exists (e.g. it was already stamped in a prior
+partial run), just ensure one named `Next` exists for the next cycle and
+move on — do not overwrite an already-closed version milestone.
+
+### 8. Update Homebrew Tap
 
 **Skip for preview releases** — `update_formula.rb` picks the newest
 non-draft release and does not filter prereleases, so running it after a
@@ -147,7 +168,7 @@ The script fetches the release checksums and creates the commit — do not
 add a manual commit on top. Verify afterwards that
 `Formula/git-flow-next.rb` contains the new version.
 
-### 8. Sync Website
+### 9. Sync Website
 
 **Skip for preview releases.**
 
@@ -164,7 +185,7 @@ Verify with `npm run build`. **Leave the changes uncommitted** for user
 review — the website deploys automatically when pushed to main, so pushing
 is publishing.
 
-### 9. Report
+### 10. Report
 
 Summarize:
 

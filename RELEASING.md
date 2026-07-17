@@ -125,7 +125,31 @@ gh run watch
 gh release view vX.Y.Z
 ```
 
-### 7. Update Homebrew Tap
+### 7. Stamp the Milestone
+
+**Skip for preview releases** — an rc/alpha must not consume the `Next`
+milestone name.
+
+Issues and PRs are assigned to a rolling `Next` milestone as they merge,
+via the `.github/workflows/milestone-on-merge.yml` workflow. Because we use
+semantic versioning, the actual version is not known until the release is
+cut — so instead of guessing a number upfront, we rename `Next` to the real
+version once it ships. Renaming preserves every assignment, so each issue
+then carries the version it shipped in on its milestone badge.
+
+After the GitHub release is verified live:
+
+```bash
+NEXT_ID=$(gh api repos/:owner/:repo/milestones --jq '.[]|select(.title=="Next")|.number')
+gh api --method PATCH repos/:owner/:repo/milestones/$NEXT_ID -f title="vX.Y.Z" -f state=closed
+gh api --method POST  repos/:owner/:repo/milestones -f title="Next"
+```
+
+Users can then find which version fixed an issue directly on the issue, and
+maintainers can list a release's scope with
+`gh issue list --milestone vX.Y.Z --state all`.
+
+### 8. Update Homebrew Tap
 
 **Skip for preview releases** — the update script picks the newest
 non-draft release and does not filter prereleases.
@@ -144,7 +168,7 @@ manual `git add`/`git commit` needed, only the push.
 
 Repository: https://github.com/gittower/homebrew-tap
 
-### 8. Update Website
+### 9. Update Website
 
 **Skip for preview releases.**
 
@@ -189,5 +213,6 @@ the Homebrew tap or the website for preview releases.
 - [ ] Pushed to main
 - [ ] Created and pushed tag
 - [ ] Verified GitHub release: artifacts, checksums, non-empty release notes
+- [ ] Stamped milestone: renamed `Next` → `vX.Y.Z`, closed it, opened new `Next` — skip for previews
 - [ ] Updated Homebrew tap (`ruby update_formula.rb` + `git push`) — skip for previews
 - [ ] Updated website: version + changelog (every release), command/config docs (if changed) — skip for previews
