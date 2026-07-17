@@ -21,6 +21,7 @@ There are four entry points, each driven by a single high-level skill (see
 | External issue / discussion | `/triage` | classify → duplicate check → verdict → reply |
 | Accepted report / own idea / concept | `/create-spec` | draft → Codex gate → acceptance → spec issue |
 | Spec issue ready to build | `/resolve-issue` | analyze → test-first plan → gate → implement → review → PR |
+| Small fix / maintenance (no PR needed) | `/quick-fix` | eligibility → task note → test-first fix → review gates → local merge |
 | Incoming pull request | `/handle-pr` | strict review → drafted GitHub review → post |
 
 Key artifacts are stored in `.ai/`, organized by issue or feature:
@@ -97,6 +98,26 @@ For our own bug fixes and smaller improvements that don't need triage:
 
 4. **Proceed to Planning**
    - Move to the [Implementation](#3-implementing) phase
+
+### Small Fixes & Maintenance (Local Route)
+
+For small, unambiguous work — docs fixes, CI/build maintenance, test-only
+changes, chores, small bug fixes with an obvious root cause — the full
+spec → PR → review cycle is overhead without benefit. These are handled
+entirely locally:
+
+- `/quick-fix <description | issue-number>` - Eligibility check → lightweight
+  task note (`.ai/quick-<slug>/task.md`, replacing spec and plan) → feature
+  branch → test-first fix → local review + **mandatory Codex gate** → local
+  merge into develop after user confirmation. No PR is created.
+
+The shortcut is past the *process* (spec issue, PR, GitHub review), not the
+*gates*: with no PR there is no Copilot review, so the Codex code-review
+gate cannot be skipped, and the merge into develop is user-confirmed like
+any publish. Not eligible — and redirected to the normal route: new
+features, CLI surface changes, user-visible behavior changes, anything
+needing a design decision. If work grows past those bounds mid-flight, the
+skill stops and escalates to `/create-spec` → `/resolve-issue`.
 
 ### Issue Analysis Template
 
@@ -439,6 +460,10 @@ Keep it concise. The checklist in the template is for author verification only �
 │   └── pr-review-<sha>.md
 ├── scans/                              # Weekly activity scans
 │   └── scan-2026-07-15.md              # Also anchors the next scan's window
+├── quick-typo-in-finish-docs/          # Local quick fixes (no PR)
+│   ├── task.md                         # Lightweight task note (replaces spec + plan)
+│   ├── review-<sha>.md                 # Local code review
+│   └── codex-code-review.md            # Codex gate log (mandatory)
 └── feature-custom-branch-types/        # Feature-based work
     ├── concept.md                      # Feature concept/design
     ├── plan.md
@@ -454,6 +479,7 @@ source of truth); these local files are working artifacts and audit trail.
 
 - **Issues**: `issue-<number>-<slug>/` (matches branch `feature/<number>-<slug>`)
 - **Features**: `feature-<name>/` (matches branch `feature/<name>`)
+- **Quick fixes**: `quick-<slug>/` (matches branch `feature/quick-<slug>`)
 
 ---
 
@@ -472,6 +498,8 @@ predictable set of decision points.
 **Gated** (preview + user confirmation required):
 - Anything public: issue comments and replies, creating issues, posting PR
   reviews and comments, pushing branches, creating/closing PRs
+- Local merge into develop (the `/quick-fix` merge gate — the no-PR
+  equivalent of publishing)
 - Spec acceptance before implementation starts
 - Abort conditions: the 3-revision test plan abort, failed verification
   steps, genuine design questions the AI cannot decide alone
@@ -498,6 +526,7 @@ Skills come in two tiers:
 | `/triage` | Classify + analyze an external issue/discussion, propose verdict | Reply & labels |
 | `/create-spec` | Draft, Codex-gate, and publish a spec issue | Acceptance, posting |
 | `/resolve-issue` | Resolve a spec issue end-to-end (plan → gate → implement → review) | Publish (push + PR) |
+| `/quick-fix` | Small fix/maintenance locally, no PR (task note → fix → review gates) | Merge into develop |
 | `/handle-pr` | Strictly review an incoming PR and post a GitHub review | Posting |
 | `/address-review` | Evaluate review feedback on our PR, implement valid items | Push & PR comment |
 | `/check-prs` | Report all open PRs vs the review response window | Reminders (optional) |
@@ -541,6 +570,9 @@ The shared Codex gate procedure used by several skills is defined once in
 
 # Build it
 /resolve-issue 43         # analyze → plan → gate → implement → review → PR
+
+# Small fix or maintenance — handled locally, no PR
+/quick-fix "fix typo in finish manpage"   # task note → fix → review gates → merge
 
 # Incoming PR from a contributor
 /handle-pr 44             # strict review, posted after confirmation
