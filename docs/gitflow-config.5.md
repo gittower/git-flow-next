@@ -122,7 +122,7 @@ These properties define the branch type's identity and process characteristics (
 
 ### Branch Name Case Sensitivity
 
-Branch identities (the *name* subsection of **gitflow.branch.*name***) are matched **case-insensitively**, following the same principle as Git's own **core.ignorecase**. The original case you use when a branch is first added is preserved as its **canonical** form and written back verbatim; git-flow always operates on that canonical name — including the underlying Git ref — so operations behave correctly on case-sensitive filesystems.
+Branch identities (the *name* subsection of `gitflow.branch.<name>`) are matched **case-insensitively**, following the same principle as Git's own **core.ignorecase**. The original case you use when a branch is first added is preserved as its **canonical** form and written back verbatim; git-flow always operates on that canonical name — including the underlying Git ref — so operations behave correctly on case-sensitive filesystems.
 
 Any later reference to that branch may be given in any case. For example, after `git flow config add base V9_Release`, all of the following resolve to the single canonical `V9_Release` entry:
 
