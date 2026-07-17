@@ -569,10 +569,14 @@ Translation happens at runtime without modifying existing configuration.
 ## VALIDATION RULES
 
 ### Branch Names
-- Must be valid Git reference names
-- Cannot contain spaces or special characters (@, ~, ^, :, ?, *, [)
-- Cannot end with .lock
-- Cannot contain consecutive dots (..)
+
+Branch names are validated with **git check-ref-format**, so they follow Git's
+own reference-name rules:
+
+- May contain dots (`.`) inside the name (e.g., `custom.main`, `V10.5`)
+- Cannot begin a path component with a dot, or contain consecutive dots (`..`)
+- Cannot end with `/` or `.lock`
+- Cannot contain spaces, control characters, or any of `~ ^ : ? * [ \`
 
 ### Branch Relationships  
 - Parent branches must exist before creating children
