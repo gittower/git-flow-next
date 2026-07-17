@@ -95,6 +95,12 @@ fi
 
 # Generate checksums
 echo "Generating checksums..."
-(cd "$BUILD_DIR" && shasum -a 256 * > "${PACKAGE_NAME}-${VERSION}-checksums.txt")
+if command -v shasum >/dev/null 2>&1; then
+    (cd "$BUILD_DIR" && shasum -a 256 * > "${PACKAGE_NAME}-${VERSION}-checksums.txt")
+elif command -v sha256sum >/dev/null 2>&1; then
+    (cd "$BUILD_DIR" && sha256sum * > "${PACKAGE_NAME}-${VERSION}-checksums.txt")
+else
+    echo "Warning: Neither shasum nor sha256sum found, skipping checksums"
+fi
 
 echo "Build complete! Artifacts are in the $BUILD_DIR directory" 
