@@ -45,7 +45,30 @@ Generate a pull request summary based on branch changes.
 
    Write the summary to `.ai/<folder>/pr_summary.md`.
 
-4. **Create PR Command**
+4. **Validate Format**
+
+   Before presenting the create command, check `pr_summary.md` against
+   `.github/PULL_REQUEST_TEMPLATE.md`. A PR body is a **GitHub-only
+   artifact** — it never enters git history, so unlike commit messages it is
+   not caught by code review. This step is that missing gate. Reject and
+   rewrite the summary if any of these fail:
+
+   - **First line** is a single-sentence TL;DR (what + why), not a heading
+   - **Details paragraph** follows it, covering what changed and key areas
+   - **Issue keyword** on its own line when an issue exists
+     (`Resolves`/`Closes`/`Relates #N`)
+   - **No leftover template scaffolding** — no `<!-- ... -->` comments,
+     author checklist, or example text copied from the template
+   - **No AI attribution** anywhere (e.g. "Generated with Claude Code");
+     credit is via `Co-Authored-By` commit trailers only
+   - Optional `## Remarks` and `**Review focus:**` sections, if present,
+     match the template's shape
+
+   If it fails, fix `pr_summary.md` and re-check before continuing. This same
+   check applies to any skill that posts a PR body directly (see
+   `/resolve-issue`, `/takeover-pr`).
+
+5. **Create PR Command**
 
    Output the `gh pr create` command:
 
@@ -53,7 +76,7 @@ Generate a pull request summary based on branch changes.
    gh pr create --title "<title>" --body "$(cat .ai/<folder>/pr_summary.md)"
    ```
 
-5. **Report Completion**
+6. **Report Completion**
    - Show path to pr_summary.md
    - Show the PR creation command
    - Remind to push branch first if not already pushed

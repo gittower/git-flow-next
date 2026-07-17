@@ -380,8 +380,17 @@ The final stage before code reaches the main branch.
 ### Process
 
 1. **Publish Branch**
-   - Push feature branch to remote
-   - `git flow feature publish <name>` or `git push -u origin <branch>`
+   - Push the feature branch so the remote branch has the **same name** and
+     the local branch tracks it. `git flow feature publish <name>` handles
+     this in the main clone.
+   - When pushing by hand — especially **from a worktree**, whose branch is
+     based off `origin/main` — do not use `git push -u origin <branch>`: it
+     can mis-set the upstream (e.g. to `main`). Push with an explicit refspec
+     and set tracking explicitly:
+     ```bash
+     git push origin feature/<slug>:refs/heads/feature/<slug>
+     git branch --set-upstream-to=origin/feature/<slug> feature/<slug>
+     ```
 
 2. **Create PR Summary**
    - `/pr-summary` - Generate PR summary following the [PR template](.github/PULL_REQUEST_TEMPLATE.md)

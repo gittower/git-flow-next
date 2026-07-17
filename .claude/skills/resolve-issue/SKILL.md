@@ -195,14 +195,25 @@ Public actions wait for the user. Present:
 - Summary of all changes (files modified, commits created)
 - Review outcomes (local, Codex) and fixes applied
 - The PR summary content
-- The exact commands: `git push -u origin feature/<slug>` and
-  `gh pr create --title "<title>" --body "$(cat <ai-folder>/pr_summary.md)"`
-  (`<title>` follows the PR-title format from `/pr-summary` /
-  COMMIT_GUIDELINES.md — `type(scope): Subject`, no issue number)
+- Confirmation that `pr_summary.md` passes the `/pr-summary` **Validate
+  Format** checklist — the PR body is a GitHub-only artifact and won't be
+  caught later in code review
+- The exact commands — push with an explicit refspec and set tracking
+  explicitly (a worktree branch mis-tracks with `git push -u`, e.g. to
+  `main`):
+  ```bash
+  git push origin feature/<slug>:refs/heads/feature/<slug>
+  git branch --set-upstream-to=origin/feature/<slug> feature/<slug>
+  gh pr create --title "<title>" --body "$(cat <ai-folder>/pr_summary.md)"
+  ```
+  `<title>` follows the PR-title format from `/pr-summary` /
+  COMMIT_GUIDELINES.md — `type(scope): Subject`, no issue number.
 
 Ask: **"Publish the branch and create the PR?"**
 
-On confirmation, push and create the PR, then report the PR URL.
+On confirmation, push and create the PR. Verify the posted body with
+`gh pr view <n>`; if it drifted from `pr_summary.md`, fix it with
+`gh pr edit`. Report the PR URL.
 
 ---
 

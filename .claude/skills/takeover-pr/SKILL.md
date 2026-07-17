@@ -105,8 +105,14 @@ Ask: **"Push, open the successor PR, and close the original?"**
 
 After confirmation:
 
-1. Push the branch: `git push -u origin feature/<slug>`
-2. Create the successor PR (`mcp__github__create_pull_request`)
+1. Push the branch with an explicit refspec and set tracking explicitly (a
+   worktree branch mis-tracks with `git push -u`, e.g. to `main`):
+   ```bash
+   git push origin feature/<slug>:refs/heads/feature/<slug>
+   git branch --set-upstream-to=origin/feature/<slug> feature/<slug>
+   ```
+2. Confirm the successor PR body passes the `/pr-summary` **Validate Format**
+   checklist, then create the PR (`mcp__github__create_pull_request`)
 3. Post the closing comment on the original PR
    (`mcp__github__add_issue_comment`), then close it:
    `gh pr close <number>`
