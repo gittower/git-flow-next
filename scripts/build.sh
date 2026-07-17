@@ -87,7 +87,10 @@ if command -v zip >/dev/null 2>&1; then
     (cd "$BUILD_DIR" && zip "${PACKAGE_NAME}-${VERSION}-windows-386.zip" "${BINARY_NAME}-${VERSION}-windows-386.exe")
     (cd "$BUILD_DIR" && zip "${PACKAGE_NAME}-${VERSION}-windows-arm64.zip" "${BINARY_NAME}-${VERSION}-windows-arm64.exe")
 else
-    echo "Warning: zip command not found, skipping Windows archives"
+    echo "Warning: zip command not found, falling back to tar.gz for Windows"
+    tar czf "$BUILD_DIR/${PACKAGE_NAME}-${VERSION}-windows-amd64.tar.gz" -C "$BUILD_DIR" "${BINARY_NAME}-${VERSION}-windows-amd64.exe"
+    tar czf "$BUILD_DIR/${PACKAGE_NAME}-${VERSION}-windows-386.tar.gz" -C "$BUILD_DIR" "${BINARY_NAME}-${VERSION}-windows-386.exe"
+    tar czf "$BUILD_DIR/${PACKAGE_NAME}-${VERSION}-windows-arm64.tar.gz" -C "$BUILD_DIR" "${BINARY_NAME}-${VERSION}-windows-arm64.exe"
 fi
 
 # Generate checksums
