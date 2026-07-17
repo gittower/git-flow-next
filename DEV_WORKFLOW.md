@@ -232,12 +232,29 @@ The implementation phase transforms issues or concepts into working code.
 
 ### Process
 
-1. **Create Feature Branch**
-   - For issues: `feature/<issue-number>-<short-description>`
-     - Example: `feature/42-add-squash-merge`
-   - For larger features: `feature/<feature-name>`
-     - Example: `feature/custom-branch-types`
-   - Use `git flow feature start` for branch creation
+1. **Create Feature Branch + Worktree**
+   - Branch names:
+     - For issues: `feature/<issue-number>-<short-description>`
+       (e.g. `feature/42-add-squash-merge`)
+     - For larger features: `feature/<feature-name>`
+       (e.g. `feature/custom-branch-types`)
+   - Every branch gets its **own git worktree**, kept in a dot-suffixed sibling
+     root next to the clone so it never pollutes the main working copy and is
+     never traversed by `go test ./...`, editors, or `git status`. Convention:
+     `../<repo>.worktrees/<branch-leaf>/`, where `<branch-leaf>` is the part of
+     the branch name after the last `/`.
+     ```bash
+     # from the main clone; <slug> is e.g. 42-add-squash-merge
+     git worktree add -b feature/<slug> ../git-flow-next.worktrees/<slug> develop
+     cd ../git-flow-next.worktrees/<slug>
+     ```
+   - Do the code work (planning-derived changes, tests, commits) from inside the
+     worktree. **`.ai/` working artifacts stay in the main clone** — they are
+     gitignored, not branch content, and some (scans) span branches; write them
+     to the main clone's `.ai/` (e.g. `../git-flow-next/.ai/...`) when operating
+     from a worktree.
+   - When the branch is merged or abandoned, remove the worktree:
+     `git worktree remove ../git-flow-next.worktrees/<slug>`
 
 2. **Create Implementation Plan (Test-First)**
    - `/create-plan` - Generate a test-first plan from the spec issue, analysis, or concept
@@ -480,6 +497,10 @@ source of truth); these local files are working artifacts and audit trail.
 - **Issues**: `issue-<number>-<slug>/` (matches branch `feature/<number>-<slug>`)
 - **Features**: `feature-<name>/` (matches branch `feature/<name>`)
 - **Quick fixes**: `quick-<slug>/` (matches branch `feature/quick-<slug>`)
+- **Worktrees**: `../<repo>.worktrees/<branch-leaf>/` — a sibling of the clone,
+  one worktree per branch (e.g. `../git-flow-next.worktrees/42-squash-merge/`
+  for branch `feature/42-squash-merge`). See
+  [§3 Implementing](#3-implementing).
 
 ---
 
@@ -594,8 +615,9 @@ The shared Codex gate procedure used by several skills is defined once in
 # 2. Analyze the issue (creates .ai/issue-42-squash-merge/)
 /analyze-issue 42
 
-# 3. Create feature branch
-git flow feature start 42-squash-merge
+# 3. Create feature branch + worktree (sibling root, see §3)
+git worktree add -b feature/42-squash-merge ../git-flow-next.worktrees/42-squash-merge develop
+cd ../git-flow-next.worktrees/42-squash-merge
 
 # 4. Create and validate implementation plan
 /create-plan
@@ -620,8 +642,9 @@ git flow feature publish 42-squash-merge
 mkdir -p .ai/feature-my-feature
 # Write concept.md manually or with Claude's help
 
-# 2. Create feature branch
-git flow feature start my-feature
+# 2. Create feature branch + worktree (sibling root, see §3)
+git worktree add -b feature/my-feature ../git-flow-next.worktrees/my-feature develop
+cd ../git-flow-next.worktrees/my-feature
 
 # 3. Create and validate implementation plan
 /create-plan

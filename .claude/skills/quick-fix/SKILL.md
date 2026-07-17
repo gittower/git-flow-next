@@ -85,20 +85,20 @@ This replaces the spec, full plan, and `/validate-tests` gate. The test
 plan section is still binding: for any code change, the tests listed here
 are written first.
 
-## Step 2: Create Branch
+## Step 2: Create Branch + Worktree
+
+Create the branch in its own worktree, using the sibling-root convention (see
+[DEV_WORKFLOW.md](../../../DEV_WORKFLOW.md) §3):
 
 ```bash
-go run main.go feature start quick-<slug>
+git worktree add -b feature/quick-<slug> ../git-flow-next.worktrees/quick-<slug> develop
+cd ../git-flow-next.worktrees/quick-<slug>
 ```
 
-If that fails, fall back to:
-
-```bash
-git checkout -b feature/quick-<slug> develop
-```
-
-**Verify**: current branch is `feature/quick-<slug>`. Never commit directly
-on develop or main.
+**Verify**: current directory is the new worktree and the current branch is
+`feature/quick-<slug>`. Never commit directly on develop or main. The
+`.ai/quick-<slug>/` task note stays in the main clone — reference it as
+`../git-flow-next/.ai/quick-<slug>/` from inside the worktree.
 
 ## Step 3: Implement (Test-First)
 
@@ -184,13 +184,15 @@ The local equivalent of the publish gate. Present to the user:
 Ask: **"Merge into develop and push?"** (offer merge-without-push as an
 alternative).
 
-On confirmation:
+On confirmation (run from the main clone, since `develop` lives there):
 
-1. `go run main.go feature finish quick-<slug>` — merges into develop and
+1. Remove the worktree first so the branch is no longer checked out:
+   `cd ../git-flow-next && git worktree remove ../git-flow-next.worktrees/quick-<slug>`
+2. `go run main.go feature finish quick-<slug>` — merges into develop and
    deletes the branch. Fall back to
    `git checkout develop && git merge --no-ff feature/quick-<slug> && git branch -d feature/quick-<slug>` if needed
-2. Push develop if confirmed
-3. If the task came from an issue: closing it is a public action — the
+3. Push develop if confirmed
+4. If the task came from an issue: closing it is a public action — the
    `Resolves #N` reference only auto-closes on merge to main (at the next
    release), so ask whether to close it now with a short comment noting
    the fix is on develop

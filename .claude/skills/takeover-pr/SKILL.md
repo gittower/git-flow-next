@@ -41,11 +41,14 @@ to the user instead of deciding alone.
 ```bash
 git fetch origin pull/<number>/head:takeover/pr-<number>
 git checkout develop && git pull
-git checkout -b feature/<slug> develop
+git worktree add -b feature/<slug> ../git-flow-next.worktrees/<slug> develop
+cd ../git-flow-next.worktrees/<slug>
 ```
 
 Derive `<slug>` from the linked issue or PR title, following the usual
-branch naming. Then bring in the contributor's commits:
+branch naming; the worktree uses the sibling-root convention (see
+[DEV_WORKFLOW.md](../../../DEV_WORKFLOW.md) §3). Then bring in the
+contributor's commits:
 
 - **Preferred**: `git merge` or `git rebase` their commits onto the new
   branch **unchanged** — original authorship is preserved automatically

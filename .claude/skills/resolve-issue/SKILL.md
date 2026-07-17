@@ -53,7 +53,7 @@ Spawn a subagent:
 
 ---
 
-### Step 2: Create Feature Branch
+### Step 2: Create Feature Branch + Worktree
 
 Run directly (no subagent needed):
 
@@ -62,18 +62,19 @@ Run directly (no subagent needed):
    ls -d .ai/issue-$ARGUMENTS-*
    ```
 2. Extract the slug from the folder name (e.g., `issue-42-squash-merge` → `42-squash-merge`)
-3. Create a feature branch:
+3. Create the feature branch in its own worktree, using the sibling-root
+   convention (see [DEV_WORKFLOW.md](../../../DEV_WORKFLOW.md) §3):
    ```bash
-   go run main.go feature start <number>-<slug>
-   ```
-   If that fails, fall back to:
-   ```bash
-   git checkout -b feature/<number>-<slug> develop
+   git worktree add -b feature/<number>-<slug> ../git-flow-next.worktrees/<number>-<slug> develop
+   cd ../git-flow-next.worktrees/<number>-<slug>
    ```
 
-**Verify**: Confirm current branch is the feature branch.
+**Verify**: Confirm the current directory is the new worktree and the current
+branch is the feature branch.
 
-Save the `.ai/` folder path and slug in variables for subsequent steps.
+Save the worktree path and slug in variables for subsequent steps. The `.ai/`
+folder stays in the main clone — reference it as
+`../git-flow-next/.ai/issue-<number>-<slug>/` from inside the worktree.
 
 ---
 
