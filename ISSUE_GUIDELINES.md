@@ -13,9 +13,19 @@ Standards for writing clear, useful GitHub issues in the git-flow-next project.
 
 ## Title
 
-- Clear and descriptive
-- Imperative mood ("Add...", "Fix...", "Update...")
-- Specific enough to understand without opening the issue
+An issue describes a problem or request — a state, not a change — so titles
+read differently from commit and PR titles.
+
+- Clear, specific, and searchable — understandable without opening the issue
+- **No type prefix** — the [label](#labels) carries the type, so
+  `bug:`, `Feature request:`, or `Question:` prefixes are redundant noise
+- An **area prefix** is fine when it aids scanning, e.g.
+  `release finish: cannot finish after resolving a conflict`
+- **Bug reports**: describe the observed problem, not a presumed fix — you may
+  not know the fix yet (`release finish fails after resolving a conflict`,
+  not `Fix release finish conflict`)
+- **Feature requests**: imperative reads naturally
+  (`Add --dry-run option to finish command`)
 
 Good: `Add --dry-run option to finish command`
 Bad: `Feature request: dry run`

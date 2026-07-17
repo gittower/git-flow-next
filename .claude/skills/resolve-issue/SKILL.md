@@ -197,6 +197,8 @@ Public actions wait for the user. Present:
 - The PR summary content
 - The exact commands: `git push -u origin feature/<slug>` and
   `gh pr create --title "<title>" --body "$(cat <ai-folder>/pr_summary.md)"`
+  (`<title>` follows the PR-title format from `/pr-summary` /
+  COMMIT_GUIDELINES.md — `type(scope): Subject`, no issue number)
 
 Ask: **"Publish the branch and create the PR?"**
 

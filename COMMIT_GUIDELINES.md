@@ -189,6 +189,27 @@ This reverts commit abc1234 due to performance regression in large repositories.
 Refs #567
 ```
 
+## Pull Request Titles
+
+PR titles use the same format as the commit subject line:
+`<type>[(<scope>)]: <subject>` — imperative mood, sentence case, no trailing
+period, drawing from the same type and scope vocabulary defined above.
+
+- **One dominant type**: for a PR that spans several types, pick the primary
+  one (or `chore`) — don't stack prefixes.
+- **No issue number in the title**: link it in the PR body instead
+  (`Resolves #123`).
+- **Length**: keep it concise; the strict ≤50-character subject limit is a
+  commit rule, so a PR title may run slightly longer when clarity needs it.
+
+Why match commits: one convention to remember, PR lists stay scannable by
+type, and titles are already correct if the project ever switches to
+squash-merging.
+
+Note: PRs currently land as **merge commits**, so the title is a
+human-facing label — it does not become a commit and does not drive
+changelog/version tooling, which reads the branch's individual commits.
+
 ## Validation
 
 Before committing, verify your message:

@@ -60,6 +60,13 @@ Generate a pull request summary based on branch changes.
 
 ## PR Title Guidelines
 
-- Use imperative mood: "Add feature" not "Added feature"
+Follow the **Pull Request Titles** rules in
+[COMMIT_GUIDELINES.md](../../../COMMIT_GUIDELINES.md) — same subject format as
+commits: `type(scope): Subject`.
+
+- Use the same type/scope vocabulary as commits (feat, fix, docs, refactor,
+  …); pick the dominant type for a multi-purpose PR — don't stack prefixes
+- Imperative mood, sentence case, no trailing period ("Add feature" not
+  "Added feature")
 - Be specific but concise
 - Do NOT include the issue number in the title (it will be linked in the PR body)
