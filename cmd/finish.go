@@ -578,7 +578,8 @@ func handleAbort(state *mergestate.MergeState) error {
 	// Checkout the original branch. This may also no-op / fail when
 	// already on that branch; propagate any actual error only if we
 	// can't also clear state below.
-	if checkoutErr := git.Checkout(state.FullBranchName); checkoutErr != nil && abortErr == nil {
+	checkoutErr := git.Checkout(state.FullBranchName)
+	if checkoutErr != nil && abortErr == nil {
 		// If the abort itself succeeded but the checkout failed, that's
 		// a genuine problem the caller should see.
 		return &errors.GitError{Operation: fmt.Sprintf("checkout original branch '%s'", state.FullBranchName), Err: checkoutErr}
@@ -594,7 +595,14 @@ func handleAbort(state *mergestate.MergeState) error {
 	if abortErr != nil {
 		// Surface the git abort failure for visibility but don't return
 		// an error, state has been cleared and the user is unblocked.
-		fmt.Fprintf(os.Stderr, "git-flow: git abort reported no active merge/rebase; cleared stale merge state anyway (%v)\n", abortErr)
+		fmt.Fprintf(os.Stderr, "Warning: git abort reported no active merge/rebase; cleared stale merge state anyway (%v)\n", abortErr)
+	}
+
+	if checkoutErr != nil {
+		// The abort also failed above, so we fell through with state
+		// cleared. Don't swallow the checkout failure: the user may be
+		// left on the wrong branch and needs to know.
+		fmt.Fprintf(os.Stderr, "Warning: failed to checkout original branch '%s'; you may be on a different branch (%v)\n", state.FullBranchName, checkoutErr)
 	}
 
 	return nil
