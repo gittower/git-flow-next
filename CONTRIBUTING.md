@@ -47,6 +47,8 @@ See the [Skills Reference in DEV_WORKFLOW.md](DEV_WORKFLOW.md#skills-reference) 
 | [CODING_GUIDELINES.md](CODING_GUIDELINES.md) | Code conventions, patterns, and architecture |
 | [TESTING_GUIDELINES.md](TESTING_GUIDELINES.md) | Test methodology, structure, and best practices |
 | [COMMIT_GUIDELINES.md](COMMIT_GUIDELINES.md) | Commit message format and standards |
+| [GITHUB_GUIDELINES.md](GITHUB_GUIDELINES.md) | Tone, style, and formatting for all GitHub content (issues, PRs, reviews, comments) |
+| [ISSUE_GUIDELINES.md](ISSUE_GUIDELINES.md) | Issue titles, labels, body structure, and spec issues |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Design concepts and technical overview |
 | [CODE_REFERENCE.md](CODE_REFERENCE.md) | Codebase navigation and implementation details |
 | [CONFIGURATION.md](CONFIGURATION.md) | Configuration reference and examples |

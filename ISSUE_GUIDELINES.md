@@ -4,12 +4,7 @@ Standards for writing clear, useful GitHub issues in the git-flow-next project.
 
 ## General Principles
 
-- **Be brief and concise** — get to the point quickly
-- **Lead with a summary** — open with 1-2 sentences explaining what this issue is about before any sections
-- **No emojis** — keep the tone professional and scannable
-- **Minimal formatting** — use plain text where possible; don't over-format with bold, blockquotes, or horizontal rules
-- **Use h3 (`###`) for sections** — not h1 or h2, which compete with the issue title
-- **Tables and code blocks are fine** — when they make things clearer, not for decoration
+Tone, formatting, and the general posting rules — lead with a summary, be concise, no emojis, minimal formatting, `###` sections, no hard-wrapping — live in [GITHUB_GUIDELINES.md](GITHUB_GUIDELINES.md), the single source of truth for all GitHub content. This document covers only the conventions specific to issues: titles, labels, body structure, and spec issues.
 
 ## Title
 
@@ -197,8 +192,6 @@ closed when the spec ships.
 
 ## What to Avoid
 
-- Wall-of-text descriptions with no structure
-- Overly templated issues where most sections are "N/A"
-- Emoji-heavy formatting
-- h1/h2 headings in the body
-- Restating the title in the first line
+The general list (emojis, h1/h2 headings, hard-wrapping, walls of text, restating the title) is in [GITHUB_GUIDELINES.md](GITHUB_GUIDELINES.md). Issue-specific:
+
+- Overly templated issues where most sections are "N/A" — use only the sections that are relevant

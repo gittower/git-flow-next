@@ -1,3 +1,4 @@
+<!-- Tone, style, and formatting for all GitHub content: see GITHUB_GUIDELINES.md (concise, no emojis, no hard-wrapping, attribution via Co-Authored-By only). -->
 <!-- PR SUMMARY FORMAT -->
 <!-- First line: One sentence TL;DR - what this PR does and why -->
 <!-- Details paragraph: What was added/modified, how it works, key areas touched -->

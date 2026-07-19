@@ -50,6 +50,8 @@ For comprehensive development information, see:
 - **[CONFIGURATION.md](CONFIGURATION.md)** - Complete configuration reference and examples
 - **[TESTING_GUIDELINES.md](TESTING_GUIDELINES.md)** - Testing methodology and practices
 - **[COMMIT_GUIDELINES.md](COMMIT_GUIDELINES.md)** - Commit message standards and best practices
+- **[GITHUB_GUIDELINES.md](GITHUB_GUIDELINES.md)** - Tone, style, and formatting for all GitHub content (issues, PRs, reviews, comments)
+- **[ISSUE_GUIDELINES.md](ISSUE_GUIDELINES.md)** - Issue titles, labels, body structure, and spec issues
 - **[RELEASING.md](RELEASING.md)** - Release process and versioning
 - **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - GitHub Copilot context and patterns
 
