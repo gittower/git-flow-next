@@ -68,6 +68,11 @@ Run directly (no subagent needed):
    git worktree add -b feature/<number>-<slug> ../git-flow-next.worktrees/<number>-<slug> develop
    cd ../git-flow-next.worktrees/<number>-<slug>
    ```
+4. Claim the issue by assigning it to yourself — the `gh`-authenticated user
+   — so it reflects who is working on it:
+   ```bash
+   gh issue edit $ARGUMENTS --add-assignee @me
+   ```
 
 **Verify**: Confirm the current directory is the new worktree and the current
 branch is the feature branch.
