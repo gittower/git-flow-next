@@ -54,7 +54,7 @@ awaiting review):
 | PR | Title | Author | Status | Days | Next action |
 |----|-------|--------|--------|------|-------------|
 | #93 | ... | @user | window lapsed | 9 | /takeover-pr 93 |
-| #95 | ... | @user | author responded | 2 | /address-review 95 or re-review |
+| #95 | ... | @user | author responded | 2 | /follow-up-review 95 |
 | #96 | ... | @user | awaiting review | 4 | /handle-pr 96 |
 ```
 

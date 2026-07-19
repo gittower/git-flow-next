@@ -13,7 +13,10 @@ GitHub review draft, posted only after user confirmation. Internal and
 external PRs are treated the same.
 
 For later rounds — after the author responds to a posted review — use
-`/address-review <number>` instead.
+`/follow-up-review <number>` instead (it is round-aware: it verifies the prior
+requested changes against the delta and reads the author's replies).
+`/address-review` is the author-side counterpart, for feedback on a PR *you*
+authored — not for re-reviewing an incoming PR.
 
 ## Arguments
 
