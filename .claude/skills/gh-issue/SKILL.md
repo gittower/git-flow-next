@@ -24,6 +24,7 @@ Create a new GitHub issue for the gittower/git-flow-next repository.
 4. **Create the Issue**
    - Determine type and apply `bug` or `enhancement` label per ISSUE_GUIDELINES.md
    - Write title and body following ISSUE_GUIDELINES.md conventions
+   - Verify the body against the [posting checklist](../_shared/POSTING_CHECKLIST.md) before creating
    - Use `mcp__github__create_issue` to create on gittower/git-flow-next
 
 5. **Report Result**

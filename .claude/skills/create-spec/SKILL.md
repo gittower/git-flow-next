@@ -95,7 +95,8 @@ Iterate until accepted.
 
 ### 6. Post to GitHub
 
-After acceptance:
+After acceptance, verify `spec.md` and any comment body against the
+[posting checklist](../_shared/POSTING_CHECKLIST.md), then:
 
 1. Create the spec issue via `mcp__github__create_issue`: title per
    ISSUE_GUIDELINES.md (imperative, specific), body from `spec.md`, labels:

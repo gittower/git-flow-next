@@ -187,7 +187,7 @@ After confirmation:
    ```bash
    gh api repos/gittower/git-flow-next/pulls/<number> -X PATCH -f body="<updated body>"
    ```
-3. Post the replies:
+3. Post the replies (verify each body against the [posting checklist](../_shared/POSTING_CHECKLIST.md) first — the PR-description PATCH and inline replies go through `gh api`, so no hook reminder fires):
    - **Inline thread replies** — reply to each inline diff comment on its own thread:
      ```bash
      gh api repos/gittower/git-flow-next/pulls/<number>/comments/<comment-id>/replies -f body="<reply>"

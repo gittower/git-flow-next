@@ -47,11 +47,13 @@ Generate a pull request summary based on branch changes.
 
 4. **Validate Format**
 
-   Before presenting the create command, check `pr_summary.md` against
-   `.github/PULL_REQUEST_TEMPLATE.md`. A PR body is a **GitHub-only
-   artifact** — it never enters git history, so unlike commit messages it is
-   not caught by code review. This step is that missing gate. Reject and
-   rewrite the summary if any of these fail:
+   Before presenting the create command, run `pr_summary.md` through the
+   [posting checklist](../_shared/POSTING_CHECKLIST.md) (mechanical + tone),
+   then check it against `.github/PULL_REQUEST_TEMPLATE.md`. A PR body is a
+   **GitHub-only artifact** — it never enters git history, so unlike commit
+   messages it is not caught by code review, and it posts via `gh` so no hook
+   reminder fires. This step is that missing gate. Reject and rewrite the
+   summary if any of these fail:
 
    - **First line** is a single-sentence TL;DR (what + why), not a heading
    - **Details paragraph** follows it, covering what changed and key areas

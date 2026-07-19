@@ -153,7 +153,7 @@ For **Format B** (code-review): compose the review body per [GITHUB_GUIDELINES.m
 - Include severity sections (Must Fix, Should Fix, Nit) that survived filtering, as clean bullet lists
 - Do NOT include the "Passed", "Summary", "Recommendations", or "Ready for PR?" sections
 
-Do not append any AI-attribution line to the review body (no "Generated with Claude" line, no emoji) — AI credit is via `Co-Authored-By` commit trailers only. See [GITHUB_GUIDELINES.md](../../../GITHUB_GUIDELINES.md).
+Do not append any AI-attribution line to the review body (no "Generated with Claude" line, no emoji) — AI credit is via `Co-Authored-By` commit trailers only. Before posting, verify the review body and inline comments against the [posting checklist](../_shared/POSTING_CHECKLIST.md). See [GITHUB_GUIDELINES.md](../../../GITHUB_GUIDELINES.md).
 
 **Inline comments** (the `comments` array):
 

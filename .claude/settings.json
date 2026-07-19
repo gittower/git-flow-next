@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__github__(create_issue|update_issue|add_issue_comment|create_pull_request|create_pull_request_review)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/github-post-verify.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -141,8 +141,7 @@ After confirmation, in this order:
   their real numbers exist before the reply references them. Substitute the
   `#NEW`/`#NEW2` placeholders in the draft reply (and in `triage.md`) with the
   assigned numbers.
-- Post the reply (`mcp__github__add_issue_comment`; for discussions, the
-  `addDiscussionComment` GraphQL mutation with the discussion `id`)
+- Verify the reply against the [posting checklist](../_shared/POSTING_CHECKLIST.md), then post it (`mcp__github__add_issue_comment`; for discussions, the `addDiscussionComment` GraphQL mutation with the discussion `id` — discussions post via `gh api`, so no hook reminder fires there)
 - Apply labels / close via `mcp__github__update_issue` as decided
   (duplicates: close with `state_reason: "not_planned"` after the reply
   links the original)
