@@ -92,8 +92,9 @@ Create a GitHub PR review with summary and inline diff comments. Writes to a fil
    event: <APPROVE|COMMENT|REQUEST_CHANGES>
    ---
 
-   <Opening paragraph: 1-3 sentences. Overall verdict — what's good,
-   what the PR does well. Professional, concise tone.>
+   <Opening: get straight to the point. Lead with the required changes,
+   not generic praise ("solid change") or a re-summary of the PR. If nothing
+   blocks merge, say so plainly. See GITHUB_GUIDELINES.md.>
 
    **Must Fix**
    - <finding> — `file:line` — <brief explanation>
@@ -114,12 +115,11 @@ Create a GitHub PR review with summary and inline diff comments. Writes to a fil
    ````
 
    **Format rules:**
+   - Tone and style follow [GITHUB_GUIDELINES.md](../../../GITHUB_GUIDELINES.md) — concise, no emojis, no checkboxes, no hard-wrapping; this is posted publicly
    - Only include severity sections that have items
-   - No checkboxes, no emoji
    - Opening paragraph has no heading — it IS the top-level content
    - Severity sections use bold text (`**Must Fix**`), not headings
    - Inline comment headers use the exact format `### \`file:line\`` for parseability
-   - Keep everything concise — this gets posted publicly
 
 8. **Report to User**
    - Show the file path

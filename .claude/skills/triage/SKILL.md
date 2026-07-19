@@ -111,11 +111,14 @@ labels) ready to create as its own issue. Reference the originating
 report. Omit this section if there are none.>
 
 ## Draft Reply
-<The complete reply to post, written for the reporter: friendly,
-concise, no emojis. Link related/duplicate issues. Reference any
-split-out issues with placeholders (#NEW, #NEW2) — real numbers are
-filled in at execution once the issues exist. For rejections, explain
-the reasoning honestly. For answers, give the full answer.>
+<The complete reply to post, written for the reporter per
+GITHUB_GUIDELINES.md: brief thanks then a plain confirmation ("Confirmed,
+this is a bug") — no effusive praise, and don't restate analysis the
+reporter already provided (add a one-line summary only if they didn't).
+Concise, no emojis. Link related/duplicate issues. Reference any split-out
+issues with placeholders (#NEW, #NEW2) — real numbers are filled in at
+execution once the issues exist. For rejections, explain the reasoning
+honestly. For answers, give the full answer.>
 
 ## Actions on Confirmation
 - <create split-out issues first, if any>

@@ -148,16 +148,12 @@ Use judgement to interpret the instructions. The goal is to give the user contro
 
 For **Format A** (pr-review): use the parsed review body text directly (between frontmatter and inline comments), after applying any filtering from step 5.
 
-For **Format B** (code-review): compose a concise review body:
+For **Format B** (code-review): compose the review body per [GITHUB_GUIDELINES.md](../../../GITHUB_GUIDELINES.md) (concise, no emojis, no checkboxes — it's a public GitHub review, not the full local file):
 - Opening: a 1-3 sentence summary/verdict (derive from the review's overall assessment or recommendations)
-- Include severity sections (Must Fix, Should Fix, Nit) that survived filtering, reformatted as clean bullet lists without checkboxes
-- Keep it concise — this is a public GitHub review comment, not the full local review file
+- Include severity sections (Must Fix, Should Fix, Nit) that survived filtering, as clean bullet lists
 - Do NOT include the "Passed", "Summary", "Recommendations", or "Ready for PR?" sections
 
-For both formats: end the body with a blank line, then the attribution line:
-```
-🤖 Review generated with [Claude Code](https://claude.ai/claude-code)
-```
+Do not append any AI-attribution line to the review body (no "Generated with Claude" line, no emoji) — AI credit is via `Co-Authored-By` commit trailers only. See [GITHUB_GUIDELINES.md](../../../GITHUB_GUIDELINES.md).
 
 **Inline comments** (the `comments` array):
 
