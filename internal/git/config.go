@@ -134,6 +134,22 @@ func UnsetConfig(key string) error {
 	return nil
 }
 
+// UnsetConfigIfPresent unsets a Git config value, treating a confirmed-absent
+// key as a no-op. A key that is not set (git config --get exits 1) returns nil
+// silently. Any other failure — including a multi-value key that plain --unset
+// refuses (exit 5) or a genuine read/write error — is surfaced as an error.
+func UnsetConfigIfPresent(key string) error {
+	// Detect absence precisely: `git config --get` exits 1 when the key is
+	// absent. Do NOT match on --unset exit 5, which also means "multi-value".
+	err := exec.Command("git", "config", "--get", key).Run()
+	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		return nil // key not present: nothing to clean up
+	}
+	// Present, multi-value, or read error: attempt the unset so real
+	// failures (multi-value, read-only) still surface to the caller.
+	return UnsetConfig(key)
+}
+
 // GetConfigWithScope gets a Git config value at a specific scope.
 // For ConfigScopeDefault, reads merged config (git's standard behavior).
 // For specific scopes, reads only from that scope.
