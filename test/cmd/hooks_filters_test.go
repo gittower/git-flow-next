@@ -377,7 +377,10 @@ func TestStartNoFilterNoNameReturnsEmptyNameError(t *testing.T) {
 		t.Errorf("Expected business-layer error, not Cobra arg-count error, got: %s", output)
 	}
 
-	refs, _ := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/release/")
+	refs, err := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/release/")
+	if err != nil {
+		t.Fatalf("for-each-ref failed: %v", err)
+	}
 	if strings.TrimSpace(refs) != "" {
 		t.Errorf("Expected no release branch to be created, got refs: %s", refs)
 	}
@@ -423,7 +426,10 @@ exit 0
 		t.Errorf("Expected output to contain 'branch name cannot be empty', got: %s", output)
 	}
 
-	refs, _ := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/release/")
+	refs, err := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/release/")
+	if err != nil {
+		t.Fatalf("for-each-ref failed: %v", err)
+	}
 	if strings.TrimSpace(refs) != "" {
 		t.Errorf("Expected no release branch to be created, got refs: %s", refs)
 	}
@@ -531,7 +537,10 @@ func TestStartFeatureNoFilterNoNameReturnsEmptyNameError(t *testing.T) {
 		t.Errorf("Expected output to contain 'branch name cannot be empty', got: %s", output)
 	}
 
-	refs, _ := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/feature/")
+	refs, err := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/feature/")
+	if err != nil {
+		t.Fatalf("for-each-ref failed: %v", err)
+	}
 	if strings.TrimSpace(refs) != "" {
 		t.Errorf("Expected no feature branch to be created, got refs: %s", refs)
 	}
@@ -562,7 +571,10 @@ func TestStartTooManyArgsRejected(t *testing.T) {
 		t.Errorf("Expected Cobra arg-count error containing 'accepts between', got: %s", output)
 	}
 
-	refs, _ := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/release/")
+	refs, err := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/release/")
+	if err != nil {
+		t.Fatalf("for-each-ref failed: %v", err)
+	}
 	if strings.TrimSpace(refs) != "" {
 		t.Errorf("Expected no release branch to be created, got refs: %s", refs)
 	}
@@ -613,7 +625,10 @@ exit 1
 		t.Errorf("Expected Git error, not empty-name fallback, got: %s", output)
 	}
 
-	refs, _ := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/release/")
+	refs, err := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/release/")
+	if err != nil {
+		t.Fatalf("for-each-ref failed: %v", err)
+	}
 	if strings.TrimSpace(refs) != "" {
 		t.Errorf("Expected no release branch to be created, got refs: %s", refs)
 	}
