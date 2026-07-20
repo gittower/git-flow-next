@@ -261,6 +261,9 @@ By default, git-flow stores configuration in the repository's **.git/config** fi
 **3**
 : Invalid preset or configuration options
 
+**6**
+: A required precondition failed — for example, the repository has no commits and branch creation is requested but no git identity (**user.name** and **user.email**) is configured
+
 ## SEE ALSO
 
 **git-flow**(1), **git-flow-config**(1), **gitflow-config**(5)
@@ -271,6 +274,7 @@ By default, git-flow stores configuration in the repository's **.git/config** fi
 - In interactive mode without **--force**, users are prompted for confirmation before reconfiguring
 - Existing branches are preserved during initialization
 - When initializing a repository with no existing commits, **git-flow init** creates an empty initial commit to enable branch creation. No files are added to the working directory
+- Creating that initial commit requires a configured git identity. When the repository has no commits and branch creation is requested, **git-flow init** verifies that both **user.name** and **user.email** are set (in local, global, or system config) before writing any configuration. If the identity is missing, init fails fast with an actionable error (exit status **6**) and leaves the repository untouched, so it can be re-run after configuring the identity. Repositories that already have commits, or runs with **--no-create-branches**, do not require an identity
 - Compatible with repositories previously initialized with git-flow-avh
 - Configuration scope options (**--local**, **--global**, **--system**, **--file**) only affect the **init** command. All other git-flow commands (start, finish, update, etc.) always read from merged config using Git's standard precedence (local > global > system)
 - When checking initialization status without an explicit scope flag, git-flow checks merged config and reports which scope the configuration was found in
