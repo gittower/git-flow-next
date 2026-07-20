@@ -32,6 +32,40 @@ func GetConfig(key string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// HasUserIdentity reports whether both user.name and user.email are configured
+// and non-empty in git's merged/effective config (local > global > system),
+// matching what `git commit` would see. It returns false without error when a
+// key is simply unset (git config --get exits with status 1), and propagates
+// any other failure (e.g. not in a repository) to the caller.
+func HasUserIdentity() (bool, error) {
+	for _, key := range []string{"user.name", "user.email"} {
+		value, found, err := readConfigValue(key)
+		if err != nil {
+			return false, err
+		}
+		if !found || strings.TrimSpace(value) == "" {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// readConfigValue reads a single git config value from the merged/effective
+// scope. It distinguishes an unset key (git config --get exits with status 1)
+// from an unexpected failure: an unset key returns ("", false, nil), while any
+// other error is returned to the caller.
+func readConfigValue(key string) (value string, found bool, err error) {
+	cmd := exec.Command("git", "config", "--get", key)
+	output, runErr := cmd.Output()
+	if runErr != nil {
+		if exitErr, ok := runErr.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to get git config %s: %w", key, runErr)
+	}
+	return strings.TrimSpace(string(output)), true, nil
+}
+
 // GetConfigAllValues gets all values for a multi-value Git config key
 func GetConfigAllValues(key string) ([]string, error) {
 	return GetConfigAllValuesInDir("", key)
