@@ -1368,12 +1368,12 @@ func TestFinishCleansUpBaseBranch(t *testing.T) {
 // published branch instead of starting it) does not print a spurious base-config
 // cleanup warning, and that the merge itself still happens.
 // Steps:
-// 1. Sets up a test repository and initializes git-flow with defaults
-// 2. Creates a feature branch and adds a commit
-// 3. Removes the base config to simulate a checked-out (not started) branch
-// 4. Finishes the feature branch
-// 5. Verifies no cleanup warning is printed, the branch is deleted, and the
-//    commit was merged into develop
+//  1. Sets up a test repository and initializes git-flow with defaults
+//  2. Creates a feature branch and adds a commit
+//  3. Removes the base config to simulate a checked-out (not started) branch
+//  4. Finishes the feature branch
+//  5. Verifies no cleanup warning is printed, the branch is deleted, and the
+//     commit was merged into develop
 func TestFinishWithMissingBaseConfigNoWarning(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
