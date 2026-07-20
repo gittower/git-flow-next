@@ -12,6 +12,14 @@ Our workflow follows a consistent pattern that ensures quality, traceability, an
 Triage → Spec → Planning (test-first) → Implementation → Review → PR → Merge
 ```
 
+**Branching model.** This repository develops single-track on `main`. Feature
+branches (`feature/<issue>-<slug>`) are cut from `main` and merged back into
+`main` — via a pull request for the spec/feature route, or a confirmed local
+merge for `/quick-fix`. There is **no `develop` branch**. The tool's default
+`develop`-based preset (described in CLAUDE.md and the manpages) applies to
+end-user repositories, not to how this project develops itself; do not assume
+a `develop` integration branch anywhere in this workflow.
+
 There are four entry points, each driven by a single high-level skill (see
 [Skills Reference](#skills-reference)):
 
@@ -109,11 +117,11 @@ entirely locally:
 - `/quick-fix <description | issue-number>` - Eligibility check → lightweight
   task note (`.ai/quick-<slug>/task.md`, replacing spec and plan) → feature
   branch → test-first fix → local review + **mandatory Codex gate** → local
-  merge into develop after user confirmation. No PR is created.
+  merge into main after user confirmation. No PR is created.
 
 The shortcut is past the *process* (spec issue, PR, GitHub review), not the
 *gates*: with no PR there is no Copilot review, so the Codex code-review
-gate cannot be skipped, and the merge into develop is user-confirmed like
+gate cannot be skipped, and the merge into main is user-confirmed like
 any publish. Not eligible — and redirected to the normal route: new
 features, CLI surface changes, user-visible behavior changes, anything
 needing a design decision. If work grows past those bounds mid-flight, the
@@ -250,7 +258,7 @@ The implementation phase transforms issues or concepts into working code.
      the branch name after the last `/`.
      ```bash
      # from the main clone; <slug> is e.g. 42-add-squash-merge
-     git worktree add -b feature/<slug> ../git-flow-next.worktrees/<slug> develop
+     git worktree add -b feature/<slug> ../git-flow-next.worktrees/<slug> main
      cd ../git-flow-next.worktrees/<slug>
      ```
    - Do the code work (planning-derived changes, tests, commits) from inside the
@@ -536,7 +544,7 @@ predictable set of decision points.
 **Gated** (preview + user confirmation required):
 - Anything public: issue comments and replies, creating issues, posting PR
   reviews and comments, pushing branches, creating/closing PRs
-- Local merge into develop (the `/quick-fix` merge gate — the no-PR
+- Local merge into main (the `/quick-fix` merge gate — the no-PR
   equivalent of publishing)
 - Spec acceptance before implementation starts
 - Abort conditions: the 3-revision test plan abort, failed verification
@@ -564,7 +572,7 @@ Skills come in two tiers:
 | `/triage` | Classify + analyze an external issue/discussion, propose verdict | Reply & labels |
 | `/create-spec` | Draft, Codex-gate, and publish a spec issue | Acceptance, posting |
 | `/resolve-issue` | Resolve a spec issue end-to-end (plan → gate → implement → review) | Publish (push + PR) |
-| `/quick-fix` | Small fix/maintenance locally, no PR (task note → fix → review gates) | Merge into develop |
+| `/quick-fix` | Small fix/maintenance locally, no PR (task note → fix → review gates) | Merge into main |
 | `/handle-pr` | Strictly review an incoming PR and post a GitHub review | Posting |
 | `/address-review` | Evaluate review feedback on our PR, implement valid items | Push, PR reply & thread resolve |
 | `/check-prs` | Report all open PRs vs the review response window | Reminders (optional) |
@@ -633,7 +641,7 @@ The shared Codex gate procedure used by several skills is defined once in
 /analyze-issue 42
 
 # 3. Create feature branch + worktree (sibling root, see §3)
-git worktree add -b feature/42-squash-merge ../git-flow-next.worktrees/42-squash-merge develop
+git worktree add -b feature/42-squash-merge ../git-flow-next.worktrees/42-squash-merge main
 cd ../git-flow-next.worktrees/42-squash-merge
 
 # 4. Create and validate implementation plan
@@ -660,7 +668,7 @@ mkdir -p .ai/feature-my-feature
 # Write concept.md manually or with Claude's help
 
 # 2. Create feature branch + worktree (sibling root, see §3)
-git worktree add -b feature/my-feature ../git-flow-next.worktrees/my-feature develop
+git worktree add -b feature/my-feature ../git-flow-next.worktrees/my-feature main
 cd ../git-flow-next.worktrees/my-feature
 
 # 3. Create and validate implementation plan

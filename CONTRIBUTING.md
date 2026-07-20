@@ -93,7 +93,15 @@ code you touched) belong in the same PR; anything else doesn't.
 
 1. **Fork the Repository**
 2. **Create a Branch**
+
+   This project develops single-track on `main` — branch from `main` and
+   target it in your PR. There is no `develop` branch (the `develop`-based
+   preset in the docs is the tool's default for *your* repositories, not how
+   this one is developed). See the branching model in
+   [DEV_WORKFLOW.md](DEV_WORKFLOW.md#overview).
+
    ```bash
+   git checkout main && git pull
    git checkout -b feature/your-feature-name
    # or
    git checkout -b fix/your-bug-fix
