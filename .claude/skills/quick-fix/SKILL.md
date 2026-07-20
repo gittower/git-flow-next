@@ -1,6 +1,6 @@
 ---
 name: quick-fix
-description: Handle a small fix or maintenance task locally end-to-end — no PR, but full review gates and a confirmed local merge into develop
+description: Handle a small fix or maintenance task locally end-to-end — no PR, but full review gates and a confirmed local merge into main
 argument-hint: <description | issue-number>
 allowed-tools: Task, Bash, Read, Glob, Grep, Write, Edit, Agent, mcp__github__get_issue
 ---
@@ -10,7 +10,11 @@ allowed-tools: Task, Bash, Read, Glob, Grep, Write, Edit, Agent, mcp__github__ge
 Resolve a small fix or maintenance task entirely locally: lightweight task
 note instead of a spec, test-first fix on a feature branch, the same review
 rigor as the PR route (local review + mandatory Codex gate), then a local
-merge into develop after user confirmation. No PR is created.
+merge into main after user confirmation. No PR is created.
+
+This repo develops single-track on `main` — feature branches are cut from
+and merged back into `main`; there is no `develop` branch (see
+[DEV_WORKFLOW.md](../../../DEV_WORKFLOW.md) §Branching Model).
 
 This is a shortcut past the *process overhead* (spec issue, PR, GitHub
 review), never past the *quality gates*. With no PR there is no Copilot
@@ -91,12 +95,12 @@ Create the branch in its own worktree, using the sibling-root convention (see
 [DEV_WORKFLOW.md](../../../DEV_WORKFLOW.md) §3):
 
 ```bash
-git worktree add -b feature/quick-<slug> ../git-flow-next.worktrees/quick-<slug> develop
+git worktree add -b feature/quick-<slug> ../git-flow-next.worktrees/quick-<slug> main
 cd ../git-flow-next.worktrees/quick-<slug>
 ```
 
 **Verify**: current directory is the new worktree and the current branch is
-`feature/quick-<slug>`. Never commit directly on develop or main. The
+`feature/quick-<slug>`. Never commit directly on main. The
 `.ai/quick-<slug>/` task note stays in the main clone — reference it as
 `../git-flow-next/.ai/quick-<slug>/` from inside the worktree.
 
@@ -178,27 +182,27 @@ The local equivalent of the publish gate. Present to the user:
 - The exact commands to run:
   ```bash
   go run main.go feature finish quick-<slug>
-  git push origin develop
+  git push origin main
   ```
 
-Ask: **"Merge into develop and push?"** (offer merge-without-push as an
+Ask: **"Merge into main and push?"** (offer merge-without-push as an
 alternative).
 
-On confirmation (run from the main clone, since `develop` lives there):
+On confirmation (run from the main clone, since `main` lives there):
 
 1. Remove the worktree first so the branch is no longer checked out:
    `cd ../git-flow-next && git worktree remove ../git-flow-next.worktrees/quick-<slug>`
-2. `go run main.go feature finish quick-<slug>` — merges into develop and
+2. `go run main.go feature finish quick-<slug>` — merges into main and
    deletes the branch. Fall back to
-   `git checkout develop && git merge --no-ff feature/quick-<slug> && git branch -d feature/quick-<slug>` if needed
-3. Push develop if confirmed
+   `git checkout main && git merge --no-ff feature/quick-<slug> && git branch -d feature/quick-<slug>` if needed
+3. Push main if confirmed
 4. If the task came from an issue: closing it is a public action — the
    `Resolves #N` reference only auto-closes on merge to main (at the next
    release), so ask whether to close it now with a short comment noting
-   the fix is on develop
+   the fix is on main
 
-**Verify**: develop contains the merge, the feature branch is gone, and
-`go test ./...` passes on develop.
+**Verify**: main contains the merge, the feature branch is gone, and
+`go test ./...` passes on main.
 
 ## Progress Reporting
 

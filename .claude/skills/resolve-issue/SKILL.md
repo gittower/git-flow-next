@@ -65,7 +65,7 @@ Run directly (no subagent needed):
 3. Create the feature branch in its own worktree, using the sibling-root
    convention (see [DEV_WORKFLOW.md](../../../DEV_WORKFLOW.md) §3):
    ```bash
-   git worktree add -b feature/<number>-<slug> ../git-flow-next.worktrees/<number>-<slug> develop
+   git worktree add -b feature/<number>-<slug> ../git-flow-next.worktrees/<number>-<slug> main
    cd ../git-flow-next.worktrees/<number>-<slug>
    ```
 4. Claim the issue by assigning it to yourself — the `gh`-authenticated user

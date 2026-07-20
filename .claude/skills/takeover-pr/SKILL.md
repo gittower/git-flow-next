@@ -40,8 +40,8 @@ to the user instead of deciding alone.
 
 ```bash
 git fetch origin pull/<number>/head:takeover/pr-<number>
-git checkout develop && git pull
-git worktree add -b feature/<slug> ../git-flow-next.worktrees/<slug> develop
+git checkout main && git pull
+git worktree add -b feature/<slug> ../git-flow-next.worktrees/<slug> main
 cd ../git-flow-next.worktrees/<slug>
 ```
 
@@ -94,7 +94,7 @@ Prepare, but do not execute:
 Present to the user:
 
 - The eligibility evidence (review date, days elapsed, no author activity)
-- Commits on the new branch (`git log --oneline develop..HEAD`) showing
+- Commits on the new branch (`git log --oneline main..HEAD`) showing
   preserved authorship
 - The review-plan verdicts and what was implemented
 - The full successor PR body and the closing comment
