@@ -37,26 +37,32 @@ func start(branchType string, name string, base string, shouldFetch *bool) error
 		return &errors.NotInitializedError{}
 	}
 
-	// Validate inputs
-	if name == "" {
-		return &errors.EmptyBranchNameError{}
-	}
-
 	// Get git directory for hooks and filters
 	gitDir, err := git.GetGitDir()
 	if err != nil {
 		return &errors.GitError{Operation: "get git directory", Err: err}
 	}
 
-	// Apply version filter for any branch type
-	// The filter script (filter-flow-{branchType}-start-version) decides what to do
+	// Apply version filter for any branch type. The filter script
+	// (filter-flow-{branchType}-start-version) decides what to do; when no name
+	// was provided, it runs with an empty version argument and may supply one.
 	filteredName, err := hooks.RunVersionFilter(gitDir, branchType, name)
 	if err != nil {
 		return &errors.GitError{Operation: "run version filter", Err: err}
 	}
 	if filteredName != name {
-		fmt.Printf("Version filter changed '%s' to '%s'\n", name, filteredName)
+		if name == "" {
+			fmt.Printf("Version filter derived name '%s'\n", filteredName)
+		} else {
+			fmt.Printf("Version filter changed '%s' to '%s'\n", name, filteredName)
+		}
 		name = filteredName
+	}
+
+	// Fall back to the empty-name error only when neither an explicit name nor a
+	// version filter supplied one.
+	if name == "" {
+		return &errors.EmptyBranchNameError{}
 	}
 
 	// Get configuration
