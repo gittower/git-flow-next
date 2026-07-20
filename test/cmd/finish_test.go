@@ -570,6 +570,115 @@ func TestFinishWithMergeAbort(t *testing.T) {
 	}
 }
 
+// TestFinishAbortAfterManualResolve reproduces gittower/git-flow-next#110,
+// where a manually resolved conflict left merge.json stale. Salvaged from
+// PR #111 (@SAY-5) and adapted: --abort treats "nothing to abort" as a quiet
+// success (exit 0) rather than erroring.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Creates a feature branch that conflicts with develop
+// 3. Finishes the feature, hitting a merge conflict (merge in progress)
+// 4. Resolves the conflict by hand and commits (drops MERGE_HEAD, leaves merge.json)
+// 5. Runs finish --abort and verifies it exits 0
+// 6. Verifies the stale merge state is cleared
+// 7. Verifies a subsequent unrelated finish succeeds (repo unblocked)
+func TestFinishAbortAfterManualResolve(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.branch.feature.upstreamstrategy", "merge")
+	if err != nil {
+		t.Fatalf("Failed to set merge strategy: %v", err)
+	}
+
+	// Create a feature branch that will conflict with develop.
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "manual-resolve")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
+	}
+
+	testutil.WriteFile(t, dir, "test.txt", "feature content")
+	if _, err = testutil.RunGit(t, dir, "add", "test.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "Add test.txt in feature"); err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	if _, err = testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	testutil.WriteFile(t, dir, "test.txt", "develop content")
+	if _, err = testutil.RunGit(t, dir, "add", "test.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "Add test.txt in develop"); err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Finish should fail on the conflict and leave a merge in progress.
+	_, err = testutil.RunGitFlow(t, dir, "feature", "finish", "manual-resolve")
+	if err == nil {
+		t.Fatal("Expected finish to fail due to merge conflict")
+	}
+	if !testutil.IsMergeInProgress(t, dir) {
+		t.Fatal("Expected to be in merge conflict state")
+	}
+
+	// The user resolves the conflict by hand and commits directly, which
+	// completes the merge and removes MERGE_HEAD but never runs
+	// `finish --continue`, so merge.json is left behind.
+	testutil.WriteFile(t, dir, "test.txt", "manually resolved content")
+	if _, err = testutil.RunGit(t, dir, "add", "test.txt"); err != nil {
+		t.Fatalf("Failed to add resolved file: %v", err)
+	}
+	if _, err = testutil.RunGit(t, dir, "commit", "--no-edit"); err != nil {
+		t.Fatalf("Failed to commit manual resolution: %v", err)
+	}
+	if testutil.IsMergeInProgress(t, dir) {
+		t.Fatal("Expected no MERGE_HEAD after manual commit")
+	}
+
+	// `finish --abort` must succeed (exit 0) even though git has nothing to
+	// abort: the stale state is auto-cleared and the repo is unblocked.
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "--abort", "manual-resolve")
+	if err != nil {
+		t.Fatalf("Expected abort to succeed on stale state, got error: %v\nOutput: %s", err, output)
+	}
+
+	// The stale merge state must be cleared.
+	if _, err = testutil.LoadMergeState(t, dir); err == nil {
+		t.Error("Expected merge.json to be cleared after abort")
+	}
+
+	// A subsequent unrelated finish must no longer be blocked by the stale
+	// state. Merge a fresh, conflict-free feature into develop.
+	if _, err = testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "followup")
+	if err != nil {
+		t.Fatalf("Failed to start followup feature: %v\nOutput: %s", err, output)
+	}
+	testutil.WriteFile(t, dir, "followup.txt", "followup content")
+	if _, err = testutil.RunGit(t, dir, "add", "followup.txt"); err != nil {
+		t.Fatalf("Failed to add followup file: %v", err)
+	}
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "Add followup.txt"); err != nil {
+		t.Fatalf("Failed to commit followup file: %v", err)
+	}
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "followup")
+	if err != nil {
+		t.Fatalf("Expected followup finish to succeed after stale state cleared, got error: %v\nOutput: %s", err, output)
+	}
+}
+
 // TestFinishWithRebaseConflict tests the behavior when finishing a branch with rebase conflicts.
 // Steps:
 // 1. Sets up a test repository and initializes git-flow
