@@ -1582,3 +1582,37 @@ func TestInitNoCreateBranchesSkipsIdentityCheck(t *testing.T) {
 		t.Errorf("Expected gitflow.version to be '1.0', got: %s", v)
 	}
 }
+
+// TestInitWithEmptyIdentityValue tests that an explicitly-configured but
+// empty/whitespace-only identity value counts as "not configured", per the
+// spec's Technical Notes (an empty value must be treated the same as an unset
+// key). This exercises the whitespace branch that a key-not-found error alone
+// does not reach.
+// Steps:
+//  1. Creates a plain repo with no commits and no identity (setupPlainRepo)
+//  2. Sets local user.name to a whitespace-only value and user.email to a
+//     valid address, so failure is attributable to the empty name
+//  3. Runs 'git flow init --defaults' with isolated global/system config
+//  4. Verifies the command fails with exit code 6
+//  5. Verifies the output mentions user.name and the identity error
+func TestInitWithEmptyIdentityValue(t *testing.T) {
+	dir := setupPlainRepo(t)
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.name", "   "); err != nil {
+		t.Fatalf("Failed to set local whitespace user.name: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.email", "a@b.c"); err != nil {
+		t.Fatalf("Failed to set local user.email: %v", err)
+	}
+	env := isolatedConfigEnv()
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults")
+	if code := exitCodeOf(t, err); code != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "user.name") {
+		t.Errorf("Expected output to mention 'user.name', got: %s", output)
+	}
+	if !strings.Contains(output, "git user identity is not configured") {
+		t.Errorf("Expected output to contain 'git user identity is not configured', got: %s", output)
+	}
+}
