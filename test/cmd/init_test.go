@@ -1241,7 +1241,7 @@ func TestInitEmptyRepoDoesNotCreateReadme(t *testing.T) {
 	}
 }
 
-// setupPlainRepo creates a bare git repository with no commits and no
+// setupPlainRepo creates a plain git repository with no commits and no
 // configured identity. Unlike testutil.SetupEmptyTestRepo it does NOT set
 // user.name/user.email, so it is suitable for the identity-precondition tests.
 func setupPlainRepo(t *testing.T) string {
@@ -1257,7 +1257,7 @@ func setupPlainRepo(t *testing.T) string {
 // ambient global/system configuration (including a developer's ~/.gitconfig
 // identity), so identity tests observe only what the repo itself configures.
 func isolatedConfigEnv() []string {
-	return []string{"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null"}
+	return []string{"GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_CONFIG_SYSTEM=" + os.DevNull}
 }
 
 // exitCodeOf extracts the process exit code from the error returned by
@@ -1454,7 +1454,7 @@ func TestInitSucceedsWithIdentityOnFreshRepo(t *testing.T) {
 	if _, err := testutil.RunGit(t, dir, "config", "--file", globalConfigFile, "user.email", "a@b.c"); err != nil {
 		t.Fatalf("Failed to seed global user.email: %v", err)
 	}
-	env := []string{"GIT_CONFIG_GLOBAL=" + globalConfigFile, "GIT_CONFIG_SYSTEM=/dev/null"}
+	env := []string{"GIT_CONFIG_GLOBAL=" + globalConfigFile, "GIT_CONFIG_SYSTEM=" + os.DevNull}
 
 	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults")
 	if err != nil {
