@@ -160,7 +160,7 @@ func performDelete(branchType, name, fullBranchName string, branchConfig config.
 
 	// Clean up base branch configuration
 	configKey := fmt.Sprintf("gitflow.branch.%s.base", fullBranchName)
-	if err := git.UnsetConfig(configKey); err != nil {
+	if err := git.UnsetConfigIfPresent(configKey); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: Failed to clean up base config: %v\n", err)
 	}
 

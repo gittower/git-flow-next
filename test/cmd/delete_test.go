@@ -1,6 +1,7 @@
 package cmd_test
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -878,5 +879,170 @@ func TestDeleteFeatureBranchRemoteNoRemoteError(t *testing.T) {
 	// Verify branch still exists locally (not deleted because error occurred before deletion)
 	if !testutil.BranchExists(t, dir, "feature/test-feature") {
 		t.Error("Expected feature/test-feature branch to still exist after failed delete --remote")
+	}
+}
+
+// TestDeleteWithMissingBaseConfigNoWarning tests that deleting a feature branch
+// whose base config was never stored locally (a collaborator checked out a
+// published branch instead of starting it) does not print a spurious base-config
+// cleanup warning.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates a feature branch (which stores base config)
+// 3. Removes the base config to simulate a checked-out (not started) branch
+// 4. Deletes the feature branch
+// 5. Verifies no cleanup warning is printed and the branch is deleted
+func TestDeleteWithMissingBaseConfigNoWarning(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create feature branch (stores base config)
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "missing-base")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Remove the base config to simulate a checked-out (not started) branch
+	_, err = testutil.RunGit(t, dir, "config", "--unset", "gitflow.branch.feature/missing-base.base")
+	if err != nil {
+		t.Fatalf("Failed to unset base config: %v", err)
+	}
+
+	// Delete the feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "delete", "missing-base")
+	if err != nil {
+		t.Fatalf("Failed to delete feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify no spurious cleanup warning was printed
+	if strings.Contains(output, "Warning: Failed to clean up base config") {
+		t.Errorf("Expected no base-config cleanup warning, but got:\n%s", output)
+	}
+
+	// Verify branch is deleted
+	if testutil.BranchExists(t, dir, "feature/missing-base") {
+		t.Error("Expected feature branch to be deleted")
+	}
+}
+
+// TestDeleteWithMultiValueBaseConfigWarns tests that deleting a feature branch
+// whose base config key holds multiple values still prints the cleanup warning,
+// because a multi-value key is a genuine failure that --unset cannot resolve and
+// must not be silently swallowed like a missing key.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates a feature branch (which stores base config)
+// 3. Adds a second value to the base config key
+// 4. Deletes the feature branch
+// 5. Verifies the cleanup warning is printed and the branch is still deleted
+func TestDeleteWithMultiValueBaseConfigWarns(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create feature branch (stores base config)
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "multi-base")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Add a second value so the key becomes multi-value
+	_, err = testutil.RunGit(t, dir, "config", "--add", "gitflow.branch.feature/multi-base.base", "other-base")
+	if err != nil {
+		t.Fatalf("Failed to add second base config value: %v", err)
+	}
+
+	// Delete the feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "delete", "multi-base")
+	if err != nil {
+		t.Fatalf("Failed to delete feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify the cleanup warning is still printed for a genuine failure
+	if !strings.Contains(output, "Warning: Failed to clean up base config") {
+		t.Errorf("Expected base-config cleanup warning for multi-value key, but got:\n%s", output)
+	}
+
+	// Verify branch is still deleted (warning is non-fatal)
+	if testutil.BranchExists(t, dir, "feature/multi-base") {
+		t.Error("Expected feature branch to be deleted")
+	}
+}
+
+// TestDeleteWithBaseConfigInNonLocalScopeNoWarning tests that deleting a feature
+// branch whose base config key is absent from local config but present only in a
+// non-local scope (global) does not print a spurious cleanup warning. The
+// presence probe must be scoped to local config — the same scope the unset
+// operates on — so a global-only value is not mistaken for a local key that then
+// fails to unset.
+// Steps:
+// 1. Isolates the global config to a temp file so the real global config is untouched
+// 2. Sets up a test repository and initializes git-flow with defaults
+// 3. Creates a feature branch (which stores the base config locally)
+// 4. Unsets the local base key to simulate a branch not started locally
+// 5. Adds the base key to the global scope only
+// 6. Deletes the feature branch
+// 7. Verifies no cleanup warning is printed and the branch is deleted
+func TestDeleteWithBaseConfigInNonLocalScopeNoWarning(t *testing.T) {
+	// Isolate the global config to a temp file so nothing touches the
+	// developer's real global config. RunGit/RunGitFlow exec inheriting
+	// os.Environ(), so the subprocess sees this override.
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "global-gitconfig"))
+
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create feature branch (stores base config locally)
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "scoped-base")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Remove the local base key to simulate a branch not started locally
+	_, err = testutil.RunGit(t, dir, "config", "--local", "--unset", "gitflow.branch.feature/scoped-base.base")
+	if err != nil {
+		t.Fatalf("Failed to unset local base config: %v", err)
+	}
+
+	// Add the base key to the global scope only (lands in the isolated GIT_CONFIG_GLOBAL file)
+	_, err = testutil.RunGit(t, dir, "config", "--global", "--add", "gitflow.branch.feature/scoped-base.base", "develop")
+	if err != nil {
+		t.Fatalf("Failed to add global base config: %v", err)
+	}
+
+	// Delete the feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "delete", "scoped-base")
+	if err != nil {
+		t.Fatalf("Failed to delete feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify no spurious cleanup warning was printed
+	if strings.Contains(output, "Warning: Failed to clean up base config") {
+		t.Errorf("Expected no base-config cleanup warning, but got:\n%s", output)
+	}
+
+	// Verify branch is deleted
+	if testutil.BranchExists(t, dir, "feature/scoped-base") {
+		t.Error("Expected feature branch to be deleted")
 	}
 }
