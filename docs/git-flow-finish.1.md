@@ -38,7 +38,7 @@ The operation maintains a persistent state file that allows it to resume after c
 : Continue the finish operation after resolving merge conflicts
 
 **--abort**, **-a**
-: Abort the finish operation and return to the original state
+: Abort the finish operation and return to the original state. When no finish operation is in progress, **--abort** is a no-op and exits successfully.
 
 **--force**, **-f**
 : Force finish: skip remote branch sync check and allow finishing non-standard branches. When used, bypasses the safety check that prevents finishing when the local branch is behind its remote tracking branch.
