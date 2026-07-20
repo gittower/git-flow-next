@@ -137,8 +137,15 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 		return &errors.MergeInProgressError{BranchName: state.FullBranchName}
 	}
 
-	// Don't allow continue or abort if no merge is in progress
-	if continueOp || abortOp {
+	// Abort is forgiving: if there is no merge in progress (e.g. stale state
+	// was just auto-cleared, or there was never a merge), --abort has nothing
+	// to do and exits quietly. The repository is already in the clean state
+	// that --abort promises. Continue still errors, since continuing implies
+	// there is an operation to resume.
+	if abortOp {
+		return nil
+	}
+	if continueOp {
 		return &errors.NoMergeInProgressError{}
 	}
 
