@@ -1329,14 +1329,14 @@ func TestInitFailsWithoutIdentityShowsActionableError(t *testing.T) {
 // identity) writes no git-flow config or branches, so a second run behaves
 // identically instead of wrongly reporting 'already configured'.
 // Steps:
-// 1. Creates a plain repo with no commits and no identity (setupPlainRepo)
-// 2. Runs 'git flow init --preset gitlab' with isolated config (first run)
-// 3. Verifies the first run fails with exit code 6 for the identity reason
-// 4. Verifies no gitflow.* local config exists after the failed run
-// 5. Verifies no base branches (main, develop, production, staging) exist
-// 6. Runs 'git flow init --preset gitlab' again (second run)
-// 7. Verifies the second run also fails with exit code 6 and the same message,
-//    and never reports 'already initialized'/'already configured'
+//  1. Creates a plain repo with no commits and no identity (setupPlainRepo)
+//  2. Runs 'git flow init --preset gitlab' with isolated config (first run)
+//  3. Verifies the first run fails with exit code 6 for the identity reason
+//  4. Verifies no gitflow.* local config exists after the failed run
+//  5. Verifies no base branches (main, develop, production, staging) exist
+//  6. Runs 'git flow init --preset gitlab' again (second run)
+//  7. Verifies the second run also fails with exit code 6 and the same message,
+//     and never reports 'already initialized'/'already configured'
 func TestInitWithoutIdentityLeavesNoState(t *testing.T) {
 	dir := setupPlainRepo(t)
 	env := isolatedConfigEnv()
