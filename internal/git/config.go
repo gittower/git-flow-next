@@ -134,15 +134,15 @@ func UnsetConfig(key string) error {
 	return nil
 }
 
-// UnsetConfigIfPresent unsets a Git config value, treating a confirmed-absent
-// key as a no-op. A key that is not set in local config (git config --local
-// --get exits 1) returns nil silently. Any other failure — including a
-// multi-value key that plain --unset refuses (exit 5) or a genuine read/write
-// error — is surfaced as an error.
+// UnsetConfigIfPresent unsets a Git config value in local config, treating a
+// confirmed-absent key as a no-op. A key that is not set in local config (git
+// config --local --get exits 1) returns nil silently. Any other failure —
+// including a multi-value key that --unset refuses (exit 5) or a genuine
+// read/write error — is surfaced as an error.
 func UnsetConfigIfPresent(key string) error {
 	// Detect absence precisely and in the scope that gets cleaned: `git config
-	// --local --get` exits 1 when the key is absent from local config. UnsetConfig
-	// below unsets local only, so probing merged config (local+global+system)
+	// --local --get` exits 1 when the key is absent from local config. The unset
+	// below is local-scoped too, so probing merged config (local+global+system)
 	// would wrongly treat a global/system-only value as present and fall through
 	// to a local --unset that finds nothing and errors. Do NOT match on --unset
 	// exit 5, which also means "multi-value".
@@ -150,9 +150,9 @@ func UnsetConfigIfPresent(key string) error {
 	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 		return nil // key not present in local config: nothing to clean up
 	}
-	// Present, multi-value, or read error: attempt the unset so real
-	// failures (multi-value, read-only) still surface to the caller.
-	return UnsetConfig(key)
+	// Present, multi-value, or read error: attempt the unset in the same local
+	// scope we probed so real failures (multi-value, read-only) still surface.
+	return UnsetConfigWithScope(key, ConfigScopeLocal, "")
 }
 
 // GetConfigWithScope gets a Git config value at a specific scope.
