@@ -1362,3 +1362,199 @@ func TestFinishCleansUpBaseBranch(t *testing.T) {
 		t.Error("Expected feature branch to be deleted after finish")
 	}
 }
+
+// TestFinishWithMissingBaseConfigNoWarning tests that finishing a feature branch
+// whose base config was never stored locally (a collaborator checked out a
+// published branch instead of starting it) does not print a spurious base-config
+// cleanup warning, and that the merge itself still happens.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates a feature branch and adds a commit
+// 3. Removes the base config to simulate a checked-out (not started) branch
+// 4. Finishes the feature branch
+// 5. Verifies no cleanup warning is printed, the branch is deleted, and the
+//    commit was merged into develop
+func TestFinishWithMissingBaseConfigNoWarning(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create feature branch (stores base config)
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "missing-base")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Add a commit on the feature branch
+	if err := testutil.WriteFile(t, dir, "missing-base.txt", "feature content"); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "add", "missing-base.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add missing-base test file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Remove the base config to simulate a checked-out (not started) branch
+	_, err = testutil.RunGit(t, dir, "config", "--unset", "gitflow.branch.feature/missing-base.base")
+	if err != nil {
+		t.Fatalf("Failed to unset base config: %v", err)
+	}
+
+	// Finish the feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "missing-base")
+	if err != nil {
+		t.Fatalf("Failed to finish feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify no spurious cleanup warning was printed
+	if strings.Contains(output, "Warning: Failed to clean up base config") {
+		t.Errorf("Expected no base-config cleanup warning, but got:\n%s", output)
+	}
+
+	// Verify branch is deleted
+	if testutil.BranchExists(t, dir, "feature/missing-base") {
+		t.Error("Expected feature branch to be deleted after finish")
+	}
+
+	// Verify the finish actually merged the commit into develop
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	if err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	content := testutil.ReadFile(t, dir, "missing-base.txt")
+	if content != "feature content" {
+		t.Errorf("Expected missing-base.txt to be merged into develop, got content '%s'", content)
+	}
+}
+
+// TestFinishKeepLocalPreservesBaseConfig tests that finishing a feature branch
+// with --keeplocal skips base-config cleanup entirely, leaving both the local
+// branch and its base config untouched.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates a feature branch and adds a commit
+// 3. Finishes the feature branch with --keeplocal
+// 4. Verifies the local branch is kept and the base config is preserved
+func TestFinishKeepLocalPreservesBaseConfig(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create feature branch (stores base config)
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "keeplocal-base")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Add a commit on the feature branch
+	if err := testutil.WriteFile(t, dir, "keeplocal.txt", "feature content"); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "add", "keeplocal.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add keeplocal test file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Finish the feature branch with --keeplocal
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "keeplocal-base", "--keeplocal")
+	if err != nil {
+		t.Fatalf("Failed to finish feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify the local branch is kept
+	if !testutil.BranchExists(t, dir, "feature/keeplocal-base") {
+		t.Error("Expected feature branch to be kept with --keeplocal")
+	}
+
+	// Verify the base config is preserved (cleanup block skipped entirely)
+	value, err := testutil.RunGit(t, dir, "config", "--get", "gitflow.branch.feature/keeplocal-base.base")
+	if err != nil {
+		t.Errorf("Expected base config to be preserved with --keeplocal, but --get failed: %v", err)
+	}
+	if strings.TrimSpace(value) == "" {
+		t.Errorf("Expected base config to hold a value, got empty")
+	}
+}
+
+// TestFinishWithMultiValueBaseConfigWarns tests that finishing a feature branch
+// whose base config key holds multiple values still prints the cleanup warning.
+// The finish call site warns through a code path independent of delete, so the
+// "genuine failure still warns" contract is guarded here separately.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates a feature branch and adds a commit
+// 3. Adds a second value to the base config key
+// 4. Finishes the feature branch
+// 5. Verifies the cleanup warning is printed and the branch is still finished
+func TestFinishWithMultiValueBaseConfigWarns(t *testing.T) {
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Create feature branch (stores base config)
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "multi-base")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Add a commit on the feature branch
+	if err := testutil.WriteFile(t, dir, "multi-base.txt", "feature content"); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "add", "multi-base.txt")
+	if err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add multi-base test file")
+	if err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	// Add a second value so the key becomes multi-value
+	_, err = testutil.RunGit(t, dir, "config", "--add", "gitflow.branch.feature/multi-base.base", "other-base")
+	if err != nil {
+		t.Fatalf("Failed to add second base config value: %v", err)
+	}
+
+	// Finish the feature branch
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "multi-base")
+	if err != nil {
+		t.Fatalf("Failed to finish feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify the cleanup warning is still printed for a genuine failure
+	if !strings.Contains(output, "Warning: Failed to clean up base config") {
+		t.Errorf("Expected base-config cleanup warning for multi-value key, but got:\n%s", output)
+	}
+
+	// Verify branch is still finished and deleted (warning is non-fatal)
+	if testutil.BranchExists(t, dir, "feature/multi-base") {
+		t.Error("Expected feature branch to be deleted after finish")
+	}
+}
