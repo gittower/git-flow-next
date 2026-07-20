@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
@@ -293,6 +294,328 @@ fi
 	// Verify original name branch was NOT created
 	if testutil.BranchExists(t, dir, "release/1.0.0") {
 		t.Error("release/1.0.0 should not exist - filter should have changed it to v1.0.0")
+	}
+}
+
+// TestStartDerivesVersionFromFilterWhenNameOmitted tests that a no-argument
+// start runs the version filter (with an empty version argument) and uses its
+// trimmed output as the branch name for a release branch.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Installs filter-flow-release-start-version that echoes "1.4.0" only when its $1 is empty
+// 3. Runs 'git flow release start' with no name and no base
+// 4. Verifies exit 0 and output contains "Created branch 'release/1.4.0' from 'develop'"
+// 5. Verifies branch release/1.4.0 exists (filter-derived name from empty $1)
+func TestStartDerivesVersionFromFilterWhenNameOmitted(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	// Filter echoes 1.4.0 only when the version argument ($1) is empty,
+	// proving it was invoked with an empty version by the no-arg start.
+	script := `#!/bin/sh
+VERSION="$1"
+if [ -z "$VERSION" ]; then
+    echo "1.4.0"
+fi
+`
+	createHookScript(t, dir, "filter-flow-release-start-version", script)
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "start")
+	if err != nil {
+		t.Fatalf("Expected release start to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(output, "Created branch 'release/1.4.0' from 'develop'") {
+		t.Errorf("Expected output to contain \"Created branch 'release/1.4.0' from 'develop'\", got: %s", output)
+	}
+
+	if !testutil.BranchExists(t, dir, "release/1.4.0") {
+		t.Error("Expected release/1.4.0 branch to exist (derived from version filter)")
+	}
+}
+
+// TestStartNoFilterNoNameReturnsEmptyNameError tests that a no-argument start
+// with no version filter falls back to the business-layer empty-name error
+// rather than the Cobra arg-count error.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults (no filter installed)
+// 2. Runs 'git flow release start' with no args
+// 3. Verifies non-zero exit with code ExitCodeInvalidInput (2)
+// 4. Verifies output contains "branch name cannot be empty" and NOT "accepts between"
+// 5. Verifies no release branch was created (refs/heads/release/ is empty)
+func TestStartNoFilterNoNameReturnsEmptyNameError(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "start")
+	if err == nil {
+		t.Fatalf("Expected release start with no name to fail, but it succeeded\nOutput: %s", output)
+	}
+
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeInvalidInput) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeInvalidInput, exitErr.ExitCode)
+		}
+	} else {
+		t.Errorf("Expected *testutil.ExitError, got %T", err)
+	}
+
+	if !strings.Contains(output, "branch name cannot be empty") {
+		t.Errorf("Expected output to contain 'branch name cannot be empty', got: %s", output)
+	}
+	if strings.Contains(output, "accepts between") {
+		t.Errorf("Expected business-layer error, not Cobra arg-count error, got: %s", output)
+	}
+
+	refs, _ := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/release/")
+	if strings.TrimSpace(refs) != "" {
+		t.Errorf("Expected no release branch to be created, got refs: %s", refs)
+	}
+}
+
+// TestStartFilterReturnsEmptyReturnsEmptyNameError tests that a no-argument
+// start with a filter that produces no output falls back to the empty-name error.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Installs filter-flow-release-start-version that prints nothing and exits 0
+// 3. Runs 'git flow release start' with no args
+// 4. Verifies non-zero exit with code ExitCodeInvalidInput (2)
+// 5. Verifies output contains "branch name cannot be empty"
+// 6. Verifies no release branch was created (refs/heads/release/ is empty)
+func TestStartFilterReturnsEmptyReturnsEmptyNameError(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	script := `#!/bin/sh
+exit 0
+`
+	createHookScript(t, dir, "filter-flow-release-start-version", script)
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "start")
+	if err == nil {
+		t.Fatalf("Expected release start with empty filter output to fail, but it succeeded\nOutput: %s", output)
+	}
+
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeInvalidInput) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeInvalidInput, exitErr.ExitCode)
+		}
+	} else {
+		t.Errorf("Expected *testutil.ExitError, got %T", err)
+	}
+
+	if !strings.Contains(output, "branch name cannot be empty") {
+		t.Errorf("Expected output to contain 'branch name cannot be empty', got: %s", output)
+	}
+
+	refs, _ := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/release/")
+	if strings.TrimSpace(refs) != "" {
+		t.Errorf("Expected no release branch to be created, got refs: %s", refs)
+	}
+}
+
+// TestStartExplicitNameNoFilter tests that an explicit name with no filter
+// installed creates the branch unchanged and prints no filter-change message.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults (no filter installed)
+// 2. Runs 'git flow release start 1.0.0'
+// 3. Verifies exit 0 and output contains "Created branch 'release/1.0.0' from 'develop'"
+// 4. Verifies branch release/1.0.0 exists
+// 5. Verifies output does NOT contain "Version filter changed"
+func TestStartExplicitNameNoFilter(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0")
+	if err != nil {
+		t.Fatalf("Expected release start to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(output, "Created branch 'release/1.0.0' from 'develop'") {
+		t.Errorf("Expected output to contain \"Created branch 'release/1.0.0' from 'develop'\", got: %s", output)
+	}
+	if !testutil.BranchExists(t, dir, "release/1.0.0") {
+		t.Error("Expected release/1.0.0 branch to exist")
+	}
+	if strings.Contains(output, "Version filter changed") {
+		t.Errorf("Expected no version filter message, got: %s", output)
+	}
+}
+
+// TestStartDerivesVersionFromFilterHotfix tests that no-argument start version
+// derivation is generic across branch types, using hotfix (start point main).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Installs filter-flow-hotfix-start-version that echoes "2.0.1"
+// 3. Runs 'git flow hotfix start' with no args
+// 4. Verifies exit 0 and output contains "Created branch 'hotfix/2.0.1' from 'main'"
+// 5. Verifies branch hotfix/2.0.1 exists (derived name, hotfix start point main)
+func TestStartDerivesVersionFromFilterHotfix(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	script := `#!/bin/sh
+echo "2.0.1"
+`
+	createHookScript(t, dir, "filter-flow-hotfix-start-version", script)
+
+	output, err := testutil.RunGitFlow(t, dir, "hotfix", "start")
+	if err != nil {
+		t.Fatalf("Expected hotfix start to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(output, "Created branch 'hotfix/2.0.1' from 'main'") {
+		t.Errorf("Expected output to contain \"Created branch 'hotfix/2.0.1' from 'main'\", got: %s", output)
+	}
+	if !testutil.BranchExists(t, dir, "hotfix/2.0.1") {
+		t.Error("Expected hotfix/2.0.1 branch to exist (derived from version filter)")
+	}
+}
+
+// TestStartFeatureNoFilterNoNameReturnsEmptyNameError tests that a feature type
+// with no version filter and no argument still yields the empty-name error.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults (no feature filter)
+// 2. Runs 'git flow feature start' with no args
+// 3. Verifies non-zero exit with code ExitCodeInvalidInput (2)
+// 4. Verifies output contains "branch name cannot be empty"
+// 5. Verifies no feature branch was created (refs/heads/feature/ is empty)
+func TestStartFeatureNoFilterNoNameReturnsEmptyNameError(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start")
+	if err == nil {
+		t.Fatalf("Expected feature start with no name to fail, but it succeeded\nOutput: %s", output)
+	}
+
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeInvalidInput) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeInvalidInput, exitErr.ExitCode)
+		}
+	} else {
+		t.Errorf("Expected *testutil.ExitError, got %T", err)
+	}
+
+	if !strings.Contains(output, "branch name cannot be empty") {
+		t.Errorf("Expected output to contain 'branch name cannot be empty', got: %s", output)
+	}
+
+	refs, _ := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/feature/")
+	if strings.TrimSpace(refs) != "" {
+		t.Errorf("Expected no feature branch to be created, got refs: %s", refs)
+	}
+}
+
+// TestStartTooManyArgsRejected tests that relaxing the lower arg bound to zero
+// still caps the upper bound at two, rejecting three positional arguments.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Runs 'git flow release start 1.0.0 develop extra' (three positional args)
+// 3. Verifies non-zero exit and output contains "accepts between" (Cobra arg-count error)
+// 4. Verifies no release branch was created (refs/heads/release/ is empty)
+func TestStartTooManyArgsRejected(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0", "develop", "extra")
+	if err == nil {
+		t.Fatalf("Expected release start with three args to fail, but it succeeded\nOutput: %s", output)
+	}
+
+	if !strings.Contains(output, "accepts between") {
+		t.Errorf("Expected Cobra arg-count error containing 'accepts between', got: %s", output)
+	}
+
+	refs, _ := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/release/")
+	if strings.TrimSpace(refs) != "" {
+		t.Errorf("Expected no release branch to be created, got refs: %s", refs)
+	}
+}
+
+// TestStartFilterNonZeroExitReturnsGitError tests that a version filter which
+// fails (non-zero exit) surfaces a Git error, not the empty-name fallback,
+// proving the filter runs before the moved empty-name guard.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Installs filter-flow-release-start-version that writes to stderr and exits 1
+// 3. Runs 'git flow release start' with no args
+// 4. Verifies non-zero exit with code ExitCodeGitError (3), not ExitCodeInvalidInput (2)
+// 5. Verifies output contains "version filter" and NOT "branch name cannot be empty"
+// 6. Verifies no release branch was created (refs/heads/release/ is empty)
+func TestStartFilterNonZeroExitReturnsGitError(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	script := `#!/bin/sh
+echo "filter boom" >&2
+exit 1
+`
+	createHookScript(t, dir, "filter-flow-release-start-version", script)
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "start")
+	if err == nil {
+		t.Fatalf("Expected release start with failing filter to fail, but it succeeded\nOutput: %s", output)
+	}
+
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeGitError) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeGitError, exitErr.ExitCode)
+		}
+	} else {
+		t.Errorf("Expected *testutil.ExitError, got %T", err)
+	}
+
+	if !strings.Contains(output, "version filter") {
+		t.Errorf("Expected output to contain 'version filter', got: %s", output)
+	}
+	if strings.Contains(output, "branch name cannot be empty") {
+		t.Errorf("Expected Git error, not empty-name fallback, got: %s", output)
+	}
+
+	refs, _ := testutil.RunGit(t, dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/release/")
+	if strings.TrimSpace(refs) != "" {
+		t.Errorf("Expected no release branch to be created, got refs: %s", refs)
 	}
 }
 
