@@ -311,3 +311,16 @@ func (e *AlreadyInitializedError) Error() string {
 func (e *AlreadyInitializedError) ExitCode() ExitCode {
 	return ExitCodeValidationError
 }
+
+// MissingUserIdentityError indicates git user.name/user.email are not configured
+type MissingUserIdentityError struct{}
+
+func (e *MissingUserIdentityError) Error() string {
+	return "git user identity is not configured. Set it before running git flow init:\n" +
+		"  git config --global user.name \"Your Name\"\n" +
+		"  git config --global user.email \"you@example.com\""
+}
+
+func (e *MissingUserIdentityError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
