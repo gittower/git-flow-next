@@ -71,6 +71,8 @@ Where:
 
 Version filters receive the version as the first argument (`$1`) and should output the modified version to stdout.
 
+When `git flow <type> start` is run without a name argument, the version filter still fires — with an empty `$1` — and its trimmed output becomes the branch name. This lets a filter derive the version itself (for example from the latest tag). If no version filter is configured, or the filter produces no output, the command fails with `branch name cannot be empty`.
+
 **Example: Add 'v' prefix to versions**
 
 ```bash
