@@ -732,9 +732,11 @@ func FetchBranch(remote, branch string) error {
 	if err != nil {
 		stderr := strings.TrimSpace(string(output))
 		if isRemoteRefNotFound(stderr) {
-			return fmt.Errorf("fetch branch '%s' from '%s': %s: %w", branch, remote, stderr, ErrRemoteRefNotFound)
+			// Join the benign sentinel with the underlying exec error so callers can classify via
+			// errors.Is(ErrRemoteRefNotFound) while the original error stays available for diagnostics.
+			return fmt.Errorf("fetch branch '%s' from '%s': %s: %w", branch, remote, stderr, errors.Join(ErrRemoteRefNotFound, err))
 		}
-		return fmt.Errorf("failed to fetch branch '%s' from '%s': %s", branch, remote, stderr)
+		return fmt.Errorf("failed to fetch branch '%s' from '%s': %s: %w", branch, remote, stderr, err)
 	}
 	return nil
 }
