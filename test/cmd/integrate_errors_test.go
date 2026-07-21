@@ -204,6 +204,46 @@ func TestIntegrateParentMissing(t *testing.T) {
 	}
 }
 
+// TestIntegrateSourceBranchDeleted verifies a configured-but-deleted base branch
+// errors cleanly before any state mutation, rather than saving state and checking
+// out the parent before the merge fails.
+//
+// Steps:
+//  1. init --defaults; checkout main; delete the configured develop branch.
+//  2. Run: git flow integrate develop.
+//  3. Assert non-zero exit, error mentions the branch does not exist, no merge
+//     state was written, and main is unchanged.
+func TestIntegrateSourceBranchDeleted(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+	if _, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+	// develop remains configured as a base branch, but the git branch is gone.
+	if _, err := testutil.RunGit(t, dir, "branch", "-D", "develop"); err != nil {
+		t.Fatalf("Failed to delete develop: %v", err)
+	}
+	preMain := integRevParse(t, dir, "main")
+
+	out, err := testutil.RunGitFlow(t, dir, "integrate", "develop")
+	if err == nil {
+		t.Fatalf("Expected integrate of deleted source branch to fail.\nOutput: %s", out)
+	}
+	if !strings.Contains(out, "does not exist") {
+		t.Errorf("Expected error to report the branch does not exist, got: %s", out)
+	}
+	if integStateExists(t, dir) {
+		t.Error("Expected no merge state written when the source branch is missing")
+	}
+	if got := integRevParse(t, dir, "main"); got != preMain {
+		t.Errorf("Expected main unchanged (%s), got %s", preMain, got)
+	}
+}
+
 // TestIntegrateNotInitialized verifies integrate errors when git-flow is not
 // initialized.
 //

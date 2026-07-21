@@ -358,3 +358,57 @@ func TestIntegrateNoFetchOverridesConfig(t *testing.T) {
 		t.Errorf("Expected commit C (%s) to be present on main", cCommit)
 	}
 }
+
+// TestIntegrateFetchParentCheckedOutSurfacesFailure verifies that when the
+// parent branch is checked out, the parent:parent fetch refspec git refuses is
+// surfaced honestly: integrate warns and does NOT print "Fetch completed", so a
+// stale local parent is not integrated silently. The operation stays non-fatal.
+//
+// Steps:
+//  1. SetupTestRepoWithRemote; push commit R to main via a second clone.
+//  2. Give local develop commit C; check out main locally so the parent is HEAD.
+//  3. Run: git flow integrate develop --fetch.
+//  4. Assert exit 0, a Warning is printed, "Fetch completed" is NOT printed,
+//     C is integrated into main, and R (unfetchable) is absent from local main.
+func TestIntegrateFetchParentCheckedOutSurfacesFailure(t *testing.T) {
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	secondDir := t.TempDir()
+	if _, err := testutil.RunGit(t, secondDir, "clone", remoteDir, "."); err != nil {
+		t.Fatalf("Failed to clone remote: %v", err)
+	}
+	testutil.ConfigureGitIdentity(t, secondDir)
+	rCommit := integAddCommit(t, secondDir, "main", "remote.txt", "R", "Add R on remote main")
+	if _, err := testutil.RunGit(t, secondDir, "push", "origin", "main"); err != nil {
+		t.Fatalf("Failed to push R to remote: %v", err)
+	}
+
+	cCommit := integAddCommit(t, dir, "develop", "c.txt", "C", "Add C on develop")
+
+	// Check out the parent so the parent:parent refspec is refused by git.
+	if _, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "integrate", "develop", "--fetch")
+	if err != nil {
+		t.Fatalf("integrate develop --fetch should stay non-fatal: %v\nOutput: %s", err, out)
+	}
+
+	if !strings.Contains(out, "Warning") {
+		t.Errorf("Expected a warning surfacing the failed parent fetch, got:\n%s", out)
+	}
+	if strings.Contains(out, "Fetch completed") {
+		t.Errorf("Expected NO \"Fetch completed\" when the parent fast-forward failed, got:\n%s", out)
+	}
+	// C still integrates into local main; R could not be fetched into the
+	// checked-out parent, so it is honestly absent rather than silently claimed.
+	if !integIsAncestor(t, dir, cCommit, "main") {
+		t.Errorf("Expected commit C (%s) integrated into main", cCommit)
+	}
+	if integIsAncestor(t, dir, rCommit, "main") {
+		t.Errorf("Expected R (%s) absent from local main after the refused fetch", rCommit)
+	}
+}

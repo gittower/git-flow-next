@@ -389,6 +389,11 @@ func TestIntegrateChildUpdateConflictThenAbort(t *testing.T) {
 	// cleanly, but makes staging's rebase replay conflict).
 	integAddCommit(t, dir, "develop", "conflict.txt", "develop content\n", "Add C on develop")
 
+	// Capture early's tip before integrating so we can prove it was genuinely
+	// updated (not left untouched) before the later staging conflict. Child
+	// discovery is sorted, so "early" is updated before "staging".
+	earlyBefore := integRevParse(t, dir, "early")
+
 	out, err := testutil.RunGitFlow(t, dir, "integrate", "develop", "--tag", "v2.0.0")
 	if err == nil {
 		t.Fatalf("Expected staging rebase conflict, got success.\nOutput: %s", out)
@@ -410,6 +415,17 @@ func TestIntegrateChildUpdateConflictThenAbort(t *testing.T) {
 	mainAtConflict := integRevParse(t, dir, "main")
 	tagAtConflict := integRevParse(t, dir, "v2.0.0")
 	earlyAtConflict := integRevParse(t, dir, "early")
+
+	// early must have actually been updated before the staging conflict: its tip
+	// moved and now carries main's completed merge. Without deterministic ordering
+	// (or if early were skipped) this assertion would not hold, so it guards
+	// against a false pass where the earlier child was never touched.
+	if earlyAtConflict == earlyBefore {
+		t.Errorf("Expected early child updated before staging conflict, but tip is unchanged (%s)", earlyBefore)
+	}
+	if !integIsAncestor(t, dir, mainAtConflict, "early") {
+		t.Error("Expected early to carry main's completed merge after its update")
+	}
 
 	out, err = testutil.RunGitFlow(t, dir, "integrate", "--abort")
 	if err != nil {

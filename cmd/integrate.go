@@ -22,6 +22,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/gittower/git-flow-next/internal/config"
 	"github.com/gittower/git-flow-next/internal/errors"
@@ -144,6 +145,13 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 		return &errors.NoUpstreamStrategyError{BranchName: name}
 	}
 
+	// The configured base branch must actually exist as a git branch. A
+	// branch that is configured but has been deleted must error here, before
+	// any fetch/state/checkout mutation, mirroring finish's BranchExists gate.
+	if err := git.BranchExists(name); err != nil {
+		return &errors.BranchNotFoundError{BranchName: name}
+	}
+
 	parent := branchConfig.Parent
 	if err := git.BranchExists(parent); err != nil {
 		return &errors.BranchNotFoundError{BranchName: parent}
@@ -159,17 +167,25 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 	}
 
 	// Optional fetch (opt-in). Fast-forward the local parent from the remote so
-	// the integration merges against up-to-date remote history; failures are
-	// non-fatal (the remote branch may not exist).
+	// the integration merges against up-to-date remote history. The parent:parent
+	// refspec updates the local parent ref, which git refuses when the parent is
+	// currently checked out. Fetch failures stay non-fatal (matching finish), but
+	// we must not claim "Fetch completed" when the parent fast-forward failed —
+	// that would silently integrate stale history.
 	if resolved.ShouldFetch && git.RemoteExists(cfg.Remote) {
 		fmt.Printf("Fetching from remote '%s'...\n", cfg.Remote)
+		parentFetched := true
 		if err := git.FetchBranch(cfg.Remote, fmt.Sprintf("%s:%s", parent, parent)); err != nil {
-			fmt.Printf("Note: Could not fetch parent branch '%s': %v\n", parent, err)
+			parentFetched = false
+			fmt.Printf("Warning: could not fetch parent branch '%s': %v\n", parent, err)
+			fmt.Printf("Warning: integrating against the local '%s', which may be behind the remote\n", parent)
 		}
 		if err := git.FetchBranch(cfg.Remote, name); err != nil {
-			fmt.Printf("Note: Could not fetch branch '%s': %v\n", name, err)
+			fmt.Printf("Note: could not fetch branch '%s': %v\n", name, err)
 		}
-		fmt.Printf("Fetch completed\n")
+		if parentFetched {
+			fmt.Printf("Fetch completed\n")
+		}
 	}
 
 	// Discover auto-update child base branches and capture their strategies.
@@ -182,6 +198,9 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 			childStrategies[branchName] = branch.DownstreamStrategy
 		}
 	}
+	// Ranging a map yields nondeterministic order; sort so children are updated
+	// in a stable, reproducible order (and so tests can assert per-child outcomes).
+	sort.Strings(childBranches)
 
 	// Build and persist the integrate merge state. Base branches have no prefix,
 	// so FullBranchName == BranchName == the base name.
