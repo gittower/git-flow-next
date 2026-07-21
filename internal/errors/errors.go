@@ -354,6 +354,73 @@ func (e *RemoteNotConfiguredError) ExitCode() ExitCode {
 	return ExitCodeGitError
 }
 
+// NotBaseBranchError indicates that integrate was invoked on a branch that is
+// not a base branch (integrate only applies to base branches).
+type NotBaseBranchError struct {
+	BranchName string
+}
+
+func (e *NotBaseBranchError) Error() string {
+	return fmt.Sprintf("branch '%s' is not a base branch; 'git flow integrate' applies only to base branches (use 'git flow finish' for topic branches)", e.BranchName)
+}
+
+func (e *NotBaseBranchError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
+// NoParentBranchError indicates a base branch has no configured parent to
+// integrate into.
+type NoParentBranchError struct {
+	BranchName string
+}
+
+func (e *NoParentBranchError) Error() string {
+	return fmt.Sprintf("branch '%s' has no configured parent branch to integrate into", e.BranchName)
+}
+
+func (e *NoParentBranchError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
+// SelfParentError indicates a base branch is configured as its own parent.
+type SelfParentError struct {
+	BranchName string
+}
+
+func (e *SelfParentError) Error() string {
+	return fmt.Sprintf("cannot integrate branch '%s' into itself", e.BranchName)
+}
+
+func (e *SelfParentError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
+// NoUpstreamStrategyError indicates a base branch has no upstream merge strategy
+// configured, so there is nothing to integrate.
+type NoUpstreamStrategyError struct {
+	BranchName string
+}
+
+func (e *NoUpstreamStrategyError) Error() string {
+	return fmt.Sprintf("branch '%s' has no upstream merge strategy configured to integrate with", e.BranchName)
+}
+
+func (e *NoUpstreamStrategyError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
+// TagEnabledNoNameError indicates tagging was enabled but no tag name could be
+// resolved (base branches have no version-derived default name).
+type TagEnabledNoNameError struct{}
+
+func (e *TagEnabledNoNameError) Error() string {
+	return "tagging is enabled but no tag name was provided; supply a name with --tag <name> or configure integrate.tagname"
+}
+
+func (e *TagEnabledNoNameError) ExitCode() ExitCode {
+	return ExitCodeInvalidInput
+}
+
 // AlreadyInitializedError indicates git-flow is already configured
 type AlreadyInitializedError struct{}
 
