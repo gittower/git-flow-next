@@ -28,10 +28,10 @@ The new branch is created from the configured starting point for the topic branc
 ## OPTIONS
 
 **--fetch**
-: Fetch from remote before creating branch to ensure latest state. If no remote is configured, the fetch is automatically skipped.
+: Fetch from remote before creating branch to ensure latest state. If no remote is configured, the fetch is skipped silently. A fetch failure is a non-fatal warning — the branch is still created (start has no sync gate). Overrides git config setting `gitflow.<type>.start.fetch`.
 
 **--no-fetch**
-: Don't fetch from remote before creating branch (default behavior)
+: Don't fetch from remote before creating branch (default behavior). Overrides git config setting `gitflow.<type>.start.fetch`.
 
 ## BRANCH NAMING
 

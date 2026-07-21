@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `finish` now treats a fetch failure against a reachable-but-failing remote as fatal (was a silent note); the error names the cause and suggests `--no-fetch` / `--force`
+- `finish` now aborts when the topic branch is ahead of its remote (was a silent note that proceeded and merged)
+- `finish` renders a diverged-specific message when the topic branch has diverged (previously reused the "behind" wording)
+- `start` now skips the fetch silently when no remote is configured, and shares the unified fetch resolution (default → config → flag) with `finish`
+
 ## [1.1.0] - 2026-04-06
 
 ### Added
