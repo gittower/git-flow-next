@@ -89,11 +89,12 @@ These git-flow-avh options are **not currently supported** in git-flow-next:
 | Missing Option | Description | Impact |
 |----------------|-------------|--------|
 | `gitflow.allowdirty` | Allow operations with dirty working tree | 🔴 High |
-| `gitflow.*.finish.push` | Auto-push after finishing | 🔴 High |
-| `gitflow.*.finish.pushproduction` | Push to production branch after finish | 🟡 Medium |
-| `gitflow.*.finish.pushdevelop` | Push to develop branch after finish | 🟡 Medium |
+| `gitflow.*.finish.pushproduction` | Push to production branch after finish | 🟢 Covered by `gitflow.*.finish.push` |
+| `gitflow.*.finish.pushdevelop` | Push to develop branch after finish | 🟢 Covered by `gitflow.*.finish.push` |
 | `gitflow.*.finish.nobackmerge` | Skip back-merge to develop | 🟡 Medium |
 | `gitflow.*.finish.ff-master` | Fast-forward merge to master | 🟡 Medium |
+
+**Note on push-on-finish**: git-flow-next implements push-on-finish generically via `gitflow.*.finish.push` (and `gitflow.*.finish.pushtag`) plus the `--push`/`--no-push` and `--pushtag`/`--no-pushtag` flags. A single `--push` pushes the target branch **and** every auto-updated child base branch (plus the created tag), so avh's separate `--pushproduction`/`--pushdevelop` knobs are unnecessary — the child set is derived from the branch topology rather than hard-coded to production/develop.
 
 ### 🆕 git-flow-next Exclusive Features
 These features are **only available** in git-flow-next:
@@ -142,8 +143,9 @@ gitflow.allowdirty=true  # Add system-level support
 # AVH
 gitflow.release.finish.push=true
 
-# Needed in git-flow-next
-gitflow.release.finish.push=true  # Add to finish command options
+# git-flow-next (supported)
+gitflow.release.finish.push=true     # Push target + auto-updated children + tag
+gitflow.release.finish.pushtag=false # Optional: decouple the tag from the branch push
 ```
 
 ---
@@ -209,9 +211,10 @@ git-flow-next implements shorthand commands that work on the current branch:
 | `-m/--message` | ✅ | ✅ |
 | `--notag` | ✅ | ✅ |
 | `--continue/--abort` | ❌ | ✅ (git-flow-next exclusive) |
-| `-p/--push` | ✅ | ❌ |
-| `--pushproduction` | ✅ | ❌ |
-| `--pushdevelop` | ✅ | ❌ |
+| `--push` / `--no-push` | ✅ | ✅ (pushes target + auto-updated children + tag) |
+| `--pushtag` / `--no-pushtag` | ❌ | ✅ (git-flow-next exclusive) |
+| `--pushproduction` | ✅ | 🟢 Covered by `--push` |
+| `--pushdevelop` | ✅ | 🟢 Covered by `--push` |
 | `-b/--nobackmerge` | ✅ | ❌ |
 | `--ff-master` | ✅ | ❌ |
 | `--showcommands` | ✅ | ❌ |
@@ -232,7 +235,7 @@ git-flow-next implements shorthand commands that work on the current branch:
 
 - **Core Features**: 100% compatible (branch management, merge strategies)
 - **Configuration Translation**: 90% automatic (prefix mapping, branch names)
-- **Command Options**: 75% compatible (most finish flags supported, missing push)
+- **Command Options**: 75% compatible (most finish flags supported, including push-on-finish)
 - **Advanced Features**: 60% compatible (preserve-merges and no-ff now supported)
 
 ### Command Compatibility: 80%
@@ -245,7 +248,7 @@ git-flow-next implements shorthand commands that work on the current branch:
 ### Combined Compatibility Score: 82%
 
 - **Core Workflow**: 95% compatible (start → work → finish → delete)
-- **Team Collaboration**: 75% compatible (publish and track work; push-on-finish missing)
+- **Team Collaboration**: 75% compatible (publish, track, and push-on-finish work)
 - **Configuration**: 85% compatible
 - **Commands**: 80% compatible
 
@@ -256,7 +259,6 @@ git-flow-next implements shorthand commands that work on the current branch:
 ### Phase 1: Critical Gaps
 **Configuration:**
 1. **`gitflow.allowdirty`** — Allow dirty working tree operations
-2. **`gitflow.*.finish.push`** — Auto-push after finishing operations
 
 **Commands:**
 1. **`diff` command** — Show changes compared to parent branch
@@ -267,8 +269,7 @@ git-flow-next implements shorthand commands that work on the current branch:
 
 **Commands:**
 1. **`--verbose` on list** — Detailed branch listing
-2. **Missing finish push flags** — `--pushproduction/--pushdevelop`
-3. **Universal `--showcommands` flag** — Debug/learning aid across all commands
+2. **Universal `--showcommands` flag** — Debug/learning aid across all commands
 
 ### Phase 3: Advanced Features
 **Commands:**

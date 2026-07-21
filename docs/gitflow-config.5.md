@@ -478,6 +478,18 @@ The finish command supports extensive merge strategy configuration through comma
 : *Type*: boolean
 : *Default*: true
 
+### Remote Push Options
+
+**gitflow.*type*.finish.push**
+: Push the results of a completed finish to the configured remote (`gitflow.remote`, default `origin`) as a final stage. When enabled, the target (parent) branch and each auto-updated child base branch are pushed (parent first), and — unless overridden by the `pushtag` key — the created tag is pushed too. The finished topic branch itself is never pushed. If no remote is configured, the push stage is skipped with a note and finish still succeeds. A rejected (non-fast-forward) push causes finish to exit with an error, leaving the already-completed local finish untouched. Corresponds to `--push`/`--no-push`.
+: *Type*: boolean
+: *Default*: false
+
+**gitflow.*type*.finish.pushtag**
+: Push the created tag on finish. When this key is unset, tag pushing follows the resolved `push` decision, so enabling `push` also pushes the tag. Set this key explicitly to decouple the tag from the branch decision: `true` pushes the tag even when branches are not pushed, `false` suppresses the tag push even when branches are. Has no effect when no tag was created. Corresponds to `--pushtag`/`--no-pushtag`.
+: *Type*: boolean
+: *Default*: (follows `gitflow.*type*.finish.push`)
+
 ### Merge Message Options
 
 **gitflow.*type*.finish.mergemessage**
