@@ -10,9 +10,10 @@ import (
 )
 
 // Push output format asserted throughout these tests (from the spec examples):
-//   Header line: "Pushing to remote 'origin'..."
-//   Per branch:  "  <branch> -> origin/<branch>"
-//   Tag:         "  <tag> (tag) -> origin"
+//
+//	Header line: "Pushing to remote 'origin'..."
+//	Per branch:  "  <branch> -> origin/<branch>"
+//	Tag:         "  <tag> (tag) -> origin"
 const (
 	pushHeader     = "Pushing to remote 'origin'..."
 	pushMainLine   = "  main -> origin/main"
@@ -848,5 +849,35 @@ func TestFinishPushOrderingParentThenChildren(t *testing.T) {
 	}
 	if count := strings.Count(output, pushMainLine); count != 1 {
 		t.Errorf("Expected exact main push line exactly once (dedupe), got %d. Output: %s", count, output)
+	}
+}
+
+// TestFinishPushShorthandForwardsFlag tests that the shorthand `git flow finish`
+// (operating on the current topic branch) honors the --push flag. Regression
+// guard: the shorthand originally registered the push flags but dropped them
+// when calling FinishCommand, so `git flow finish --push` silently did nothing.
+// Steps:
+// 1. Sets up a single-track repo with origin tracking main
+// 2. Creates feature branch 'login' with one commit (leaves it checked out)
+// 3. Runs the shorthand 'git flow finish --push --no-fetch' (no type/name)
+// 4. Verifies main is up to date with origin (the flag was forwarded)
+// 5. Verifies output shows the push header and the main push line
+func TestFinishPushShorthandForwardsFlag(t *testing.T) {
+	dir, remoteDir := setupSingleTrackWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	createTopicCommit(t, dir, "feature", "login", "login.txt", "login content")
+
+	output, err := testutil.RunGitFlow(t, dir, "finish", "--push", "--no-fetch")
+	if err != nil {
+		t.Fatalf("Failed to finish via shorthand with --push: %v\nOutput: %s", err, output)
+	}
+
+	if got := testutil.CommitsAhead(t, dir, "origin/main", "main"); got != 0 {
+		t.Errorf("Expected main up to date with origin (shorthand --push forwarded), got %d commits ahead. Output: %s", got, output)
+	}
+	if !strings.Contains(output, pushHeader) || !strings.Contains(output, pushMainLine) {
+		t.Errorf("Expected push header and main push line via shorthand. Output: %s", output)
 	}
 }

@@ -161,7 +161,10 @@ func RegisterShorthandCommands() {
 			if noVerify {
 				noVerifyPtr = &noVerify
 			}
-			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, nil, noVerifyPtr, nil, nil)
+			// Resolve push flags (unset stays nil so config can apply)
+			push := getBoolPtr(cmd, "push", "no-push")
+			pushTag := getBoolPtr(cmd, "pushtag", "no-pushtag")
+			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, nil, noVerifyPtr, push, pushTag)
 		},
 	}
 
