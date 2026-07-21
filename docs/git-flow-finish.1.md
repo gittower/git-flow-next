@@ -142,7 +142,7 @@ The operation maintains a persistent state file that allows it to resume after c
 
 By default, finishing a branch performs only local work; nothing is pushed. These options opt in to pushing the results of a completed finish to the configured remote (`gitflow.remote`, default `origin`) as a final stage, after all merges, tags, child updates, and branch deletion are done. The finished topic branch itself is never pushed by these options.
 
-When pushing branches, finish pushes the target (parent) branch first, followed by each auto-updated child base branch (for example `main` then `develop` on a release or hotfix finish). Pushes use a plain `git push`, so the base branches must already track their remote.
+When pushing branches, finish pushes the target (parent) branch first, followed by each auto-updated child base branch (for example `main` then `develop` on a release or hotfix finish). Each branch is pushed explicitly to the configured remote with a plain `git push <remote> <branch>`, so it does not depend on or alter the branch's upstream tracking configuration.
 
 **--push**
 : Push the target branch and each auto-updated child base branch (and, by default, the created tag) after finishing. Overrides git config setting `gitflow.<type>.finish.push`.
