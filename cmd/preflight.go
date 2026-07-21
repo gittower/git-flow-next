@@ -24,7 +24,7 @@ import (
 // extension points (kept out of this signature to avoid unused hooks):
 //   - #99: parent sync-check before merge.
 //   - #88: fast-forward the parent from its remote before merge.
-func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, parentBranch string, shouldFetch, force bool) error {
+func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, shortName, parentBranch string, shouldFetch, force bool) error {
 	// topicRefFound tracks whether the topic still has a remote ref to compare against. It stays
 	// true when the fetch is skipped (we then rely on existing tracking data).
 	topicRefFound := true
@@ -46,7 +46,11 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 				// sync check for this topic.
 				fmt.Printf("Note: Remote branch for '%s' not found; skipping sync check\n", topicBranch)
 				topicRefFound = false
-				_ = git.DeleteRemoteTrackingRef(remote, topicBranch)
+				// Best-effort cleanup: the ref may already be absent, so a failure here is a
+				// note, not a reason to abort the finish.
+				if derr := git.DeleteRemoteTrackingRef(remote, topicBranch); derr != nil {
+					fmt.Printf("Note: Could not prune stale tracking ref for '%s': %v\n", topicBranch, derr)
+				}
 			} else if !force {
 				return &errors.FetchFailedError{
 					Remote: remote,
@@ -69,6 +73,7 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 				}
 				return &errors.BranchNotInSyncError{
 					BranchName:   topicBranch,
+					ShortName:    shortName,
 					RemoteBranch: trackingBranch,
 					Status:       string(status),
 					CommitCount:  commitCount,

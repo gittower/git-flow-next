@@ -254,6 +254,7 @@ const (
 // --force is given. The message is tailored to the specific Status.
 type BranchNotInSyncError struct {
 	BranchName   string
+	ShortName    string // topic name without the branch-type prefix, used to build the suggested command
 	RemoteBranch string
 	Status       string // "ahead", "behind", or "diverged"
 	CommitCount  int
@@ -261,10 +262,12 @@ type BranchNotInSyncError struct {
 }
 
 func (e *BranchNotInSyncError) Error() string {
-	// Get the short name by extracting the part after the last slash if it exists
-	shortName := e.BranchName
-	if idx := lastSlashIndex(e.BranchName); idx != -1 {
-		shortName = e.BranchName[idx+1:]
+	// Use the caller-supplied short name for the suggested command. Deriving it here from the
+	// full branch name would mishandle nested topic names (e.g. feature/ui/login). Fall back to
+	// the full name only if the caller left it unset.
+	shortName := e.ShortName
+	if shortName == "" {
+		shortName = e.BranchName
 	}
 
 	switch e.Status {
@@ -288,13 +291,11 @@ The local and remote branches each have commits the other does not.
 Finishing now would discard the remote-only commits.
 
 To resolve:
-  git flow %s update %s    # merge/rebase remote changes
-  git pull                       # or pull directly
+  git pull                       # merge/rebase the remote changes first
 
 To finish anyway (discarding remote changes):
   git flow %s finish --force %s`,
 			e.BranchName, e.RemoteBranch, e.CommitCount,
-			e.BranchType, shortName,
 			e.BranchType, shortName)
 	default: // SyncStatusBehind
 		return fmt.Sprintf(`local branch '%s' is behind '%s' by %d commit(s).
@@ -303,13 +304,11 @@ The remote branch has commits not present locally. Finishing now
 would discard those changes.
 
 To resolve:
-  git flow %s update %s    # merge/rebase remote changes
-  git pull                       # or pull directly
+  git pull                       # merge/rebase the remote changes first
 
 To finish anyway (discarding remote changes):
   git flow %s finish --force %s`,
 			e.BranchName, e.RemoteBranch, e.CommitCount,
-			e.BranchType, shortName,
 			e.BranchType, shortName)
 	}
 }
@@ -333,22 +332,12 @@ func (e *FetchFailedError) Error() string {
 The remote could not be reached, so the sync check cannot run against
 fresh data. To proceed anyway:
   --no-fetch    skip the fetch and use local tracking data
-  --force       skip the fetch and the sync check entirely`,
+  --force       ignore fetch failures and skip the sync check`,
 		e.Branch, e.Remote, e.Detail)
 }
 
 func (e *FetchFailedError) ExitCode() ExitCode {
 	return ExitCodeGitError
-}
-
-// lastSlashIndex returns the index of the last slash in a string, or -1 if not found
-func lastSlashIndex(s string) int {
-	for i := len(s) - 1; i >= 0; i-- {
-		if s[i] == '/' {
-			return i
-		}
-	}
-	return -1
 }
 
 // RemoteNotConfiguredError indicates a required remote is not configured

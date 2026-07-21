@@ -41,7 +41,7 @@ The operation maintains a persistent state file that allows it to resume after c
 : Abort the finish operation and return to the original state. When no finish operation is in progress, **--abort** is a no-op and exits successfully.
 
 **--force**, **-f**
-: Force finish: skip the remote fetch/sync check and allow finishing non-standard branches. When used, bypasses the safety check that prevents finishing when the local branch is ahead of, behind, or diverged from its remote tracking branch, and ignores any fetch failure.
+: Force finish: ignore fetch failures, skip the remote sync check, and allow finishing non-standard branches. The fetch is still attempted, but any failure is ignored rather than fatal, and the safety check that prevents finishing when the local branch is ahead of, behind, or diverged from its remote tracking branch is bypassed.
 
 ### Tag Creation
 

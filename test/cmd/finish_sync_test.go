@@ -77,6 +77,12 @@ func TestFinishFeatureBranchBehindRemote(t *testing.T) {
 		t.Fatalf("Failed to fetch: %v", err)
 	}
 
+	// Record develop's SHA before finishing
+	developBefore, err := testutil.RunGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop SHA: %v", err)
+	}
+
 	// Attempt to finish the feature branch
 	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "test-behind")
 
@@ -90,14 +96,23 @@ func TestFinishFeatureBranchBehindRemote(t *testing.T) {
 		t.Errorf("Expected error message to mention 'behind'. Output: %s", output)
 	}
 
-	// Verify error message suggests update command
-	if !strings.Contains(output, "git flow feature update") {
-		t.Errorf("Expected error message to suggest update command. Output: %s", output)
+	// Verify error message suggests pulling the remote changes
+	if !strings.Contains(output, "git pull") {
+		t.Errorf("Expected error message to suggest 'git pull'. Output: %s", output)
 	}
 
 	// Verify error message suggests --force option
 	if !strings.Contains(output, "--force") {
 		t.Errorf("Expected error message to suggest --force option. Output: %s", output)
+	}
+
+	// Verify the merge did not happen: develop is unchanged
+	developAfter, err := testutil.RunGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop SHA after: %v", err)
+	}
+	if developBefore != developAfter {
+		t.Errorf("Expected develop to be unchanged after aborted finish. Before: %s After: %s", developBefore, developAfter)
 	}
 
 	// Verify branch still exists (finish was aborted)
