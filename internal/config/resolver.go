@@ -85,7 +85,7 @@ func ResolveFinishOptions(cfg *Config, branchType string, branchName string, tag
 	fullBranchName := branchConfig.Prefix + branchName
 
 	// Resolve merge strategy components
-	strategy, useRebase, preserveMerges, noFastForward, useSquash := resolveMergeStrategy(cfg, branchConfig, branchType, mergeOpts)
+	strategy, useRebase, preserveMerges, noFastForward, useSquash := resolveMergeStrategy(cfg, branchConfig, branchType, "finish", mergeOpts)
 
 	// Resolve push options. Order matters: pushTag's default derives from the
 	// resolved pushBranches value, so resolve branches first.
@@ -323,8 +323,10 @@ func getCommandConfigString(cfg *Config, configKey string) string {
 	return value
 }
 
-// resolveMergeStrategy resolves merge strategy using three-layer precedence
-func resolveMergeStrategy(cfg *Config, branchConfig BranchConfig, branchType string, mergeOpts *MergeStrategyOptions) (string, bool, bool, bool, bool) {
+// resolveMergeStrategy resolves merge strategy using three-layer precedence.
+// The command segment (e.g. "finish" or "integrate") selects the Layer-2
+// gitflow.<branchType>.<command>.* config namespace.
+func resolveMergeStrategy(cfg *Config, branchConfig BranchConfig, branchType string, command string, mergeOpts *MergeStrategyOptions) (string, bool, bool, bool, bool) {
 	// Layer 1: Get base strategy from branch configuration
 	baseStrategy := branchConfig.UpstreamStrategy
 	if baseStrategy == "" {
@@ -332,10 +334,10 @@ func resolveMergeStrategy(cfg *Config, branchConfig BranchConfig, branchType str
 	}
 
 	// Layer 2: Check for command-specific overrides
-	rebase := resolveFinishRebase(cfg, branchType, baseStrategy, mergeOpts)
-	squash := resolveFinishSquash(cfg, branchType, baseStrategy, mergeOpts)
-	preserveMerges := resolveFinishPreserveMerges(cfg, branchType, mergeOpts)
-	noFF := resolveFinishNoFF(cfg, branchType, mergeOpts)
+	rebase := resolveFinishRebase(cfg, branchType, command, baseStrategy, mergeOpts)
+	squash := resolveFinishSquash(cfg, branchType, command, baseStrategy, mergeOpts)
+	preserveMerges := resolveFinishPreserveMerges(cfg, branchType, command, mergeOpts)
+	noFF := resolveFinishNoFF(cfg, branchType, command, mergeOpts)
 
 	// Determine final strategy based on precedence: squash > rebase > base strategy
 	var finalStrategy string
@@ -351,16 +353,16 @@ func resolveMergeStrategy(cfg *Config, branchConfig BranchConfig, branchType str
 }
 
 // resolveFinishRebase resolves whether to use rebase strategy
-func resolveFinishRebase(cfg *Config, branchType string, baseStrategy string, mergeOpts *MergeStrategyOptions) bool {
+func resolveFinishRebase(cfg *Config, branchType string, command string, baseStrategy string, mergeOpts *MergeStrategyOptions) bool {
 	// Layer 1: Base strategy determines default
 	useRebase := baseStrategy == "rebase"
 
 	// Layer 2: Command-specific config
-	if rebaseConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.finish.rebase", branchType)); rebaseConfig {
+	if rebaseConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.%s.rebase", branchType, command)); rebaseConfig {
 		useRebase = true
 	}
 	// Check for explicit no-rebase config
-	if noRebaseConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.finish.no-rebase", branchType)); noRebaseConfig {
+	if noRebaseConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.%s.no-rebase", branchType, command)); noRebaseConfig {
 		useRebase = false
 	}
 
@@ -379,16 +381,16 @@ func resolveFinishRebase(cfg *Config, branchType string, baseStrategy string, me
 }
 
 // resolveFinishSquash resolves whether to use squash strategy
-func resolveFinishSquash(cfg *Config, branchType string, baseStrategy string, mergeOpts *MergeStrategyOptions) bool {
+func resolveFinishSquash(cfg *Config, branchType string, command string, baseStrategy string, mergeOpts *MergeStrategyOptions) bool {
 	// Layer 1: Base strategy determines default
 	useSquash := baseStrategy == "squash"
 
 	// Layer 2: Command-specific config
-	if squashConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.finish.squash", branchType)); squashConfig {
+	if squashConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.%s.squash", branchType, command)); squashConfig {
 		useSquash = true
 	}
 	// Check for explicit no-squash config
-	if noSquashConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.finish.no-squash", branchType)); noSquashConfig {
+	if noSquashConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.%s.no-squash", branchType, command)); noSquashConfig {
 		useSquash = false
 	}
 
@@ -407,16 +409,16 @@ func resolveFinishSquash(cfg *Config, branchType string, baseStrategy string, me
 }
 
 // resolveFinishPreserveMerges resolves whether to preserve merges during rebase
-func resolveFinishPreserveMerges(cfg *Config, branchType string, mergeOpts *MergeStrategyOptions) bool {
+func resolveFinishPreserveMerges(cfg *Config, branchType string, command string, mergeOpts *MergeStrategyOptions) bool {
 	// Layer 1: Default is not to preserve merges (flatten)
 	preserveMerges := false
 
 	// Layer 2: Command-specific config
-	if preserveConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.finish.preserve-merges", branchType)); preserveConfig {
+	if preserveConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.%s.preserve-merges", branchType, command)); preserveConfig {
 		preserveMerges = true
 	}
 	// Check for explicit no-preserve-merges config
-	if noPreserveConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.finish.no-preserve-merges", branchType)); noPreserveConfig {
+	if noPreserveConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.%s.no-preserve-merges", branchType, command)); noPreserveConfig {
 		preserveMerges = false
 	}
 
@@ -429,16 +431,16 @@ func resolveFinishPreserveMerges(cfg *Config, branchType string, mergeOpts *Merg
 }
 
 // resolveFinishNoFF resolves whether to create merge commit for fast-forward
-func resolveFinishNoFF(cfg *Config, branchType string, mergeOpts *MergeStrategyOptions) bool {
+func resolveFinishNoFF(cfg *Config, branchType string, command string, mergeOpts *MergeStrategyOptions) bool {
 	// Layer 1: Default is to allow fast-forward (no --no-ff)
 	noFF := false
 
 	// Layer 2: Command-specific config
-	if noFFConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.finish.no-ff", branchType)); noFFConfig {
+	if noFFConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.%s.no-ff", branchType, command)); noFFConfig {
 		noFF = true
 	}
 	// Check for explicit fast-forward config
-	if ffConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.finish.ff", branchType)); ffConfig {
+	if ffConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.%s.ff", branchType, command)); ffConfig {
 		noFF = false
 	}
 
@@ -557,6 +559,167 @@ func resolveSquashMessage(fullBranchName string, mergeOpts *MergeStrategyOptions
 
 	// Default message
 	return fmt.Sprintf("Squashed commit of branch '%s'", fullBranchName)
+}
+
+// ResolveIntegrateOptions resolves all integrate command options using the same
+// three-layer precedence as finish, keyed on the base-branch name and the
+// gitflow.<branch>.integrate.* Layer-2 namespace. It differs from
+// ResolveFinishOptions in its defaults: tagging is OFF by default (base branches
+// have no version-derived tag name) and fetching is OFF by default (opt-in).
+// Retention options are irrelevant to integrate and left unset.
+func ResolveIntegrateOptions(cfg *Config, branchName string, tagOpts *TagOptions, mergeOpts *MergeStrategyOptions, fetch *bool) *ResolvedFinishOptions {
+	branchConfig := cfg.Branches[branchName]
+
+	// Base branches have no prefix, so the full name is just the branch name.
+	fullBranchName := branchName
+
+	strategy, useRebase, preserveMerges, noFastForward, useSquash := resolveMergeStrategy(cfg, branchConfig, branchName, "integrate", mergeOpts)
+
+	tagName := resolveIntegrateTagName(cfg, branchName, tagOpts)
+
+	return &ResolvedFinishOptions{
+		// Tag resolution
+		ShouldTag:   resolveIntegrateShouldTag(cfg, branchName, tagOpts),
+		TagName:     tagName,
+		ShouldSign:  resolveIntegrateShouldSign(cfg, branchName, tagOpts),
+		SigningKey:  resolveIntegrateSigningKey(cfg, branchName, tagOpts),
+		TagMessage:  resolveIntegrateTagMessage(tagName, tagOpts),
+		MessageFile: resolveIntegrateMessageFile(cfg, branchName, tagOpts),
+
+		// Merge strategy resolution
+		MergeStrategy:  strategy,
+		UseRebase:      useRebase,
+		PreserveMerges: preserveMerges,
+		NoFastForward:  noFastForward,
+		UseSquash:      useSquash,
+		SquashMessage:  resolveSquashMessage(fullBranchName, mergeOpts),
+
+		// Fetch resolution (Layer-1 default OFF)
+		ShouldFetch: resolveIntegrateShouldFetch(cfg, branchName, fetch),
+
+		// Merge commit message resolution
+		MergeMessage:  resolveIntegrateMergeMessage(cfg, branchName, mergeOpts),
+		UpdateMessage: resolveIntegrateUpdateMessage(cfg, branchName, mergeOpts),
+	}
+}
+
+// resolveIntegrateShouldTag resolves whether integrate should create a tag.
+// Layer 1 default is OFF (base branches do not tag by branch-type identity).
+func resolveIntegrateShouldTag(cfg *Config, branchName string, tagOpts *TagOptions) bool {
+	// Layer 1: default off
+	shouldTag := false
+
+	// Layer 2: command-specific config
+	if value, exists := cfg.CommandConfig[fmt.Sprintf("gitflow.%s.integrate.tag", branchName)]; exists {
+		shouldTag = value == "true"
+	}
+
+	// Layer 3: command-line flags override config
+	if tagOpts != nil && tagOpts.ShouldTag != nil {
+		shouldTag = *tagOpts.ShouldTag
+	}
+
+	return shouldTag
+}
+
+// resolveIntegrateTagName resolves the tag name. There is no Layer-1 default for
+// base branches; an unresolved name (empty string) signals the driver to error
+// when tagging is enabled.
+func resolveIntegrateTagName(cfg *Config, branchName string, tagOpts *TagOptions) string {
+	// Layer 1: no default name for base branches
+	tagName := ""
+
+	// Layer 2: command-specific configured name
+	if name := getCommandConfigString(cfg, fmt.Sprintf("gitflow.%s.integrate.tagname", branchName)); name != "" {
+		tagName = name
+	}
+
+	// Layer 3: command-line --tag <name> overrides config
+	if tagOpts != nil && tagOpts.TagName != "" {
+		tagName = tagOpts.TagName
+	}
+
+	return tagName
+}
+
+// resolveIntegrateShouldSign resolves whether to sign the tag.
+func resolveIntegrateShouldSign(cfg *Config, branchName string, tagOpts *TagOptions) bool {
+	shouldSign := false
+	if sign := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.integrate.sign", branchName)); sign {
+		shouldSign = true
+	}
+	if tagOpts != nil && tagOpts.ShouldSign != nil {
+		shouldSign = *tagOpts.ShouldSign
+	}
+	return shouldSign
+}
+
+// resolveIntegrateSigningKey resolves the signing key.
+func resolveIntegrateSigningKey(cfg *Config, branchName string, tagOpts *TagOptions) string {
+	signingKey := ""
+	if key := getCommandConfigString(cfg, fmt.Sprintf("gitflow.%s.integrate.signingkey", branchName)); key != "" {
+		signingKey = key
+	}
+	if tagOpts != nil && tagOpts.SigningKey != "" {
+		signingKey = tagOpts.SigningKey
+	}
+	return signingKey
+}
+
+// resolveIntegrateTagMessage resolves the tag message.
+func resolveIntegrateTagMessage(tagName string, tagOpts *TagOptions) string {
+	message := fmt.Sprintf("Integrate %s", tagName)
+	if tagOpts != nil && tagOpts.Message != "" {
+		message = tagOpts.Message
+	}
+	return message
+}
+
+// resolveIntegrateMessageFile resolves the tag message file path.
+func resolveIntegrateMessageFile(cfg *Config, branchName string, tagOpts *TagOptions) string {
+	messageFile := ""
+	if file := getCommandConfigString(cfg, fmt.Sprintf("gitflow.%s.integrate.messagefile", branchName)); file != "" {
+		messageFile = file
+	}
+	if tagOpts != nil && tagOpts.MessageFile != "" {
+		messageFile = tagOpts.MessageFile
+	}
+	return messageFile
+}
+
+// resolveIntegrateShouldFetch resolves whether to fetch before integrating.
+// Layer-1 default is OFF (opt-in), unlike finish.
+func resolveIntegrateShouldFetch(cfg *Config, branchName string, fetch *bool) bool {
+	shouldFetch := false
+	if value, exists := cfg.CommandConfig[fmt.Sprintf("gitflow.%s.integrate.fetch", branchName)]; exists {
+		shouldFetch = value == "true"
+	}
+	if fetch != nil {
+		shouldFetch = *fetch
+	}
+	return shouldFetch
+}
+
+// resolveIntegrateMergeMessage resolves the upstream merge commit message.
+func resolveIntegrateMergeMessage(cfg *Config, branchName string, mergeOpts *MergeStrategyOptions) string {
+	if mergeOpts != nil && mergeOpts.MergeMessage != nil && *mergeOpts.MergeMessage != "" {
+		return *mergeOpts.MergeMessage
+	}
+	if msg := getCommandConfigString(cfg, fmt.Sprintf("gitflow.%s.integrate.mergemessage", branchName)); msg != "" {
+		return msg
+	}
+	return ""
+}
+
+// resolveIntegrateUpdateMessage resolves the child-update commit message.
+func resolveIntegrateUpdateMessage(cfg *Config, branchName string, mergeOpts *MergeStrategyOptions) string {
+	if mergeOpts != nil && mergeOpts.UpdateMessage != nil && *mergeOpts.UpdateMessage != "" {
+		return *mergeOpts.UpdateMessage
+	}
+	if msg := getCommandConfigString(cfg, fmt.Sprintf("gitflow.%s.integrate.updatemessage", branchName)); msg != "" {
+		return msg
+	}
+	return ""
 }
 
 // resolveMergeMessage resolves the merge commit message.
