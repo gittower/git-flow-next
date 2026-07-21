@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -283,6 +284,36 @@ func RemoteBranchExists(t *testing.T, dir string, remote string, branch string) 
 	ref := fmt.Sprintf("refs/remotes/%s/%s", remote, branch)
 	_, err := RunGit(t, dir, "rev-parse", "--verify", "--quiet", ref)
 	return err == nil
+}
+
+// RemoteTagExists checks whether a tag exists on the given remote by querying
+// the remote directly with `git ls-remote --tags`. This reflects what was
+// actually pushed to the remote, not the local tag database.
+func RemoteTagExists(t *testing.T, dir, remote, tag string) bool {
+	t.Helper()
+	output, err := RunGit(t, dir, "ls-remote", "--tags", remote)
+	if err != nil {
+		t.Fatalf("Failed to list remote tags: %v\nOutput: %s", err, output)
+	}
+	return strings.Contains(output, fmt.Sprintf("refs/tags/%s", tag))
+}
+
+// CommitsAhead returns the number of commits that branch has that base does not,
+// computed via `git rev-list --count <base>..<branch>`. Use it with a remote
+// tracking ref as base (e.g. CommitsAhead(t, dir, "origin/main", "main")) to
+// determine whether a local branch has been pushed: a result of 0 means the
+// branch is up to date with the remote, > 0 means it is ahead (not pushed).
+func CommitsAhead(t *testing.T, dir, base, branch string) int {
+	t.Helper()
+	output, err := RunGit(t, dir, "rev-list", "--count", fmt.Sprintf("%s..%s", base, branch))
+	if err != nil {
+		t.Fatalf("Failed to count commits ahead (%s..%s): %v\nOutput: %s", base, branch, err, output)
+	}
+	count, err := strconv.Atoi(strings.TrimSpace(output))
+	if err != nil {
+		t.Fatalf("Failed to parse commit count %q: %v", output, err)
+	}
+	return count
 }
 
 // SetupTestRepoWithRemote creates a test repository with git-flow initialized and a local remote.
