@@ -1,7 +1,9 @@
 package git_test
 
 import (
+	goerrors "errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gittower/git-flow-next/internal/git"
@@ -649,10 +651,12 @@ func TestFetchBranch(t *testing.T) {
 }
 
 // TestFetchBranchNonExistent tests fetch of a non-existent branch.
+// A missing remote ref is a benign condition that must be classified as ErrRemoteRefNotFound,
+// so the finish preflight can distinguish it from a fatal transport failure.
 // Steps:
 // 1. Sets up a test repository with a remote
 // 2. Calls FetchBranch for a branch that doesn't exist on remote
-// 3. Verifies an error is returned
+// 3. Verifies the error wraps the ErrRemoteRefNotFound sentinel
 func TestFetchBranchNonExistent(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -666,7 +670,34 @@ func TestFetchBranchNonExistent(t *testing.T) {
 	withGitRepo(t, dir, func() {
 		err := git.FetchBranch("origin", "non-existent-branch")
 		if err == nil {
-			t.Error("Expected error when fetching non-existent branch, got nil")
+			t.Fatal("Expected error when fetching non-existent branch, got nil")
+		}
+		if !goerrors.Is(err, git.ErrRemoteRefNotFound) {
+			t.Errorf("Expected error to wrap ErrRemoteRefNotFound, got: %v", err)
+		}
+	})
+}
+
+// TestFetchBranchTransportFailure tests that a transport/connection failure is NOT misclassified
+// as a benign missing ref. Fetching from a bogus remote (a path that is not a git repository)
+// must return an error that does not wrap ErrRemoteRefNotFound, so the preflight treats it as fatal.
+// Steps:
+// 1. Sets up a test repository (no reachable remote for the bogus target)
+// 2. Calls FetchBranch against a non-existent remote path
+// 3. Verifies an error is returned that does NOT wrap ErrRemoteRefNotFound
+func TestFetchBranchTransportFailure(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	bogusRemote := filepath.Join(dir, "does-not-exist-remote.git")
+
+	withGitRepo(t, dir, func() {
+		err := git.FetchBranch(bogusRemote, "main")
+		if err == nil {
+			t.Fatal("Expected error when fetching from a non-existent remote, got nil")
+		}
+		if goerrors.Is(err, git.ErrRemoteRefNotFound) {
+			t.Errorf("Expected transport failure NOT to wrap ErrRemoteRefNotFound, got: %v", err)
 		}
 	})
 }

@@ -724,6 +724,10 @@ func CompareBranchWithRemote(branch string) (BranchSyncStatus, int, error) {
 //     trimmed stderr.
 func FetchBranch(remote, branch string) error {
 	cmd := exec.Command("git", "fetch", remote, branch)
+	// Pin the locale so isRemoteRefNotFound classifies stderr against git's English phrasing,
+	// regardless of the user's LANG/LC_* settings. A localized "missing ref" message would
+	// otherwise be misclassified as a fatal transport failure.
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		stderr := strings.TrimSpace(string(output))
