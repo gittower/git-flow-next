@@ -544,6 +544,88 @@ These options are useful for teams using commit message validation hooks (e.g., 
     preserve-merges = false
 ```
 
+## INTEGRATE COMMAND CONFIGURATION
+
+The **git-flow-integrate**(1) command reads its operational defaults from the
+`gitflow.<branch>.integrate.*` namespace, keyed by the **base-branch name**
+(the same identifier used as the `gitflow.branch.<name>.*` subsection). Integrate
+applies only to base branches.
+
+The available keys mirror the finish command's merge-strategy, tag, message, and
+fetch options, but the Layer-1 defaults differ.
+
+### Layer-1 Defaults
+
+Unlike finish, integrate defaults tagging and fetching **off**:
+
+- **Tagging is off by default.** Base branches have no version from which to
+  derive a tag name, so tagging must be enabled explicitly (via `--tag <name>`
+  or `integrate.tag` + `integrate.tagname`). Enabling tagging without a
+  resolvable name is an error.
+- **Fetching is off by default** (opt-in), unlike finish where fetch defaults on.
+
+### Tag Options
+
+**gitflow.*branch*.integrate.tag**
+: Enable tag creation on integrate (boolean; default false).
+
+**gitflow.*branch*.integrate.tagname**
+: Tag name to create. Required when tagging is enabled and no `--tag` is given.
+
+**gitflow.*branch*.integrate.sign**
+: Sign the tag cryptographically (boolean).
+
+**gitflow.*branch*.integrate.signingkey**
+: GPG key id to use for the signature.
+
+**gitflow.*branch*.integrate.messagefile**
+: Read the tag message from the given file.
+
+### Merge Strategy Options
+
+**gitflow.*branch*.integrate.squash**, **gitflow.*branch*.integrate.no-squash**
+: Force (or disable) a squash merge.
+
+**gitflow.*branch*.integrate.rebase**, **gitflow.*branch*.integrate.no-rebase**
+: Force (or disable) rebasing the base branch before merging.
+
+**gitflow.*branch*.integrate.preserve-merges**, **gitflow.*branch*.integrate.no-preserve-merges**
+: Preserve or flatten merges during rebase.
+
+**gitflow.*branch*.integrate.no-ff**, **gitflow.*branch*.integrate.ff**
+: Force a merge commit for a fast-forward, or allow fast-forward.
+
+### Message and Fetch Options
+
+**gitflow.*branch*.integrate.mergemessage**
+: Custom commit message for the upstream merge.
+
+**gitflow.*branch*.integrate.updatemessage**
+: Custom commit message for child branch updates.
+
+**gitflow.*branch*.integrate.fetch**
+: Fetch from the remote before integrating (boolean; default false).
+
+### Strategy Precedence
+
+1. **Command-line flags** (Layer 3 — highest priority)
+2. **gitflow.*branch*.integrate.*** configuration (Layer 2)
+3. **gitflow.branch.*branch*.upstreamstrategy** (Layer 1)
+
+### Examples
+
+```ini
+# Tag main whenever develop is integrated
+[gitflow "develop.integrate"]
+    tag = true
+    tagname = latest
+
+# Rebase a private staging branch onto main and fetch first
+[gitflow "staging.integrate"]
+    rebase = true
+    fetch = true
+```
+
 ## MERGE STRATEGY REFERENCE
 
 ### none

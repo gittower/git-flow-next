@@ -10,6 +10,7 @@ Comprehensive manpage-style documentation for git-flow-next commands and configu
 | **git-flow init** | Initialize git-flow | [git-flow-init(1)](git-flow-init.1.md) |
 | **git-flow config** | Manage configuration | [git-flow-config(1)](git-flow-config.1.md) |
 | **git-flow overview** | Repository status | [git-flow-overview(1)](git-flow-overview.1.md) |
+| **git-flow integrate** | Integrate a base branch into its parent | [git-flow-integrate(1)](git-flow-integrate.1.md) |
 
 ## Topic Branch Commands
 
