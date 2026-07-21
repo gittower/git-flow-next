@@ -171,6 +171,63 @@ func RegisterShorthandCommands() {
 
 	addFinishFlags(finishCmd)
 	rootCmd.AddCommand(finishCmd)
+
+	// Integrate (top-level: merge a base branch into its parent)
+	integrateCmd := &cobra.Command{
+		Use:   "integrate [<branch>]",
+		Short: "Integrate a base branch into its parent",
+		Long: `Integrate merges a base branch upstream into its configured parent
+(e.g. develop into main), honoring the branch type's upstream merge strategy,
+optionally tagging the parent, and auto-updating the parent's children.
+
+Unlike finish, integrate operates on base branches only and never deletes,
+creates, or renames a branch — base branches are permanent. If no branch is
+given, the current branch is integrated into its parent.`,
+		Example: "  git flow integrate develop\n  git flow integrate develop --tag v2.0.0\n  git flow integrate --continue",
+		Args:    cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			name := ""
+			if len(args) > 0 {
+				name = args[0]
+			}
+
+			continueOp, _ := cmd.Flags().GetBool("continue")
+			abortOp, _ := cmd.Flags().GetBool("abort")
+
+			// --tag is a string: setting it both enables tagging and supplies
+			// the tag name; --notag disables tagging.
+			tagOptions := &config.TagOptions{
+				ShouldSign:  getBoolPtr(cmd, "sign", "no-sign"),
+				SigningKey:  cmd.Flag("signingkey").Value.String(),
+				Message:     cmd.Flag("message").Value.String(),
+				MessageFile: cmd.Flag("messagefile").Value.String(),
+			}
+			if cmd.Flags().Changed("tag") {
+				enable := true
+				tagOptions.ShouldTag = &enable
+				tagOptions.TagName = cmd.Flag("tag").Value.String()
+			} else if cmd.Flags().Changed("notag") {
+				disable := false
+				tagOptions.ShouldTag = &disable
+			}
+
+			mergeOptions := &config.MergeStrategyOptions{
+				Rebase:         getBoolPtr(cmd, "rebase", "no-rebase"),
+				PreserveMerges: getBoolPtr(cmd, "preserve-merges", "no-preserve-merges"),
+				NoFF:           getBoolPtr(cmd, "no-ff", "ff"),
+				Squash:         getBoolPtr(cmd, "squash", "no-squash"),
+				SquashMessage:  getStringPtrFromFlag(cmd, "squash-message"),
+				MergeMessage:   getStringPtrFromFlag(cmd, "merge-message"),
+				UpdateMessage:  getStringPtrFromFlag(cmd, "update-message"),
+			}
+
+			fetch := getBoolPtr(cmd, "fetch", "no-fetch")
+
+			IntegrateCommand(name, continueOp, abortOp, tagOptions, mergeOptions, fetch)
+		},
+	}
+	addIntegrateFlags(integrateCmd)
+	rootCmd.AddCommand(integrateCmd)
 }
 
 // executeShorthandUpdate handles the shared logic for both update and rebase shorthand commands
