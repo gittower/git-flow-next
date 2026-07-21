@@ -295,7 +295,22 @@ func RemoteTagExists(t *testing.T, dir, remote, tag string) bool {
 	if err != nil {
 		t.Fatalf("Failed to list remote tags: %v\nOutput: %s", err, output)
 	}
-	return strings.Contains(output, fmt.Sprintf("refs/tags/%s", tag))
+	// ls-remote lines are "<sha>\t<ref>"; annotated tags add a peeled
+	// "<sha>\trefs/tags/<tag>^{}" line. Compare the ref field exactly so a
+	// searched tag is not matched as a prefix of a longer tag (e.g. "1.0"
+	// must not match "refs/tags/1.0.0").
+	wantRef := fmt.Sprintf("refs/tags/%s", tag)
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		ref := strings.TrimSuffix(fields[1], "^{}")
+		if ref == wantRef {
+			return true
+		}
+	}
+	return false
 }
 
 // CommitsAhead returns the number of commits that branch has that base does not,

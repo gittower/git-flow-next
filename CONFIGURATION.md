@@ -160,6 +160,8 @@ The finish command supports per-branch-type configuration:
 | `keeplocal` | Keep local branch | `true`, `false` | `false` |
 | `force-delete` | Force delete branch | `true`, `false` | `false` |
 | `fetch` | Fetch before operation | `true`, `false` | `false` |
+| `push` | Push finished branches to remote | `true`, `false` | `false` |
+| `pushtag` | Push created tag to remote | `true`, `false` | Follows `push` |
 
 #### Examples
 
@@ -176,7 +178,21 @@ gitflow.release.finish.signingkey=ABC123DEF
 
 # Keep hotfix branches locally after finish
 gitflow.hotfix.finish.keeplocal=true
+
+# Push finished release branches and the created tag to the remote
+gitflow.release.finish.push=true
+
+# Push the created tag even when branches are not pushed
+gitflow.release.finish.pushtag=true
 ```
+
+When `push` is enabled, finish pushes the target/parent branch and each
+auto-updated child base branch to the remote (`gitflow.remote`, default
+`origin`) as a final stage, then the created tag. `pushtag` follows the
+resolved `push` value unless set explicitly, letting you decouple the tag push
+from the branch push. A missing remote skips the push with a note (finish still
+succeeds); a rejected non-fast-forward push is a hard error, leaving the
+already-completed local finish intact.
 
 ### Update Command Options
 

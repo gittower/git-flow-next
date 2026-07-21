@@ -637,7 +637,7 @@ func PushRef(remote, branch string) error {
 	cmd := exec.Command("git", "push", remote, branch)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to push branch '%s' to '%s': %s", branch, remote, strings.TrimSpace(string(output)))
+		return fmt.Errorf("failed to push branch '%s' to '%s': %w (output: %s)", branch, remote, err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }
@@ -648,7 +648,7 @@ func PushTag(remote, tag string) error {
 	cmd := exec.Command("git", "push", remote, "tag", tag)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to push tag '%s' to '%s': %s", tag, remote, strings.TrimSpace(string(output)))
+		return fmt.Errorf("failed to push tag '%s' to '%s': %w (output: %s)", tag, remote, err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }

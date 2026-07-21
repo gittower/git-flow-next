@@ -652,7 +652,9 @@ func TestFinishPushRunsAfterContinue(t *testing.T) {
 	if _, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
 		t.Fatalf("Failed to start release: %v", err)
 	}
-	testutil.WriteFile(t, dir, "conflict.txt", "release version")
+	if err := testutil.WriteFile(t, dir, "conflict.txt", "release version"); err != nil {
+		t.Fatalf("Failed to write conflict.txt: %v", err)
+	}
 	if _, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
 		t.Fatalf("Failed to add conflict.txt: %v", err)
 	}
@@ -663,7 +665,9 @@ func TestFinishPushRunsAfterContinue(t *testing.T) {
 	if _, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
 		t.Fatalf("Failed to checkout main: %v", err)
 	}
-	testutil.WriteFile(t, dir, "conflict.txt", "main version")
+	if err := testutil.WriteFile(t, dir, "conflict.txt", "main version"); err != nil {
+		t.Fatalf("Failed to write conflict.txt on main: %v", err)
+	}
 	if _, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
 		t.Fatalf("Failed to add conflict.txt on main: %v", err)
 	}
@@ -698,7 +702,9 @@ func TestFinishPushRunsAfterContinue(t *testing.T) {
 	}
 
 	// Resolve and continue.
-	testutil.WriteFile(t, dir, "conflict.txt", "resolved")
+	if err := testutil.WriteFile(t, dir, "conflict.txt", "resolved"); err != nil {
+		t.Fatalf("Failed to write conflict resolution: %v", err)
+	}
 	if _, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
 		t.Fatalf("Failed to stage resolution: %v", err)
 	}
@@ -738,7 +744,9 @@ func TestFinishPushRejectedNonFastForward(t *testing.T) {
 		t.Fatalf("Failed to clone remote: %v", err)
 	}
 	testutil.ConfigureGitIdentity(t, secondDir)
-	testutil.WriteFile(t, secondDir, "remote.txt", "remote change")
+	if err := testutil.WriteFile(t, secondDir, "remote.txt", "remote change"); err != nil {
+		t.Fatalf("Failed to write remote.txt: %v", err)
+	}
 	if _, err := testutil.RunGit(t, secondDir, "add", "remote.txt"); err != nil {
 		t.Fatalf("Failed to add remote.txt: %v", err)
 	}
