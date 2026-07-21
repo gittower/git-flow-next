@@ -154,6 +154,12 @@ func registerBranchCommand(branchType string) {
 			fetch, _ := cmd.Flags().GetBool("fetch")
 			noFetch, _ := cmd.Flags().GetBool("no-fetch")
 
+			// Get push flags
+			push, _ := cmd.Flags().GetBool("push")
+			noPush, _ := cmd.Flags().GetBool("no-push")
+			pushtag, _ := cmd.Flags().GetBool("pushtag")
+			noPushtag, _ := cmd.Flags().GetBool("no-pushtag")
+
 			// Get hook bypass flag
 			noVerify, _ := cmd.Flags().GetBool("no-verify")
 
@@ -222,7 +228,7 @@ func registerBranchCommand(branchType string) {
 			}
 
 			// Call the generic finish command with the branch type and name
-			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, getBoolFlag(fetch, noFetch), getSingleBoolPtr(noVerify))
+			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, getBoolFlag(fetch, noFetch), getSingleBoolPtr(noVerify), getBoolFlag(push, noPush), getBoolFlag(pushtag, noPushtag))
 		},
 	}
 
@@ -448,6 +454,12 @@ func addFinishFlags(cmd *cobra.Command) {
 	// Fetch Flags
 	cmd.Flags().Bool("fetch", false, "Fetch from remote before finishing")
 	cmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before finishing")
+
+	// Remote Push Options
+	cmd.Flags().Bool("push", false, "Push the target and updated child branches (and the created tag) after finishing")
+	cmd.Flags().Bool("no-push", false, "Don't push after finishing (overrides config)")
+	cmd.Flags().Bool("pushtag", false, "Push the created tag after finishing (defaults to the push setting)")
+	cmd.Flags().Bool("no-pushtag", false, "Don't push the created tag after finishing")
 
 	// Hook Control Flags
 	cmd.Flags().Bool("no-verify", false, "Bypass pre-commit and commit-msg hooks during merge and commit operations")

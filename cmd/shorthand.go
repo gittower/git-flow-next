@@ -161,7 +161,7 @@ func RegisterShorthandCommands() {
 			if noVerify {
 				noVerifyPtr = &noVerify
 			}
-			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, nil, noVerifyPtr)
+			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, nil, noVerifyPtr, nil, nil)
 		},
 	}
 

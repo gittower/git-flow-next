@@ -80,8 +80,8 @@ const (
 // =============================================================================
 
 // FinishCommand is the implementation of the finish command for topic branches
-func FinishCommand(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool) {
-	if err := executeFinish(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, fetch, noVerify); err != nil {
+func FinishCommand(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) {
+	if err := executeFinish(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -98,7 +98,7 @@ func FinishCommand(branchType string, name string, continueOp bool, abortOp bool
 // =============================================================================
 
 // executeFinish performs the actual branch finishing logic and returns any errors
-func executeFinish(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool) error {
+func executeFinish(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) error {
 	// Get configuration early
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -130,7 +130,7 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 
 		if continueOp {
 			// Resolve options for continue operation
-			resolvedOptions := config.ResolveFinishOptions(cfg, state.BranchType, state.BranchName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify)
+			resolvedOptions := config.ResolveFinishOptions(cfg, state.BranchType, state.BranchName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
 			return handleContinue(cfg, state, stateBranchConfig, resolvedOptions, mergeOptions)
 		}
 
@@ -172,7 +172,7 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 			fmt.Printf("1. Merge it into '%s' using the %s strategy\n", branchConfig.Parent, branchConfig.UpstreamStrategy)
 
 			// Resolve options early for confirmation dialog
-			resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify)
+			resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
 
 			if resolvedOptions.ShouldTag {
 				fmt.Printf("2. Create a tag '%s'\n", resolvedOptions.TagName)
@@ -199,7 +199,7 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	}
 
 	// Resolve all options once before starting operations
-	resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify)
+	resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
 
 	// Perform fetch if enabled (only on initial finish, not continue)
 	if resolvedOptions.ShouldFetch && git.RemoteExists(cfg.Remote) {
@@ -243,10 +243,10 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	}
 
 	// Regular finish command flow
-	return finishBranch(cfg, branchType, name, branchConfig, tagOptions, retentionOptions, mergeOptions, fetch, noVerify)
+	return finishBranch(cfg, branchType, name, branchConfig, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
 }
 
-func finishBranch(cfg *config.Config, branchType string, name string, branchConfig config.BranchConfig, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool) error {
+func finishBranch(cfg *config.Config, branchType string, name string, branchConfig config.BranchConfig, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized()
 	if err != nil {
@@ -297,7 +297,7 @@ func finishBranch(cfg *config.Config, branchType string, name string, branchConf
 	}
 
 	// Resolve all options once at the beginning
-	resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify)
+	resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
 
 	// Run pre-hook before starting finish operation
 	gitDir, err := git.GetGitDir()
@@ -785,6 +785,13 @@ func handleDeleteBranchStep(cfg *config.Config, state *mergestate.MergeState, re
 		}
 	}
 
+	// Push stage: runs after all local work is complete and the merge state is
+	// cleared. A missing remote is a skip (exit 0); a rejected push is a real
+	// error, leaving the completed local finish as-is.
+	if err := pushFinishedBranches(cfg, state, resolvedOptions); err != nil {
+		return err
+	}
+
 	fmt.Printf("Successfully finished branch '%s' and updated %d child base branches\n", state.FullBranchName, len(state.UpdatedBranches))
 
 	// Run post-hook after successful completion
@@ -807,6 +814,64 @@ func handleDeleteBranchStep(cfg *config.Config, state *mergestate.MergeState, re
 		if result.Executed && result.Output != "" {
 			fmt.Print(result.Output)
 		}
+	}
+
+	return nil
+}
+
+// pushFinishedBranches pushes the branches modified by the finish (the target
+// branch plus each auto-updated child base branch) and the created tag to the
+// configured remote, according to the resolved push options. It runs as the final
+// stage of a completed finish.
+//
+// Behavior:
+//   - Nothing to push (neither branches nor tag enabled): no-op, no output.
+//   - Remote not configured: prints a skip note and returns nil (exit 0).
+//   - A push failure (e.g. non-fast-forward rejection): returns the error
+//     verbatim, which propagates to a non-zero exit. The completed local finish
+//     is left as-is (nothing is rolled back).
+func pushFinishedBranches(cfg *config.Config, state *mergestate.MergeState, resolvedOptions *config.ResolvedFinishOptions) error {
+	// Only push the tag if one was actually created.
+	tagToPush := resolvedOptions.PushTag && resolvedOptions.ShouldTag
+
+	// Nothing to do.
+	if !resolvedOptions.PushBranches && !tagToPush {
+		return nil
+	}
+
+	remote := cfg.Remote
+
+	// A missing remote is a skip-with-note, not an error.
+	if !git.RemoteExists(remote) {
+		fmt.Printf("Note: Remote '%s' not configured, skipping push\n", remote)
+		return nil
+	}
+
+	fmt.Printf("Pushing to remote '%s'...\n", remote)
+
+	if resolvedOptions.PushBranches {
+		// Ordered, de-duplicated branch list: parent first, then updated children,
+		// skipping any child equal to the parent.
+		branches := []string{state.ParentBranch}
+		for _, child := range state.UpdatedBranches {
+			if child != state.ParentBranch {
+				branches = append(branches, child)
+			}
+		}
+
+		for _, branch := range branches {
+			if err := git.PushRef(remote, branch); err != nil {
+				return &errors.GitError{Operation: fmt.Sprintf("push branch '%s'", branch), Err: err}
+			}
+			fmt.Printf("  %s -> %s/%s\n", branch, remote, branch)
+		}
+	}
+
+	if tagToPush {
+		if err := git.PushTag(remote, resolvedOptions.TagName); err != nil {
+			return &errors.GitError{Operation: fmt.Sprintf("push tag '%s'", resolvedOptions.TagName), Err: err}
+		}
+		fmt.Printf("  %s (tag) -> %s\n", resolvedOptions.TagName, remote)
 	}
 
 	return nil
@@ -918,7 +983,7 @@ func updateChildBranch(cfg *config.Config, branchName string, state *mergestate.
 			var resolvedOptions *config.ResolvedFinishOptions
 			if cfg != nil {
 				// Try to resolve options for better tag information in message
-				resolvedOptions = config.ResolveFinishOptions(cfg, state.BranchType, state.BranchName, nil, nil, nil, nil, nil)
+				resolvedOptions = config.ResolveFinishOptions(cfg, state.BranchType, state.BranchName, nil, nil, nil, nil, nil, nil, nil)
 			}
 
 			// Generate and print detailed conflict message

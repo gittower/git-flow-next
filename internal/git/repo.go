@@ -629,6 +629,30 @@ func PushBranch(remote, branch string, pushOptions []string) error {
 	return nil
 }
 
+// PushRef pushes a branch to a remote with a plain `git push <remote> <branch>`
+// (no -u). Finish pushes base branches that already track their remote, so this
+// avoids rewriting tracking config. The combined output is returned verbatim on
+// failure so a rejected (non-fast-forward) push surfaces to the caller.
+func PushRef(remote, branch string) error {
+	cmd := exec.Command("git", "push", remote, branch)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to push branch '%s' to '%s': %s", branch, remote, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+// PushTag pushes a single tag to a remote with `git push <remote> tag <tag>`.
+// The combined output is returned verbatim on failure.
+func PushTag(remote, tag string) error {
+	cmd := exec.Command("git", "push", remote, "tag", tag)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to push tag '%s' to '%s': %s", tag, remote, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
 // CreateTrackingBranch creates a local branch that tracks a remote branch
 func CreateTrackingBranch(localBranch, remote, remoteBranch string) error {
 	// git checkout -b <local> --track <remote>/<branch>
