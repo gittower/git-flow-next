@@ -91,9 +91,6 @@ Each topic branch type supports these subcommands:
 **publish**
 : Publish current topic branch to remote (planned feature).
 
-**integrate** [*branch*]
-: Integrate current or specified base branch into its parent. See **git-flow-integrate**(1).
-
 ## WORKFLOW PRESETS
 
 git-flow-next supports three workflow presets:

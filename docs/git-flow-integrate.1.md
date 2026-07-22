@@ -153,7 +153,7 @@ git flow integrate --abort
 : Invalid input (for example, tagging enabled without a resolvable name).
 
 **3**
-: A Git operation failed, a merge or rebase is already in progress, unresolved conflicts remain, or there is no in-progress operation to continue or abort.
+: A Git operation failed, a merge or rebase is already in progress, unresolved conflicts remain, or there is no in-progress operation to continue.
 
 **5**
 : A required branch (the parent, or the named branch) does not exist.

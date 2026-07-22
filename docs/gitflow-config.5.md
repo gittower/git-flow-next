@@ -610,7 +610,7 @@ Unlike finish, integrate defaults tagging and fetching **off**:
 
 1. **Command-line flags** (Layer 3 — highest priority)
 2. **gitflow.*branch*.integrate.*** configuration (Layer 2)
-3. **gitflow.branch.*branch*.upstreamstrategy** (Layer 1)
+3. **gitflow.branch.*branch*.upstreamStrategy** (Layer 1)
 
 ### Examples
 
