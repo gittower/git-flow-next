@@ -631,8 +631,9 @@ func PushBranch(remote, branch string, pushOptions []string) error {
 
 // PushRef pushes a branch to a remote with a plain `git push <remote> <branch>`
 // (no -u). Finish pushes base branches that already track their remote, so this
-// avoids rewriting tracking config. The combined output is returned verbatim on
-// failure so a rejected (non-fast-forward) push surfaces to the caller.
+// avoids rewriting tracking config. On failure it returns a wrapped error that
+// embeds the underlying error and the trimmed combined output, so a rejected
+// (non-fast-forward) push surfaces to the caller.
 func PushRef(remote, branch string) error {
 	cmd := exec.Command("git", "push", remote, branch)
 	output, err := cmd.CombinedOutput()
@@ -643,7 +644,8 @@ func PushRef(remote, branch string) error {
 }
 
 // PushTag pushes a single tag to a remote with `git push <remote> tag <tag>`.
-// The combined output is returned verbatim on failure.
+// On failure it returns a wrapped error that embeds the underlying error and the
+// trimmed combined output.
 func PushTag(remote, tag string) error {
 	cmd := exec.Command("git", "push", remote, "tag", tag)
 	output, err := cmd.CombinedOutput()

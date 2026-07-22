@@ -889,3 +889,38 @@ func TestFinishPushShorthandForwardsFlag(t *testing.T) {
 		t.Errorf("Expected push header and main push line via shorthand. Output: %s", output)
 	}
 }
+
+// TestFinishFetchShorthandForwardsFlag tests that the shorthand `git flow finish`
+// (operating on the current topic branch) honors the --fetch flag. Regression
+// guard: the shorthand registered the fetch flags but dropped them when calling
+// FinishCommand (passing nil), so `git flow finish --fetch` silently fell back to
+// config/defaults instead of honoring the flag.
+// Steps:
+//  1. Sets up a single-track repo with origin tracking main
+//  2. Disables fetch via config so the default alone would not fetch
+//  3. Creates feature branch 'login' with one commit (leaves it checked out)
+//  4. Runs the shorthand 'git flow finish --fetch' (no type/name)
+//  5. Verifies the fetch message appears, proving the flag was forwarded and
+//     overrode the config
+func TestFinishFetchShorthandForwardsFlag(t *testing.T) {
+	dir, remoteDir := setupSingleTrackWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Disable fetch via config so a dropped --fetch flag would result in no fetch.
+	// The flag must override this config to prove it is forwarded.
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.finish.fetch", "false"); err != nil {
+		t.Fatalf("Failed to configure fetch option: %v", err)
+	}
+
+	createTopicCommit(t, dir, "feature", "login", "login.txt", "login content")
+
+	output, err := testutil.RunGitFlow(t, dir, "finish", "--fetch")
+	if err != nil {
+		t.Fatalf("Failed to finish via shorthand with --fetch: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(output, "Fetching from remote") {
+		t.Errorf("Expected fetch to occur via shorthand --fetch (flag forwarded, overriding config). Output: %s", output)
+	}
+}
