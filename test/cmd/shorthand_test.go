@@ -3,6 +3,7 @@ package cmd_test
 import (
 	"testing"
 
+	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/test/testutil"
 	"github.com/stretchr/testify/assert"
 )
@@ -387,4 +388,30 @@ func TestRebaseWithCustomBranchTypes(t *testing.T) {
 
 	// Verify the change was applied
 	assert.True(t, testutil.FileExists(t, dir, "main-change.txt"))
+}
+
+// TestShorthandFinishWithoutInitialization verifies that the shorthand
+// 'git flow finish' reports "not initialized" in an uninitialized repository,
+// even when the current branch matches a default topic prefix. This guards the
+// shorthand entry point (which reaches finish via FinishCommand, bypassing the
+// topic-branch command handler) against the misleading branch-resolution error.
+func TestShorthandFinishWithoutInitialization(t *testing.T) {
+	// Setup: plain repo, git-flow NOT initialized
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Manually create and check out a branch matching the default feature prefix
+	_, err := testutil.RunGit(t, dir, "checkout", "-b", "feature/foo")
+	assert.NoError(t, err)
+
+	// Shorthand finish should report not-initialized, not a branch error
+	output, err := testutil.RunGitFlow(t, dir, "finish")
+	assert.Error(t, err)
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		assert.Equal(t, int(errors.ExitCodeNotInitialized), exitErr.ExitCode)
+	} else {
+		t.Error("Expected ExitError")
+	}
+	assert.Contains(t, output, "Error: git flow is not initialized")
+	assert.NotContains(t, output, "does not exist")
 }

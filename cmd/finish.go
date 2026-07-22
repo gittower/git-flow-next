@@ -103,9 +103,20 @@ func FinishCommand(branchType string, name string, continueOp bool, abortOp bool
 
 // executeFinish performs the actual branch finishing logic and returns any errors
 func executeFinish(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) error {
-	// Note: the git-flow initialization gate runs in the finish command handler
-	// (cmd/topicbranch.go), before the current-branch name detection that would
-	// otherwise emit a misleading error in an uninitialized repository.
+	// Validate that git-flow is initialized before loading config or resolving
+	// branches. This is the shared gate for every finish entry point: both the
+	// topic-branch handler (cmd/topicbranch.go) and the shorthand command
+	// (cmd/shorthand.go) reach finish through here. LoadConfig falls back to
+	// DefaultConfig when uninitialized, so this must run first. The topic-branch
+	// handler additionally gates before its own current-branch name detection,
+	// which runs ahead of this function.
+	initialized, err := config.IsInitialized()
+	if err != nil {
+		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+	}
+	if !initialized {
+		return &errors.NotInitializedError{}
+	}
 
 	// Get configuration early
 	cfg, err := config.LoadConfig()
@@ -221,8 +232,8 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 }
 
 func finishBranch(cfg *config.Config, branchType string, name string, branchConfig config.BranchConfig, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) error {
-	// Note: the git-flow initialization gate lives in the finish command handler
-	// (cmd/topicbranch.go), which is the only path that reaches finishBranch.
+	// Note: the git-flow initialization gate runs earlier in executeFinish (the
+	// only path to finishBranch) and in the topic-branch command handler.
 
 	// Validate inputs
 	if name == "" {
