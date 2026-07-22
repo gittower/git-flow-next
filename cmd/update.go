@@ -244,14 +244,11 @@ func handleUpdateContinue(state *mergestate.MergeState) error {
 	case strategyRebase:
 		err := git.RebaseContinue()
 		if err != nil {
-			if strings.Contains(err.Error(), "No rebase in progress") {
-				// Rebase already complete; proceed to clear state.
-			} else if strings.Contains(err.Error(), "conflict") {
+			if strings.Contains(err.Error(), "conflict") {
 				// A later replayed commit conflicts: stay resumable.
 				return &errors.UnresolvedConflictsError{}
-			} else {
-				return &errors.GitError{Operation: "continue rebase", Err: err}
 			}
+			return &errors.GitError{Operation: "continue rebase", Err: err}
 		}
 
 	case strategySquash:
