@@ -65,24 +65,30 @@ func RegisterShorthandCommands() {
 	// Update
 	updateCmd := &cobra.Command{
 		Use:   "update",
-		Short: "Update the current topic branch from parent",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Short: "Update the current branch from its parent",
+		Run: func(cmd *cobra.Command, args []string) {
+			continueOp, _ := cmd.Flags().GetBool("continue")
+			abortOp, _ := cmd.Flags().GetBool("abort")
 			useRebase, _ := cmd.Flags().GetBool("rebase")
-			return executeShorthandUpdate(useRebase, args)
+			runShorthandUpdate(useRebase, continueOp, abortOp, args)
 		},
 	}
-	updateCmd.Flags().Bool("rebase", false, "Force rebase strategy instead of configured strategy")
+	addUpdateFlags(updateCmd)
 	rootCmd.AddCommand(updateCmd)
 
 	// Rebase (shorthand for update --rebase)
 	rebaseCmd := &cobra.Command{
 		Use:   "rebase",
-		Short: "Rebase the current topic branch from parent",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Short: "Rebase the current branch onto its parent",
+		Run: func(cmd *cobra.Command, args []string) {
 			// Always use rebase strategy for this shorthand
-			return executeShorthandUpdate(true, args)
+			continueOp, _ := cmd.Flags().GetBool("continue")
+			abortOp, _ := cmd.Flags().GetBool("abort")
+			runShorthandUpdate(true, continueOp, abortOp, args)
 		},
 	}
+	rebaseCmd.Flags().BoolP("continue", "c", false, "Continue the update operation after resolving conflicts")
+	rebaseCmd.Flags().BoolP("abort", "a", false, "Abort the update operation and return to the original state; a no-op success when none is in progress")
 	rootCmd.AddCommand(rebaseCmd)
 
 	// Rename
@@ -230,18 +236,23 @@ given, the current branch is integrated into its parent.`,
 	rootCmd.AddCommand(integrateCmd)
 }
 
-// executeShorthandUpdate handles the shared logic for both update and rebase shorthand commands
-func executeShorthandUpdate(useRebase bool, args []string) error {
+// runShorthandUpdate resolves the branch to update for the top-level update/rebase
+// surface and routes through UpdateCommand, which maps errors to exit codes and
+// exits (so the top-level surface exits 3, not main.go's exit 1). A topic current
+// branch is updated by its type; otherwise the current or named base branch is
+// used (branchType == "").
+func runShorthandUpdate(useRebase, continueOp, abortOp bool, args []string) {
 	branchType, name, err := detectBranchTypeAndName()
 	if err == nil {
-		return executeUpdate(branchType, name, useRebase)
+		UpdateCommand(branchType, name, useRebase, continueOp, abortOp)
+		return
 	}
-	// Fallback to original if not topic
+	// Not a topic branch: fall back to the current or named base branch.
 	var branchName string
 	if len(args) > 0 {
 		branchName = args[0]
 	}
-	return executeUpdate("", branchName, useRebase)
+	UpdateCommand("", branchName, useRebase, continueOp, abortOp)
 }
 
 // detectBranchTypeAndName detects type and name from current branch

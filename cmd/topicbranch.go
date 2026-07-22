@@ -261,26 +261,20 @@ func registerBranchCommand(branchType string) {
 		Use:     "update [name]",
 		Short:   fmt.Sprintf("Update a %s branch with changes from its parent branch", branchType),
 		Long:    fmt.Sprintf("Update a %s branch with changes from its parent branch using the configured downstream strategy", branchType),
-		Example: fmt.Sprintf("  git flow %s update my-feature", branchType),
+		Example: fmt.Sprintf("  git flow %s update my-feature\n  git flow %s update --continue\n  git flow %s update --abort", branchType, branchType, branchType),
 		Args:    cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			var name string
 			if len(args) > 0 {
 				name = args[0]
 			}
-			if err := executeUpdate(branchType, name, false); err != nil {
-				var exitCode errors.ExitCode
-				if flowErr, ok := err.(errors.Error); ok {
-					exitCode = flowErr.ExitCode()
-				} else {
-					exitCode = errors.ExitCodeGitError
-				}
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(int(exitCode))
-			}
-			return nil
+			continueOp, _ := cmd.Flags().GetBool("continue")
+			abortOp, _ := cmd.Flags().GetBool("abort")
+			useRebase, _ := cmd.Flags().GetBool("rebase")
+			UpdateCommand(branchType, name, useRebase, continueOp, abortOp)
 		},
 	}
+	addUpdateFlags(updateCmd)
 	branchCmd.AddCommand(updateCmd)
 
 	// Add delete subcommand
@@ -416,6 +410,15 @@ started by someone else.`, branchType, branchType),
 func init() {
 	// Register topic branch commands
 	RegisterTopicBranchCommands()
+}
+
+// addUpdateFlags adds the update command's operation-control and strategy flags.
+// Shared by both update surfaces (topic and top-level) so --continue/--abort/--rebase
+// behave identically. Mirrors finish/integrate wording.
+func addUpdateFlags(cmd *cobra.Command) {
+	cmd.Flags().BoolP("continue", "c", false, "Continue the update operation after resolving conflicts")
+	cmd.Flags().BoolP("abort", "a", false, "Abort the update operation and return to the original state; a no-op success when none is in progress")
+	cmd.Flags().Bool("rebase", false, "Force rebase strategy instead of the configured strategy")
 }
 
 // addFinishFlags adds common finish flags to the given Cobra command
