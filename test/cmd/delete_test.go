@@ -1046,3 +1046,526 @@ func TestDeleteWithBaseConfigInNonLocalScopeNoWarning(t *testing.T) {
 		t.Error("Expected feature branch to be deleted")
 	}
 }
+
+// TestDeleteFeatureWithFetchFlag tests that the --fetch flag fetches before deleting.
+// Steps:
+// 1. Sets up a test repository with remote (includes git-flow init)
+// 2. Starts a feature branch
+// 3. Runs 'git flow feature delete my-feature --fetch'
+// 4. Verifies output contains "Fetching from remote"
+// 5. Verifies branch is deleted
+func TestDeleteFeatureWithFetchFlag(t *testing.T) {
+	// Setup test repository with remote
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Create a feature branch
+	_, err := testutil.RunGitFlow(t, dir, "feature", "start", "test-fetch")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+
+	// Delete with --fetch flag
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "test-fetch", "--fetch")
+	if err != nil {
+		t.Fatalf("Failed to delete feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify that fetch occurred
+	if !strings.Contains(output, "Fetching from remote") {
+		t.Error("Expected fetch to occur with --fetch flag")
+	}
+
+	// Verify branch is deleted
+	if testutil.BranchExists(t, dir, "feature/test-fetch") {
+		t.Error("Expected feature branch to be deleted")
+	}
+}
+
+// TestDeleteFeatureWithFetchConfig tests that gitflow.feature.delete.fetch config triggers fetch.
+// Steps:
+// 1. Sets up a test repository with remote (includes git-flow init)
+// 2. Starts a feature branch
+// 3. Sets gitflow.feature.delete.fetch to true
+// 4. Runs 'git flow feature delete my-feature' (no flag)
+// 5. Verifies output contains "Fetching from remote"
+// 6. Verifies branch is deleted
+func TestDeleteFeatureWithFetchConfig(t *testing.T) {
+	// Setup test repository with remote
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Create a feature branch
+	_, err := testutil.RunGitFlow(t, dir, "feature", "start", "test-fetch-config")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+
+	// Set fetch config
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.feature.delete.fetch", "true")
+	if err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
+	// Delete without flag (should use config)
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "test-fetch-config")
+	if err != nil {
+		t.Fatalf("Failed to delete feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify that fetch occurred
+	if !strings.Contains(output, "Fetching from remote") {
+		t.Error("Expected fetch to occur with fetch config enabled")
+	}
+
+	// Verify branch is deleted
+	if testutil.BranchExists(t, dir, "feature/test-fetch-config") {
+		t.Error("Expected feature branch to be deleted")
+	}
+}
+
+// TestDeleteFeatureWithNoFetchOverridesConfig tests that --no-fetch overrides fetch config.
+// Steps:
+// 1. Sets up a test repository with remote (includes git-flow init)
+// 2. Starts a feature branch
+// 3. Sets gitflow.feature.delete.fetch to true
+// 4. Runs 'git flow feature delete my-feature --no-fetch'
+// 5. Verifies output does NOT contain "Fetching"
+// 6. Verifies branch is deleted
+func TestDeleteFeatureWithNoFetchOverridesConfig(t *testing.T) {
+	// Setup test repository with remote
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Create a feature branch
+	_, err := testutil.RunGitFlow(t, dir, "feature", "start", "test-no-fetch")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+
+	// Set fetch config
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.feature.delete.fetch", "true")
+	if err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
+	// Delete with --no-fetch flag (should override config)
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "test-no-fetch", "--no-fetch")
+	if err != nil {
+		t.Fatalf("Failed to delete feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify that fetch did NOT occur
+	if strings.Contains(output, "Fetching") {
+		t.Error("Expected --no-fetch to override config and skip fetch")
+	}
+
+	// Verify branch is deleted
+	if testutil.BranchExists(t, dir, "feature/test-no-fetch") {
+		t.Error("Expected feature branch to be deleted")
+	}
+}
+
+// TestDeleteFeatureNoRemoteFetchSkipped tests that --fetch silently skips when no remote exists.
+// Steps:
+// 1. Sets up a test repository (no remote) and initializes git-flow with defaults
+// 2. Starts a feature branch
+// 3. Runs 'git flow feature delete my-feature --fetch'
+// 4. Verifies output does NOT contain "Fetching" (fetch skipped silently)
+// 5. Verifies no error about missing remote
+// 6. Verifies branch is deleted
+func TestDeleteFeatureNoRemoteFetchSkipped(t *testing.T) {
+	// Setup test repository without remote
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	// Create a feature branch
+	_, err = testutil.RunGitFlow(t, dir, "feature", "start", "test-no-remote")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+
+	// Delete with --fetch flag (no remote configured)
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "test-no-remote", "--fetch")
+	if err != nil {
+		t.Fatalf("Failed to delete feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify fetch was skipped silently
+	if strings.Contains(output, "Fetching") {
+		t.Error("Expected fetch to be skipped silently when no remote exists")
+	}
+
+	// Verify no confusing error messages
+	if strings.Contains(output, "does not appear to be a git repository") {
+		t.Error("Expected no confusing error about missing remote")
+	}
+
+	// Verify branch is deleted
+	if testutil.BranchExists(t, dir, "feature/test-no-remote") {
+		t.Error("Expected feature branch to be deleted")
+	}
+}
+
+// setupBehindDeleteRepo sets up a repo whose local feature branch is behind its remote: it starts a
+// feature branch, commits, pushes it with tracking, then advances the remote branch from a second
+// clone so the local branch falls behind. It returns the working dir (already registered for
+// cleanup) for the test to run delete against.
+func setupBehindDeleteRepo(t *testing.T, feature string) string {
+	t.Helper()
+
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	t.Cleanup(func() { testutil.CleanupTestRepo(t, dir) })
+	t.Cleanup(func() { testutil.CleanupTestRepo(t, remoteDir) })
+
+	// Create a feature branch with a commit and push it with tracking
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "start", feature); err != nil {
+		t.Fatalf("Failed to start feature: %v", err)
+	}
+	if err := testutil.WriteFile(t, dir, "local.txt", "local content"); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "add", "local.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Local feature commit"); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/"+feature); err != nil {
+		t.Fatalf("Failed to push feature: %v", err)
+	}
+
+	// In a second clone, add a commit to the remote feature branch so local falls behind
+	secondDir := t.TempDir()
+	if _, err := testutil.RunGit(t, secondDir, "clone", remoteDir, "."); err != nil {
+		t.Fatalf("Failed to clone: %v", err)
+	}
+	testutil.ConfigureGitIdentity(t, secondDir)
+	if _, err := testutil.RunGit(t, secondDir, "checkout", "feature/"+feature); err != nil {
+		t.Fatalf("Failed to checkout feature in clone: %v", err)
+	}
+	if err := testutil.WriteFile(t, secondDir, "remote.txt", "remote content"); err != nil {
+		t.Fatalf("Failed to write file in clone: %v", err)
+	}
+	if _, err := testutil.RunGit(t, secondDir, "add", "remote.txt"); err != nil {
+		t.Fatalf("Failed to add file in clone: %v", err)
+	}
+	if _, err := testutil.RunGit(t, secondDir, "commit", "-m", "Remote feature commit"); err != nil {
+		t.Fatalf("Failed to commit in clone: %v", err)
+	}
+	if _, err := testutil.RunGit(t, secondDir, "push", "origin", "feature/"+feature); err != nil {
+		t.Fatalf("Failed to push from clone: %v", err)
+	}
+
+	return dir
+}
+
+// TestDeleteFeatureBehindRemoteAborts verifies the fetch/sync preflight blocks deleting a topic
+// branch that is behind its remote, and that the abort recommends the delete-specific command (not
+// finish).
+// Steps:
+// 1. Sets up a repo whose local feature branch is behind its remote
+// 2. Runs 'git flow feature delete --fetch' and expects an abort mentioning "behind"
+// 3. Confirms the error recommends 'git flow feature delete --force' and not 'finish --force'
+// 4. Confirms the branch still exists
+func TestDeleteFeatureBehindRemoteAborts(t *testing.T) {
+	dir := setupBehindDeleteRepo(t, "behind-del")
+
+	// Delete with --fetch must abort because the local branch is behind its remote
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "behind-del", "--fetch")
+	if err == nil {
+		t.Fatalf("Expected delete --fetch to fail when behind remote. Output: %s", output)
+	}
+	if !strings.Contains(output, "behind") {
+		t.Errorf("Expected abort message to mention 'behind'. Output: %s", output)
+	}
+	// The abort must recommend the delete command, not finish (#88 operation-aware message).
+	if !strings.Contains(output, "git flow feature delete --force") {
+		t.Errorf("Expected abort to recommend 'git flow feature delete --force'. Output: %s", output)
+	}
+	if strings.Contains(output, "finish --force") {
+		t.Errorf("Expected abort not to mention 'finish --force'. Output: %s", output)
+	}
+	if !testutil.BranchExists(t, dir, "feature/behind-del") {
+		t.Error("Expected feature branch to still exist after aborted delete")
+	}
+}
+
+// TestDeleteFeatureBehindRemoteForceOverrides verifies that --force overrides the sync gate and
+// deletes a branch that is behind its remote.
+// Steps:
+// 1. Sets up a repo whose local feature branch is behind its remote
+// 2. Runs 'git flow feature delete --fetch --force' and expects it to succeed
+// 3. Confirms the branch is deleted
+func TestDeleteFeatureBehindRemoteForceOverrides(t *testing.T) {
+	dir := setupBehindDeleteRepo(t, "behind-del-force")
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "behind-del-force", "--fetch", "--force")
+	if err != nil {
+		t.Fatalf("Expected forced delete to succeed. Output: %s\nerr: %v", output, err)
+	}
+	if testutil.BranchExists(t, dir, "feature/behind-del-force") {
+		t.Error("Expected feature branch to be deleted with --force")
+	}
+}
+
+// TestDeleteFeatureNoFetchStillAbortsWhenBehind verifies that --no-fetch skips only the fetch, not
+// the sync gate: a branch already known (via cached tracking data) to be behind still aborts.
+// Steps:
+// 1. Sets up a repo whose local feature branch is behind its remote
+// 2. Runs a plain 'git fetch' so the remote-tracking ref reflects the behind state locally
+// 3. Runs 'git flow feature delete --no-fetch' and expects an abort mentioning "behind"
+// 4. Confirms no "Fetching" line was printed (the fetch really was skipped)
+// 5. Confirms the branch still exists
+func TestDeleteFeatureNoFetchStillAbortsWhenBehind(t *testing.T) {
+	dir := setupBehindDeleteRepo(t, "no-fetch-behind")
+
+	// Update the remote-tracking ref locally without git-flow fetching, so the cached tracking
+	// data already shows the branch is behind.
+	if _, err := testutil.RunGit(t, dir, "fetch", "origin"); err != nil {
+		t.Fatalf("Failed to fetch: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "no-fetch-behind", "--no-fetch")
+	if err == nil {
+		t.Fatalf("Expected delete --no-fetch to fail when behind remote. Output: %s", output)
+	}
+	if !strings.Contains(output, "behind") {
+		t.Errorf("Expected abort message to mention 'behind'. Output: %s", output)
+	}
+	// --no-fetch must skip the fetch itself but still run the sync check.
+	if strings.Contains(output, "Fetching") {
+		t.Errorf("Expected --no-fetch to skip the fetch. Output: %s", output)
+	}
+	if !testutil.BranchExists(t, dir, "feature/no-fetch-behind") {
+		t.Error("Expected feature branch to still exist after aborted delete")
+	}
+}
+
+// TestDeleteFeatureDivergedRemoteAborts verifies the sync preflight blocks deleting a topic branch
+// that has diverged from its remote, and that the abort recommends the delete-specific command.
+// Steps:
+// 1. Sets up a repo with remote, starts a feature branch, commits, and pushes it with tracking
+// 2. In a second clone, advances the remote feature branch (remote gains a commit)
+// 3. Adds a different local commit so the branch diverges
+// 4. Runs 'git flow feature delete --fetch' and expects an abort mentioning "diverged"
+// 5. Confirms the error recommends 'git flow feature delete --force' and not 'finish --force'
+// 6. Confirms the branch still exists
+func TestDeleteFeatureDivergedRemoteAborts(t *testing.T) {
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Create a feature branch with a commit and push it with tracking
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "start", "diverged-del"); err != nil {
+		t.Fatalf("Failed to start feature: %v", err)
+	}
+	if err := testutil.WriteFile(t, dir, "base.txt", "base content"); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "add", "base.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Base feature commit"); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/diverged-del"); err != nil {
+		t.Fatalf("Failed to push feature: %v", err)
+	}
+
+	// In a second clone, add a commit to the remote feature branch
+	secondDir := t.TempDir()
+	if _, err := testutil.RunGit(t, secondDir, "clone", remoteDir, "."); err != nil {
+		t.Fatalf("Failed to clone: %v", err)
+	}
+	testutil.ConfigureGitIdentity(t, secondDir)
+	if _, err := testutil.RunGit(t, secondDir, "checkout", "feature/diverged-del"); err != nil {
+		t.Fatalf("Failed to checkout feature in clone: %v", err)
+	}
+	if err := testutil.WriteFile(t, secondDir, "remote.txt", "remote content"); err != nil {
+		t.Fatalf("Failed to write file in clone: %v", err)
+	}
+	if _, err := testutil.RunGit(t, secondDir, "add", "remote.txt"); err != nil {
+		t.Fatalf("Failed to add file in clone: %v", err)
+	}
+	if _, err := testutil.RunGit(t, secondDir, "commit", "-m", "Remote feature commit"); err != nil {
+		t.Fatalf("Failed to commit in clone: %v", err)
+	}
+	if _, err := testutil.RunGit(t, secondDir, "push", "origin", "feature/diverged-del"); err != nil {
+		t.Fatalf("Failed to push from clone: %v", err)
+	}
+
+	// Add a different local commit so the branch diverges from the remote
+	if err := testutil.WriteFile(t, dir, "local.txt", "local content"); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "add", "local.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Local feature commit"); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Delete with --fetch must abort because the local branch has diverged
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "diverged-del", "--fetch")
+	if err == nil {
+		t.Fatalf("Expected delete --fetch to fail when diverged. Output: %s", output)
+	}
+	if !strings.Contains(output, "diverged") {
+		t.Errorf("Expected abort message to mention 'diverged'. Output: %s", output)
+	}
+	if !strings.Contains(output, "git flow feature delete --force") {
+		t.Errorf("Expected abort to recommend 'git flow feature delete --force'. Output: %s", output)
+	}
+	if strings.Contains(output, "finish --force") {
+		t.Errorf("Expected abort not to mention 'finish --force'. Output: %s", output)
+	}
+	if !testutil.BranchExists(t, dir, "feature/diverged-del") {
+		t.Error("Expected feature branch to still exist after aborted delete")
+	}
+}
+
+// TestDeleteFeatureAheadRemoteTolerated verifies the delete preflight tolerates a topic branch that
+// is merely ahead of its remote: unlike finish, the sync gate does not abort on ahead
+// (tolerateAhead). It prints a note and lets the operation proceed to `git branch -d`.
+//
+// Note: a branch that is genuinely ahead of its upstream cannot complete a non-force `git branch -d`
+// (Git independently refuses a branch not merged into its upstream, even when merged into HEAD), so
+// this test asserts what tolerateAhead actually governs — the sync gate does not fire — rather than
+// full deletion, which would require --force (which bypasses the sync check entirely).
+// Steps:
+//  1. Sets up a repo with remote, starts a feature branch, commits, and pushes it with tracking
+//  2. Adds a local commit that is not pushed, so the branch is ahead of its remote
+//  3. Runs 'git flow feature delete --fetch' and confirms the ahead state is tolerated (a note is
+//     printed) and the sync gate does NOT abort (no delete/finish --force recommendation)
+func TestDeleteFeatureAheadRemoteTolerated(t *testing.T) {
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Create a feature branch with a commit and push it with tracking (in sync)
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "start", "ahead-del"); err != nil {
+		t.Fatalf("Failed to start feature: %v", err)
+	}
+	if err := testutil.WriteFile(t, dir, "base.txt", "base content"); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "add", "base.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Base feature commit"); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/ahead-del"); err != nil {
+		t.Fatalf("Failed to push feature: %v", err)
+	}
+
+	// Add a local commit that is not pushed, so the branch is ahead of its remote
+	if err := testutil.WriteFile(t, dir, "local.txt", "local content"); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "add", "local.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Local unpushed commit"); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Delete with --fetch: the sync gate must tolerate the ahead state (a note, not an abort).
+	// git branch -d itself still refuses a branch that is not merged into its upstream, so the
+	// command as a whole fails there — not at the sync gate. Asserting that failure (rather than
+	// ignoring the error) keeps this test from passing vacuously.
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "ahead-del", "--fetch")
+	if err == nil {
+		t.Errorf("Expected delete to fail (git branch -d refuses an ahead branch). Output: %s", output)
+	}
+	// The branch must still exist: deletion did not happen.
+	if !testutil.BranchExists(t, dir, "feature/ahead-del") {
+		t.Error("Expected feature/ahead-del to still exist after the refused delete")
+	}
+	// The sync gate must have TOLERATED ahead: it printed a note...
+	if !strings.Contains(output, "ahead of remote") {
+		t.Errorf("Expected a tolerated 'ahead of remote' note. Output: %s", output)
+	}
+	// ...and did NOT abort with a sync error (that would recommend `delete --force`).
+	if strings.Contains(output, "To delete anyway") || strings.Contains(output, "--force ahead-del") {
+		t.Errorf("Expected the sync gate not to abort on an ahead branch. Output: %s", output)
+	}
+}
+
+// TestDeleteFeatureMergedRemotely verifies the #88 scenario: a feature merged remotely (e.g. via a
+// PR) can be deleted with a non-force `git branch -d` once --fetch fast-forwards the parent.
+// Steps:
+// 1. Sets up a repo with remote, starts a feature branch, commits, and pushes it
+// 2. In a second clone, merges the feature into develop, pushes develop, deletes the remote feature
+// 3. Checks out the parent and runs 'git flow feature delete --fetch' (no --force)
+// 4. The fetch fast-forwards develop so `git branch -d` recognizes the branch as merged
+func TestDeleteFeatureMergedRemotely(t *testing.T) {
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Create a feature branch with a commit and publish it (no upstream tracking, so
+	// `git branch -d` later falls back to checking HEAD)
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "start", "merged-remote"); err != nil {
+		t.Fatalf("Failed to start feature: %v", err)
+	}
+	if err := testutil.WriteFile(t, dir, "feature.txt", "feature work"); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "add", "feature.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Feature work"); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "push", "origin", "feature/merged-remote"); err != nil {
+		t.Fatalf("Failed to push feature: %v", err)
+	}
+
+	// Simulate a remote PR merge in a second clone: merge the feature into develop, push
+	// develop, and delete the remote feature branch
+	secondDir := t.TempDir()
+	if _, err := testutil.RunGit(t, secondDir, "clone", remoteDir, "."); err != nil {
+		t.Fatalf("Failed to clone: %v", err)
+	}
+	testutil.ConfigureGitIdentity(t, secondDir)
+	if _, err := testutil.RunGit(t, secondDir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop in clone: %v", err)
+	}
+	if _, err := testutil.RunGit(t, secondDir, "merge", "--no-ff", "-m", "Merge feature/merged-remote", "origin/feature/merged-remote"); err != nil {
+		t.Fatalf("Failed to merge feature into develop: %v", err)
+	}
+	if _, err := testutil.RunGit(t, secondDir, "push", "origin", "develop"); err != nil {
+		t.Fatalf("Failed to push develop: %v", err)
+	}
+	if _, err := testutil.RunGit(t, secondDir, "push", "origin", "--delete", "feature/merged-remote"); err != nil {
+		t.Fatalf("Failed to delete remote feature: %v", err)
+	}
+
+	// Back in the original repo, move to the parent. Without --fetch the local develop does not
+	// yet contain the merge, so a non-force delete would refuse.
+	if _, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "merged-remote", "--fetch")
+	if err != nil {
+		t.Fatalf("Expected delete --fetch to succeed for a remotely-merged branch. Output: %s\nerr: %v", output, err)
+	}
+	if !strings.Contains(output, "Fetching from remote") {
+		t.Errorf("Expected fetch to occur. Output: %s", output)
+	}
+	if testutil.BranchExists(t, dir, "feature/merged-remote") {
+		t.Error("Expected feature branch to be deleted after fast-forwarding the parent")
+	}
+}
