@@ -764,7 +764,7 @@ func TestStartUnreachableRemoteWarnsAndCreates(t *testing.T) {
 	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.start.fetch", "true"); err != nil {
 		t.Fatalf("Failed to set fetch config: %v", err)
 	}
-	if _, err := testutil.RunGit(t, dir, "remote", "set-url", "origin", "/nonexistent/repo.git"); err != nil {
+	if _, err := testutil.RunGit(t, dir, "remote", "set-url", "origin", "./nonexistent-remote-repo.git"); err != nil {
 		t.Fatalf("Failed to break remote: %v", err)
 	}
 

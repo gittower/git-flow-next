@@ -786,7 +786,7 @@ func TestFinishUnreachableRemoteAborts(t *testing.T) {
 	commitFeatureAndPush(t, dir, "feature.txt", "feature content", "Add feature file", "feature/test-unreachable")
 
 	// Break the remote so any fetch fails with a transport error
-	if _, err := testutil.RunGit(t, dir, "remote", "set-url", "origin", "/nonexistent/repo.git"); err != nil {
+	if _, err := testutil.RunGit(t, dir, "remote", "set-url", "origin", "./nonexistent-remote-repo.git"); err != nil {
 		t.Fatalf("Failed to break remote: %v", err)
 	}
 
@@ -845,7 +845,7 @@ func TestFinishUnreachableRemoteNoFetchCompletes(t *testing.T) {
 	}
 	commitFeatureAndPush(t, dir, "feature.txt", "feature content", "Add feature file", "feature/test-unreachable-nofetch")
 
-	if _, err := testutil.RunGit(t, dir, "remote", "set-url", "origin", "/nonexistent/repo.git"); err != nil {
+	if _, err := testutil.RunGit(t, dir, "remote", "set-url", "origin", "./nonexistent-remote-repo.git"); err != nil {
 		t.Fatalf("Failed to break remote: %v", err)
 	}
 
@@ -889,7 +889,7 @@ func TestFinishUnreachableRemoteForceCompletes(t *testing.T) {
 	}
 	commitFeatureAndPush(t, dir, "feature.txt", "feature content", "Add feature file", "feature/test-unreachable-force")
 
-	if _, err := testutil.RunGit(t, dir, "remote", "set-url", "origin", "/nonexistent/repo.git"); err != nil {
+	if _, err := testutil.RunGit(t, dir, "remote", "set-url", "origin", "./nonexistent-remote-repo.git"); err != nil {
 		t.Fatalf("Failed to break remote: %v", err)
 	}
 

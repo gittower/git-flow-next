@@ -574,7 +574,7 @@ func TestFinishContinueSkipsRemoteCheck(t *testing.T) {
 	}
 
 	// Break the remote so any fetch during continue would fatally fail
-	_, err = testutil.RunGit(t, dir, "remote", "set-url", "origin", "/nonexistent/repo.git")
+	_, err = testutil.RunGit(t, dir, "remote", "set-url", "origin", "./nonexistent-remote-repo.git")
 	if err != nil {
 		t.Fatalf("Failed to break remote: %v", err)
 	}
