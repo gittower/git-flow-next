@@ -64,25 +64,33 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 	// Sync-check the topic only when it still has a remote ref and a tracking branch.
 	if !force && topicRefFound && git.HasTrackingBranch(topicBranch) {
 		status, commitCount, err := git.CompareBranchWithRemote(topicBranch)
-		if err == nil {
-			switch status {
-			case git.SyncStatusAhead, git.SyncStatusBehind, git.SyncStatusDiverged:
-				trackingBranch, terr := git.GetTrackingBranch(topicBranch)
-				if terr != nil {
-					trackingBranch = "remote tracking branch"
-				}
-				return &errors.BranchNotInSyncError{
-					BranchName:   topicBranch,
-					ShortName:    shortName,
-					RemoteBranch: trackingBranch,
-					Status:       string(status),
-					CommitCount:  commitCount,
-					BranchType:   branchType,
-				}
+		if err != nil {
+			// HasTrackingBranch already confirmed a tracking branch, and when fetching, the topic
+			// fetch succeeded — so a compare failure here is unexpected (e.g. a corrupt/dangling
+			// tracking ref or a rev-list failure). Fail closed rather than merging against an
+			// undetermined sync status; --force skips this whole block.
+			return &errors.GitError{
+				Operation: fmt.Sprintf("determine sync status for branch '%s'", topicBranch),
+				Err:       err,
 			}
-			// SyncStatusEqual or SyncStatusNoTracking: proceed normally.
 		}
-		// err != nil: unable to compare (no tracking data) — proceed normally.
+		switch status {
+		case git.SyncStatusAhead, git.SyncStatusBehind, git.SyncStatusDiverged:
+			trackingBranch, terr := git.GetTrackingBranch(topicBranch)
+			if terr != nil {
+				trackingBranch = "remote tracking branch"
+			}
+			return &errors.BranchNotInSyncError{
+				BranchName:   topicBranch,
+				ShortName:    shortName,
+				RemoteBranch: trackingBranch,
+				Status:       string(status),
+				CommitCount:  commitCount,
+				BranchType:   branchType,
+			}
+		}
+		// SyncStatusEqual: the topic is in sync, proceed normally. (SyncStatusNoTracking always
+		// arrives with a non-nil error, handled fatally above.)
 	}
 
 	return nil

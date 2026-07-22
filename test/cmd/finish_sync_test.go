@@ -759,3 +759,64 @@ func TestFinishNoFetchStillRunsSyncCheck(t *testing.T) {
 		t.Error("Expected feature branch to still exist after aborted finish")
 	}
 }
+
+// TestFinishCompareErrorAborts verifies that when a tracking branch exists but the sync comparison
+// itself fails (e.g. a corrupt/dangling tracking ref), finish fails closed rather than merging
+// against an undetermined sync status. This exercises the compare-error branch of the preflight,
+// which HasTrackingBranch gates entry into, so reaching a compare error is unexpected and fatal.
+// Steps:
+//  1. Sets up a test repository with remote and initializes git-flow
+//  2. Creates a feature branch, commits, and pushes it (establishes a tracking ref)
+//  3. Corrupts the loose remote-tracking ref to point at a nonexistent object, so @{upstream} still
+//     resolves by name (HasTrackingBranch stays true) but rev-list can no longer compare
+//  4. Finishes with --no-fetch (so the corrupt ref is not repaired by a fetch)
+//  5. Verifies finish fails, names the sync-status determination, and does not merge
+func TestFinishCompareErrorAborts(t *testing.T) {
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "start", "test-compare-error"); err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+	commitFeatureAndPush(t, dir, "feature.txt", "feature content", "Add feature file", "feature/test-compare-error")
+
+	// Corrupt the loose remote-tracking ref: point it at a nonexistent object. @{upstream} still
+	// resolves the tracking name (so HasTrackingBranch stays true), but rev-list can no longer walk
+	// the ref, forcing CompareBranchWithRemote to fail.
+	trackingRef := ".git/refs/remotes/origin/feature/test-compare-error"
+	if _, err := testutil.RunGit(t, dir, "rev-parse", "--verify", "origin/feature/test-compare-error"); err != nil {
+		t.Fatalf("Precondition failed: expected a loose tracking ref to exist: %v", err)
+	}
+	if err := testutil.WriteFile(t, dir, trackingRef, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n"); err != nil {
+		t.Fatalf("Failed to corrupt tracking ref: %v", err)
+	}
+
+	developBefore, err := testutil.RunGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop SHA: %v", err)
+	}
+
+	// --no-fetch so the corrupt ref is not repaired by a fetch before the sync check
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "--no-fetch", "test-compare-error")
+	if err == nil {
+		t.Errorf("Expected finish to fail when the sync status cannot be determined. Output: %s", output)
+	}
+
+	// Verify the failure is the sync-status determination (not a merge or unrelated error)
+	if !strings.Contains(output, "determine sync status") {
+		t.Errorf("Expected the error to name the sync-status determination. Output: %s", output)
+	}
+
+	// Verify no merge happened: develop unchanged and the branch still exists
+	developAfter, err := testutil.RunGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop SHA after: %v", err)
+	}
+	if developBefore != developAfter {
+		t.Errorf("Expected develop unchanged after aborted finish. Before: %s After: %s", developBefore, developAfter)
+	}
+	if !testutil.BranchExists(t, dir, "feature/test-compare-error") {
+		t.Error("Expected feature branch to still exist after aborted finish")
+	}
+}
