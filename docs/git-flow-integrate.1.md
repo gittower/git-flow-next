@@ -34,10 +34,10 @@ A persistent state file lets the operation resume after conflicts. If a conflict
 ### Operation Control
 
 **--continue**, **-c**
-: Continue the integrate operation after resolving merge conflicts.
+: Continue the integrate operation after resolving merge conflicts. This acts only on an in-progress integrate. If a **finish** or **update** operation is in progress instead, integrate refuses non-destructively, names the owning operation, prints its resume/abort commands, and exits 3 without touching it.
 
 **--abort**, **-a**
-: Abort the integrate operation and return to the original state. When no integrate operation is in progress, **--abort** is a no-op and exits successfully. A completed upstream merge and tag are preserved when aborting during a child update.
+: Abort the integrate operation and return to the original state. When no integrate operation is in progress, **--abort** is a no-op and exits successfully. A completed upstream merge and tag are preserved when aborting during a child update. Like **--continue**, it acts only on an integrate operation: a foreign in-progress finish or update is refused (exit 3) rather than aborted.
 
 ### Tag Creation
 
