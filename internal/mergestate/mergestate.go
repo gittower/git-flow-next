@@ -138,6 +138,14 @@ func ClearMergeState() error {
 // isStateValid checks whether a loaded merge state is still meaningful by
 // validating it against the actual git repository state. This detects stale
 // state files left by manual intervention, crashes, or interrupted operations.
+//
+// Update states are first-class here (#143): the update command now persists a
+// resolvable BranchType (topic type or base branch key) alongside a "merge" step,
+// so a genuine update conflict passes this check rather than being auto-cleared.
+// The empty-BranchType auto-clear below is intentionally retained — the foreign
+// guard (refuseIfForeignOperation) reads the raw state directly and refuses an
+// unknown/empty Action before IsMergeInProgress ever runs, so that case never
+// reaches the auto-clear path.
 func isStateValid(state *MergeState) bool {
 	// Critical fields must be non-empty
 	if state.BranchType == "" || state.FullBranchName == "" || state.CurrentStep == "" {
