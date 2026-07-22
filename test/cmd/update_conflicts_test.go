@@ -14,12 +14,12 @@ import (
 // TestUpdateMergeConflictThenContinue verifies a merge-strategy update conflict is
 // resumable and completes exactly one update (no tag, no child update, no delete).
 // Steps:
-// 1. Sets up an update merge conflict on feature/x (downstream=merge).
-// 2. Captures pre-update develop and feature/x tips.
-// 3. Resolves c.txt, stages, runs 'git flow feature update --continue x'.
-// 4. Verifies the merge commits, feature/x has develop as ancestor, MERGE_HEAD
-//    gone, state cleared, HEAD on feature/x, exit 0.
-// 5. Verifies exactly one completion: no tag, develop tip unchanged, feature/x kept.
+//  1. Sets up an update merge conflict on feature/x (downstream=merge).
+//  2. Captures pre-update develop and feature/x tips.
+//  3. Resolves c.txt, stages, runs 'git flow feature update --continue x'.
+//  4. Verifies the merge commits, feature/x has develop as ancestor, MERGE_HEAD
+//     gone, state cleared, HEAD on feature/x, exit 0.
+//  5. Verifies exactly one completion: no tag, develop tip unchanged, feature/x kept.
 func TestUpdateMergeConflictThenContinue(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -62,10 +62,10 @@ func TestUpdateMergeConflictThenContinue(t *testing.T) {
 // TestUpdateMergeConflictThenAbort verifies a merge-strategy update conflict rolls
 // back cleanly on abort.
 // Steps:
-// 1. Sets up an update merge conflict on feature/x; captures feature/x, develop tips.
-// 2. Runs 'git flow feature update --abort x'.
-// 3. Verifies MERGE_HEAD gone, feature/x and develop restored, state cleared,
-//    HEAD on feature/x, clean working tree, exit 0.
+//  1. Sets up an update merge conflict on feature/x; captures feature/x, develop tips.
+//  2. Runs 'git flow feature update --abort x'.
+//  3. Verifies MERGE_HEAD gone, feature/x and develop restored, state cleared,
+//     HEAD on feature/x, clean working tree, exit 0.
 func TestUpdateMergeConflictThenAbort(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -101,11 +101,11 @@ func TestUpdateMergeConflictThenAbort(t *testing.T) {
 // TestUpdateRebaseConflictThenContinue verifies a rebase-strategy update conflict
 // is resumable and completes.
 // Steps:
-// 1. Sets up an update rebase conflict on feature/x (default downstream=rebase);
-//    verifies rebase-merge present and head-name is refs/heads/feature/x.
-// 2. Resolves c.txt, stages, runs 'git flow feature update --continue x'.
-// 3. Verifies rebase completes, rebase-merge gone, develop is an ancestor of
-//    feature/x, state cleared, HEAD on feature/x, exit 0.
+//  1. Sets up an update rebase conflict on feature/x (default downstream=rebase);
+//     verifies rebase-merge present and head-name is refs/heads/feature/x.
+//  2. Resolves c.txt, stages, runs 'git flow feature update --continue x'.
+//  3. Verifies rebase completes, rebase-merge gone, develop is an ancestor of
+//     feature/x, state cleared, HEAD on feature/x, exit 0.
 func TestUpdateRebaseConflictThenContinue(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -141,12 +141,12 @@ func TestUpdateRebaseConflictThenContinue(t *testing.T) {
 // TestUpdateRebaseReconflictStaysResumable verifies a rebase update that
 // re-conflicts on a second replayed commit stays resumable.
 // Steps:
-// 1. Builds feature/x with two commits each editing files that also diverged on
-//    develop, so the rebase conflicts twice.
-// 2. Runs 'git flow feature update x' (rebase) to reach the first conflict.
-// 3. Resolves the first conflict, stages, runs 'git flow feature update --continue x'.
-// 4. Verifies --continue reports unresolved conflicts (exit 3), the state file
-//    bytes are unchanged, and rebase-merge is still present (resumable).
+//  1. Builds feature/x with two commits each editing files that also diverged on
+//     develop, so the rebase conflicts twice.
+//  2. Runs 'git flow feature update x' (rebase) to reach the first conflict.
+//  3. Resolves the first conflict, stages, runs 'git flow feature update --continue x'.
+//  4. Verifies --continue reports unresolved conflicts (exit 3), the state file
+//     bytes are unchanged, and rebase-merge is still present (resumable).
 func TestUpdateRebaseReconflictStaysResumable(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -191,10 +191,10 @@ func TestUpdateRebaseReconflictStaysResumable(t *testing.T) {
 // TestUpdateRebaseConflictThenAbort verifies a rebase-strategy update conflict
 // rolls back on abort.
 // Steps:
-// 1. Sets up an update rebase conflict on feature/x; captures feature/x tip.
-// 2. Runs 'git flow feature update --abort x'.
-// 3. Verifies rebase-merge gone, feature/x restored, state cleared, HEAD on
-//    feature/x, exit 0.
+//  1. Sets up an update rebase conflict on feature/x; captures feature/x tip.
+//  2. Runs 'git flow feature update --abort x'.
+//  3. Verifies rebase-merge gone, feature/x restored, state cleared, HEAD on
+//     feature/x, exit 0.
 func TestUpdateRebaseConflictThenAbort(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

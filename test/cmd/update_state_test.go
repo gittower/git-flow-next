@@ -68,10 +68,10 @@ func TestUpdateContinueNoMergeInProgress(t *testing.T) {
 // TestUpdateStateIsSelfDescribing verifies a topic update conflict saves a
 // resolvable, self-describing state.
 // Steps:
-// 1. Sets up an update merge conflict on feature/x (downstream=merge).
-// 2. Loads .git/gitflow/state/merge.json.
-// 3. Verifies Action=update, BranchType=feature, FullBranchName=feature/x,
-//    ParentBranch=develop, MergeStrategy=merge, CurrentStep=merge.
+//  1. Sets up an update merge conflict on feature/x (downstream=merge).
+//  2. Loads .git/gitflow/state/merge.json.
+//  3. Verifies Action=update, BranchType=feature, FullBranchName=feature/x,
+//     ParentBranch=develop, MergeStrategy=merge, CurrentStep=merge.
 func TestUpdateStateIsSelfDescribing(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -104,10 +104,10 @@ func TestUpdateStateIsSelfDescribing(t *testing.T) {
 // TestBaseUpdateStateIsSelfDescribing verifies a base-branch update conflict saves
 // a resolvable, self-describing state keyed on the base branch.
 // Steps:
-// 1. Sets up a develop <- main top-level update conflict.
-// 2. Loads .git/gitflow/state/merge.json.
-// 3. Verifies Action=update, BranchType=develop, FullBranchName=develop,
-//    ParentBranch=main, CurrentStep=merge.
+//  1. Sets up a develop <- main top-level update conflict.
+//  2. Loads .git/gitflow/state/merge.json.
+//  3. Verifies Action=update, BranchType=develop, FullBranchName=develop,
+//     ParentBranch=main, CurrentStep=merge.
 func TestBaseUpdateStateIsSelfDescribing(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
