@@ -201,45 +201,11 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	// Resolve all options once before starting operations
 	resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
 
-	// Perform fetch if enabled (only on initial finish, not continue)
-	if resolvedOptions.ShouldFetch && git.RemoteExists(cfg.Remote) {
-		fmt.Printf("Fetching from remote '%s'...\n", cfg.Remote)
-		// Fetch base branch
-		if err := git.FetchBranch(cfg.Remote, branchConfig.Parent); err != nil {
-			// Non-fatal: remote branch might not exist
-			fmt.Printf("Note: Could not fetch base branch '%s': %v\n", branchConfig.Parent, err)
-		}
-		// Fetch topic branch
-		if err := git.FetchBranch(cfg.Remote, name); err != nil {
-			// Non-fatal: remote branch might not exist
-			fmt.Printf("Note: Could not fetch topic branch '%s': %v\n", name, err)
-		}
-		fmt.Printf("Fetch completed\n")
-	}
-
-	// Check if local branch is in sync with remote (unless --force)
-	if !force {
-		status, commitCount, err := git.CompareBranchWithRemote(name)
-		if err == nil { // Only check if we can get tracking info
-			switch status {
-			case git.SyncStatusBehind, git.SyncStatusDiverged:
-				trackingBranch, err := git.GetTrackingBranch(name)
-				if err != nil {
-					trackingBranch = "remote tracking branch"
-				}
-				return &errors.BranchBehindRemoteError{
-					BranchName:   name,
-					RemoteBranch: trackingBranch,
-					CommitCount:  commitCount,
-					BranchType:   branchType,
-				}
-			case git.SyncStatusAhead:
-				// Local is ahead - proceed (optionally warn)
-				fmt.Printf("Note: Local branch is %d commit(s) ahead of remote\n", commitCount)
-			}
-			// SyncStatusEqual or SyncStatusNoTracking - proceed normally
-		}
-		// If err != nil (no tracking branch), proceed normally - no remote to compare against
+	// Fetch the topic (and parent, best-effort) and verify the topic is in sync with its remote.
+	// This runs only on the initial finish, never on --continue/--abort (handled above). A fatal
+	// fetch failure or an out-of-sync topic aborts here, before any merge.
+	if err := runFetchSyncPreflight(cfg, branchType, cfg.Remote, name, shortName, branchConfig.Parent, resolvedOptions.ShouldFetch, force); err != nil {
+		return err
 	}
 
 	// Regular finish command flow

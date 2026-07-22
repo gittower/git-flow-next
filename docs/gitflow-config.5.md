@@ -206,8 +206,8 @@ These are operational settings that adjust command behavior. Some can override L
 : *Values*: **merge**, **rebase**, **squash**
 
 **fetch**
-: Fetch from remote before operation.
-: *Default*: false
+: Fetch from remote before the operation. This is a Layer 2 operational setting only (there is no Layer 1 branch-type knob). Resolution is uniform across commands: per-command default, then `gitflow.<type>.<cmd>.fetch`, then the `--fetch`/`--no-fetch` CLI flag (which always wins).
+: *Default*: **true** for `finish` (so the sync check runs against fresh data), **false** for `start`.
 
 **keep**
 : Keep branch after finishing (finish command only).
@@ -473,10 +473,15 @@ The finish command supports extensive merge strategy configuration through comma
 ### Remote Fetch Options
 
 **gitflow.*type*.finish.fetch**
-: Fetch from remote before finishing a topic branch. When enabled, fetches both the base branch and the topic branch from the remote to ensure the latest remote state is known before merging.
-: After fetching, if the local topic branch is behind or diverged from its remote tracking branch, the finish operation will abort with an error to prevent accidental data loss. Use `--force` to bypass this safety check.
+: Fetch from remote before finishing a topic branch. When enabled, fetches the base branch (best-effort) and the topic branch from the remote to ensure the latest remote state is known before merging. A failure fetching the topic branch against a reachable-but-failing remote is fatal; a remote with no ref for the topic (never pushed, or deleted after a remote merge) is benign and its sync check is skipped.
+: After fetching, if the local topic branch is ahead of, behind, or diverged from its remote tracking branch, the finish operation aborts with an error to prevent accidental data loss or merging unpublished work. Use `--force` to bypass this safety check. `--no-fetch` skips only the fetch; the sync check still runs against existing tracking data.
 : *Type*: boolean
 : *Default*: true
+
+**gitflow.*type*.start.fetch**
+: Fetch from remote before starting a topic branch. When no remote is configured, the fetch is skipped silently. A fetch failure is a non-fatal warning — the branch is still created (start has no sync gate).
+: *Type*: boolean
+: *Default*: false
 
 ### Remote Push Options
 

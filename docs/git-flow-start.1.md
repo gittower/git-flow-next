@@ -6,7 +6,7 @@ git-flow-start - Create and checkout topic branches
 
 ## SYNOPSIS
 
-**git-flow** *topic* **start** *name* [*base*] [*options*]
+**git-flow** *topic* **start** [*name*] [*base*] [*options*]
 
 ## DESCRIPTION
 
@@ -20,7 +20,7 @@ The new branch is created from the configured starting point for the topic branc
 : The topic branch type (feature, release, hotfix, support, or any configured custom type)
 
 *name*
-: Name of the new topic branch (without the prefix - that's added automatically)
+: Name of the new topic branch (without the prefix - that's added automatically). Optional: when omitted, git-flow runs the `filter-flow-<type>-start-version` filter with an empty version argument and uses its trimmed output as the branch name. If no such filter is configured or it yields no output, the command fails with `branch name cannot be empty`.
 
 *base*
 : Optional base commit, tag, or branch to start from instead of the configured starting point
@@ -28,10 +28,10 @@ The new branch is created from the configured starting point for the topic branc
 ## OPTIONS
 
 **--fetch**
-: Fetch from remote before creating branch to ensure latest state. If no remote is configured, the fetch is automatically skipped.
+: Fetch from remote before creating branch to ensure latest state. If no remote is configured, the fetch is skipped silently. A fetch failure is a non-fatal warning — the branch is still created (start has no sync gate). Overrides git config setting `gitflow.<type>.start.fetch`.
 
 **--no-fetch**
-: Don't fetch from remote before creating branch (default behavior)
+: Don't fetch from remote before creating branch (default behavior). Overrides git config setting `gitflow.<type>.start.fetch`.
 
 ## BRANCH NAMING
 
@@ -75,6 +75,13 @@ git flow release start 1.2.0
 Start a hotfix:
 ```bash
 git flow hotfix start critical-security-fix
+```
+
+### Deriving the Name from a Version Filter
+
+Start a release without a name, letting the configured `filter-flow-release-start-version` filter supply the version:
+```bash
+git flow release start
 ```
 
 ### Custom Starting Points

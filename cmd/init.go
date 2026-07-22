@@ -228,6 +228,25 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 		cfg = config.ApplyOverrides(cfg, overrides)
 	}
 
+	// Fail fast if an initial commit would be created but no git identity is
+	// configured — otherwise `git commit --allow-empty` fails with exit 128
+	// after config/marker have already been written (see issue #131).
+	if createBranches {
+		hasCommits, err := git.HasCommits()
+		if err != nil {
+			return &errors.GitError{Operation: "check repository commits", Err: err}
+		}
+		if !hasCommits {
+			ok, err := git.HasUserIdentity()
+			if err != nil {
+				return &errors.GitError{Operation: "check git user identity", Err: err}
+			}
+			if !ok {
+				return &errors.MissingUserIdentityError{}
+			}
+		}
+	}
+
 	// Save configuration with the appropriate scope
 	if err := config.SaveConfigWithScope(cfg, scope, scopeFile); err != nil {
 		return &errors.GitError{Operation: "save configuration", Err: err}

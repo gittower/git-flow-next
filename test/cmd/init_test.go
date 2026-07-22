@@ -1240,3 +1240,379 @@ func TestInitEmptyRepoDoesNotCreateReadme(t *testing.T) {
 		t.Error("Expected no README.md file in working directory, but it exists")
 	}
 }
+
+// setupPlainRepo creates a plain git repository with no commits and no
+// configured identity. Unlike testutil.SetupEmptyTestRepo it does NOT set
+// user.name/user.email, so it is suitable for the identity-precondition tests.
+func setupPlainRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if _, err := testutil.RunGit(t, dir, "init", "--initial-branch=main"); err != nil {
+		t.Fatalf("Failed to initialize plain git repository: %v", err)
+	}
+	return dir
+}
+
+// isolatedConfigEnv returns environment variables that isolate git from any
+// ambient global/system configuration (including a developer's ~/.gitconfig
+// identity), so identity tests observe only what the repo itself configures.
+func isolatedConfigEnv() []string {
+	return []string{"GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_CONFIG_SYSTEM=" + os.DevNull}
+}
+
+// exitCodeOf extracts the process exit code from the error returned by
+// runGitFlowWithEnv/runGitFlow (a raw *exec.ExitError). It fails the test if
+// err is nil or is not an *exec.ExitError.
+func exitCodeOf(t *testing.T, err error) int {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("Expected a non-nil error carrying an exit code, got nil")
+	}
+	if ee, ok := err.(*exec.ExitError); ok {
+		return ee.ExitCode()
+	}
+	t.Fatalf("Expected *exec.ExitError, got %T: %v", err, err)
+	return 0
+}
+
+// gitflowConfigKeysLocal returns the local gitflow.* config keys/values as a
+// raw string. An empty result means no gitflow.* config exists. The regex is
+// passed as a bare argv argument (no shell quoting) since RunGit uses
+// exec.Command directly.
+func gitflowConfigKeysLocal(t *testing.T, dir string) string {
+	t.Helper()
+	// A no-match exit (status 1) yields a non-nil error and empty output.
+	out, _ := testutil.RunGit(t, dir, "config", "--local", "--get-regexp", `^gitflow\.`)
+	return strings.TrimSpace(out)
+}
+
+// TestInitFailsWithoutIdentityShowsActionableError tests that git flow init on
+// a fresh repository with no configured identity fails fast with an actionable
+// error and exit code 6 instead of an opaque git failure.
+// Steps:
+// 1. Creates a plain repo with no commits and no identity (setupPlainRepo)
+// 2. Runs 'git flow init --preset gitlab' with isolated global/system config
+// 3. Verifies the command fails with exit code 6
+// 4. Verifies the output names both user.name and user.email
+// 5. Verifies the output shows both 'git config --global' suggested commands
+// 6. Verifies the output does NOT contain the opaque 'exit status 128'
+// 7. Verifies the output contains 'git user identity is not configured'
+func TestInitFailsWithoutIdentityShowsActionableError(t *testing.T) {
+	dir := setupPlainRepo(t)
+	env := isolatedConfigEnv()
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--preset", "gitlab")
+	if code := exitCodeOf(t, err); code != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "user.name") {
+		t.Errorf("Expected output to mention 'user.name', got: %s", output)
+	}
+	if !strings.Contains(output, "user.email") {
+		t.Errorf("Expected output to mention 'user.email', got: %s", output)
+	}
+	if !strings.Contains(output, "git config --global user.name") {
+		t.Errorf("Expected output to contain 'git config --global user.name', got: %s", output)
+	}
+	if !strings.Contains(output, "git config --global user.email") {
+		t.Errorf("Expected output to contain 'git config --global user.email', got: %s", output)
+	}
+	if strings.Contains(output, "exit status 128") {
+		t.Errorf("Expected output to NOT contain 'exit status 128', got: %s", output)
+	}
+	if !strings.Contains(output, "git user identity is not configured") {
+		t.Errorf("Expected output to contain 'git user identity is not configured', got: %s", output)
+	}
+}
+
+// TestInitWithoutIdentityLeavesNoState tests that a failed init (missing
+// identity) writes no git-flow config or branches, so a second run behaves
+// identically instead of wrongly reporting 'already configured'.
+// Steps:
+//  1. Creates a plain repo with no commits and no identity (setupPlainRepo)
+//  2. Runs 'git flow init --preset gitlab' with isolated config (first run)
+//  3. Verifies the first run fails with exit code 6 for the identity reason
+//  4. Verifies no gitflow.* local config exists after the failed run
+//  5. Verifies no base branches (main, develop, production, staging) exist
+//  6. Runs 'git flow init --preset gitlab' again (second run)
+//  7. Verifies the second run also fails with exit code 6 and the same message,
+//     and never reports 'already initialized'/'already configured'
+func TestInitWithoutIdentityLeavesNoState(t *testing.T) {
+	dir := setupPlainRepo(t)
+	env := isolatedConfigEnv()
+
+	output1, err1 := runGitFlowWithEnv(t, dir, env, "init", "--preset", "gitlab")
+	if code := exitCodeOf(t, err1); code != 6 {
+		t.Fatalf("Expected first run to exit 6, got %d\nOutput: %s", code, output1)
+	}
+	if !strings.Contains(output1, "git user identity is not configured") {
+		t.Fatalf("Expected first run to fail for the identity reason, got: %s", output1)
+	}
+
+	// No gitflow.* config should have been written.
+	if keys := gitflowConfigKeysLocal(t, dir); keys != "" {
+		t.Errorf("Expected no gitflow.* local config after failed run, got: %s", keys)
+	}
+	for _, key := range []string{"gitflow.version", "gitflow.initialized"} {
+		if v := getGitConfigWithScope(t, dir, key, "local"); v != "" {
+			t.Errorf("Expected %s to be absent after failed run, got: %s", key, v)
+		}
+	}
+
+	// No base branches should have been created.
+	for _, branch := range []string{"main", "develop", "production", "staging"} {
+		if branchExists(t, dir, branch) {
+			t.Errorf("Expected branch %q to NOT exist after failed run", branch)
+		}
+	}
+
+	// Re-run must be identical in kind: another exit-6 identity error, never
+	// a spurious "already configured".
+	output2, err2 := runGitFlowWithEnv(t, dir, env, "init", "--preset", "gitlab")
+	if code := exitCodeOf(t, err2); code != 6 {
+		t.Fatalf("Expected second run to exit 6, got %d\nOutput: %s", code, output2)
+	}
+	if !strings.Contains(output2, "git user identity is not configured") {
+		t.Errorf("Expected second run to report the identity error, got: %s", output2)
+	}
+	if strings.Contains(output2, "already initialized") || strings.Contains(output2, "already configured") {
+		t.Errorf("Expected second run to NOT report 'already configured', got: %s", output2)
+	}
+}
+
+// TestInitFailsWithOnlyUserNameSet tests that init still fails when only
+// user.name is configured but user.email is missing.
+// Steps:
+// 1. Creates a plain repo with no commits (setupPlainRepo)
+// 2. Sets only local user.name (email left unset)
+// 3. Runs 'git flow init --defaults' with isolated global/system config
+// 4. Verifies the command fails with exit code 6
+// 5. Verifies the output mentions the missing user.email and the identity error
+func TestInitFailsWithOnlyUserNameSet(t *testing.T) {
+	dir := setupPlainRepo(t)
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.name", "A"); err != nil {
+		t.Fatalf("Failed to set local user.name: %v", err)
+	}
+	env := isolatedConfigEnv()
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults")
+	if code := exitCodeOf(t, err); code != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "user.email") {
+		t.Errorf("Expected output to mention 'user.email', got: %s", output)
+	}
+	if !strings.Contains(output, "git user identity is not configured") {
+		t.Errorf("Expected output to contain 'git user identity is not configured', got: %s", output)
+	}
+}
+
+// TestInitFailsWithOnlyUserEmailSet tests that init still fails when only
+// user.email is configured but user.name is missing.
+// Steps:
+// 1. Creates a plain repo with no commits (setupPlainRepo)
+// 2. Sets only local user.email (name left unset)
+// 3. Runs 'git flow init --defaults' with isolated global/system config
+// 4. Verifies the command fails with exit code 6
+// 5. Verifies the output mentions the missing user.name and the identity error
+func TestInitFailsWithOnlyUserEmailSet(t *testing.T) {
+	dir := setupPlainRepo(t)
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.email", "a@b.c"); err != nil {
+		t.Fatalf("Failed to set local user.email: %v", err)
+	}
+	env := isolatedConfigEnv()
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults")
+	if code := exitCodeOf(t, err); code != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "user.name") {
+		t.Errorf("Expected output to mention 'user.name', got: %s", output)
+	}
+	if !strings.Contains(output, "git user identity is not configured") {
+		t.Errorf("Expected output to contain 'git user identity is not configured', got: %s", output)
+	}
+}
+
+// TestInitSucceedsWithIdentityOnFreshRepo tests that init on a fresh repo
+// succeeds when the identity is configured in the global scope (the common
+// ~/.gitconfig case), acting as a regression guard for the empty-repo path.
+// Steps:
+// 1. Creates a plain repo with no commits and no local identity (setupPlainRepo)
+// 2. Seeds a writable temp global config file with user.name and user.email
+// 3. Runs 'git flow init --defaults' with that global config and isolated system
+// 4. Verifies the command succeeds
+// 5. Verifies main and develop base branches were created
+// 6. Verifies the repo is marked initialized (gitflow.initialized/version)
+func TestInitSucceedsWithIdentityOnFreshRepo(t *testing.T) {
+	dir := setupPlainRepo(t)
+
+	globalConfigFile := filepath.Join(t.TempDir(), "gitconfig-global")
+	if _, err := testutil.RunGit(t, dir, "config", "--file", globalConfigFile, "user.name", "A"); err != nil {
+		t.Fatalf("Failed to seed global user.name: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "--file", globalConfigFile, "user.email", "a@b.c"); err != nil {
+		t.Fatalf("Failed to seed global user.email: %v", err)
+	}
+	env := []string{"GIT_CONFIG_GLOBAL=" + globalConfigFile, "GIT_CONFIG_SYSTEM=" + os.DevNull}
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+	}
+	if !branchExists(t, dir, "main") {
+		t.Error("Expected 'main' branch to exist")
+	}
+	if !branchExists(t, dir, "develop") {
+		t.Error("Expected 'develop' branch to exist")
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.initialized", "local"); v != "true" {
+		t.Errorf("Expected gitflow.initialized to be 'true', got: %s", v)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
+		t.Errorf("Expected gitflow.version to be '1.0', got: %s", v)
+	}
+}
+
+// TestInitSucceedsWithExistingCommitsWithoutIdentity tests that init succeeds
+// without an identity when the repo already has commits, since no initial
+// commit needs to be created.
+// Steps:
+// 1. Creates a plain repo (setupPlainRepo)
+// 2. Sets a temporary local identity, creates a commit, then unsets the identity
+// 3. Runs 'git flow init --defaults' with isolated global/system config
+// 4. Verifies the command succeeds (identity check is skipped when HasCommits)
+// 5. Verifies base branches exist and the repo is marked initialized
+func TestInitSucceedsWithExistingCommitsWithoutIdentity(t *testing.T) {
+	dir := setupPlainRepo(t)
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.name", "Temp"); err != nil {
+		t.Fatalf("Failed to set temp user.name: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.email", "temp@example.com"); err != nil {
+		t.Fatalf("Failed to set temp user.email: %v", err)
+	}
+	if err := testutil.WriteFile(t, dir, "README.md", "# Test"); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "add", "README.md"); err != nil {
+		t.Fatalf("Failed to git add: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Initial commit"); err != nil {
+		t.Fatalf("Failed to git commit: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "--unset", "user.name"); err != nil {
+		t.Fatalf("Failed to unset user.name: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "--unset", "user.email"); err != nil {
+		t.Fatalf("Failed to unset user.email: %v", err)
+	}
+	env := isolatedConfigEnv()
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Expected success with existing commits, got error: %v\nOutput: %s", err, output)
+	}
+	if !branchExists(t, dir, "main") {
+		t.Error("Expected 'main' branch to exist")
+	}
+	if !branchExists(t, dir, "develop") {
+		t.Error("Expected 'develop' branch to exist")
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.initialized", "local"); v != "true" {
+		t.Errorf("Expected gitflow.initialized to be 'true', got: %s", v)
+	}
+}
+
+// TestInitSucceedsWithLocalIdentityOnly tests that a local identity satisfies
+// the precondition even when the global/system scopes are isolated (empty).
+// Steps:
+// 1. Creates a plain repo with no commits (setupPlainRepo)
+// 2. Sets local user.name and user.email
+// 3. Runs 'git flow init --defaults' with isolated global/system config
+// 4. Verifies the command succeeds (merged-scope identity read sees the local)
+// 5. Verifies base branches exist and the repo is marked initialized
+func TestInitSucceedsWithLocalIdentityOnly(t *testing.T) {
+	dir := setupPlainRepo(t)
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.name", "Local User"); err != nil {
+		t.Fatalf("Failed to set local user.name: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.email", "local@example.com"); err != nil {
+		t.Fatalf("Failed to set local user.email: %v", err)
+	}
+	env := isolatedConfigEnv()
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Expected success with local identity, got error: %v\nOutput: %s", err, output)
+	}
+	if !branchExists(t, dir, "main") {
+		t.Error("Expected 'main' branch to exist")
+	}
+	if !branchExists(t, dir, "develop") {
+		t.Error("Expected 'develop' branch to exist")
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.initialized", "local"); v != "true" {
+		t.Errorf("Expected gitflow.initialized to be 'true', got: %s", v)
+	}
+}
+
+// TestInitNoCreateBranchesSkipsIdentityCheck tests that --no-create-branches
+// skips the identity precondition, since no initial commit is created.
+// Steps:
+// 1. Creates a plain repo with no commits and no identity (setupPlainRepo)
+// 2. Runs 'git flow init --defaults --no-create-branches' with isolated config
+// 3. Verifies the command succeeds despite the missing identity
+// 4. Verifies no base branches (main, develop) were created
+// 5. Verifies configuration was still written (gitflow.version == '1.0')
+func TestInitNoCreateBranchesSkipsIdentityCheck(t *testing.T) {
+	dir := setupPlainRepo(t)
+	env := isolatedConfigEnv()
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--no-create-branches")
+	if err != nil {
+		t.Fatalf("Expected success with --no-create-branches, got error: %v\nOutput: %s", err, output)
+	}
+	if branchExists(t, dir, "main") {
+		t.Error("Expected 'main' branch to NOT exist")
+	}
+	if branchExists(t, dir, "develop") {
+		t.Error("Expected 'develop' branch to NOT exist")
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
+		t.Errorf("Expected gitflow.version to be '1.0', got: %s", v)
+	}
+}
+
+// TestInitWithEmptyIdentityValue tests that an explicitly-configured but
+// empty/whitespace-only identity value counts as "not configured", per the
+// spec's Technical Notes (an empty value must be treated the same as an unset
+// key). This exercises the whitespace branch that a key-not-found error alone
+// does not reach.
+// Steps:
+//  1. Creates a plain repo with no commits and no identity (setupPlainRepo)
+//  2. Sets local user.name to a whitespace-only value and user.email to a
+//     valid address, so failure is attributable to the empty name
+//  3. Runs 'git flow init --defaults' with isolated global/system config
+//  4. Verifies the command fails with exit code 6
+//  5. Verifies the output mentions user.name and the identity error
+func TestInitWithEmptyIdentityValue(t *testing.T) {
+	dir := setupPlainRepo(t)
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.name", "   "); err != nil {
+		t.Fatalf("Failed to set local whitespace user.name: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.email", "a@b.c"); err != nil {
+		t.Fatalf("Failed to set local user.email: %v", err)
+	}
+	env := isolatedConfigEnv()
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults")
+	if code := exitCodeOf(t, err); code != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "user.name") {
+		t.Errorf("Expected output to mention 'user.name', got: %s", output)
+	}
+	if !strings.Contains(output, "git user identity is not configured") {
+		t.Errorf("Expected output to contain 'git user identity is not configured', got: %s", output)
+	}
+}

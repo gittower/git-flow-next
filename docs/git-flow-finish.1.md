@@ -41,7 +41,7 @@ The operation maintains a persistent state file that allows it to resume after c
 : Abort the finish operation and return to the original state. When no finish operation is in progress, **--abort** is a no-op and exits successfully.
 
 **--force**, **-f**
-: Force finish: skip remote branch sync check and allow finishing non-standard branches. When used, bypasses the safety check that prevents finishing when the local branch is behind its remote tracking branch.
+: Force finish: ignore fetch failures, skip the remote sync check, and allow finishing non-standard branches. The fetch is still attempted, but any failure is ignored rather than fatal, and the safety check that prevents finishing when the local branch is ahead of, behind, or diverged from its remote tracking branch is bypassed.
 
 ### Tag Creation
 
@@ -133,10 +133,10 @@ The operation maintains a persistent state file that allows it to resume after c
 ### Remote Fetch Options
 
 **--fetch**
-: Fetch from remote before finishing the branch (default). This fetches both the base branch and the topic branch to ensure the latest remote changes are known before merging. Overrides git config setting `gitflow.<type>.finish.fetch`. If no remote is configured, the fetch is automatically skipped.
+: Fetch from remote before finishing the branch (default). This fetches both the base branch and the topic branch to ensure the latest remote changes are known before merging. Overrides git config setting `gitflow.<type>.finish.fetch`. If no remote is configured, the fetch is automatically skipped. The base (parent) branch is fetched best-effort — a failure there is a non-fatal note. A failure fetching the **topic** branch against a reachable-but-failing remote is **fatal**: finish aborts and names the cause, suggesting `--no-fetch` or `--force`. A remote that simply has no ref for the topic (never pushed, or deleted after a remote merge) is treated as benign and the topic's sync check is skipped.
 
 **--no-fetch**
-: Don't fetch from remote before finishing. Disables the default fetch behavior. Overrides git config setting `gitflow.<type>.finish.fetch`.
+: Don't fetch from remote before finishing. Disables the default fetch behavior. Overrides git config setting `gitflow.<type>.finish.fetch`. The fetch is skipped, but the remote sync check still runs against existing (local) tracking data.
 
 ### Remote Push Options
 
@@ -167,17 +167,17 @@ CLI push flags are not persisted across `--continue`. Options are re-resolved on
 
 ## REMOTE SYNC CHECK
 
-Before performing the merge operation, the finish command checks if the local topic branch is in sync with its remote tracking branch. This safety check prevents accidental data loss when the remote has commits that are not present locally.
+Before performing the merge operation, the finish command checks if the local topic branch is in sync with its remote tracking branch. This safety check prevents accidental data loss when the remote has commits that are not present locally, and prevents merging work that has not been published. Only the topic branch is sync-checked; the parent branch is fetched best-effort but not compared.
 
 ### Sync Status Behavior
 
 **Equal**: Local and remote are at the same commit. Finish proceeds normally.
 
-**Ahead**: Local has commits not pushed to remote. Finish proceeds with an informational note about unpushed commits.
+**Ahead**: Local has commits not pushed to remote. Finish **aborts with an error** so the unpublished commits are not merged without being pushed first.
 
 **Behind**: Remote has commits not present locally. Finish **aborts with an error** to prevent discarding those changes.
 
-**Diverged**: Both local and remote have unique commits. Finish **aborts with an error** since the branches have diverged.
+**Diverged**: Both local and remote have unique commits. Finish **aborts with an error** with a diverged-specific message, since finishing would discard the remote-only commits.
 
 **No Tracking**: Branch has no remote tracking branch configured. Finish proceeds normally (no remote to compare against).
 

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +9,12 @@ import (
 	"strconv"
 	"strings"
 )
+
+// ErrRemoteRefNotFound is a sentinel error returned by FetchBranch when git reports that the
+// requested branch does not exist on the remote (e.g. never pushed, or deleted after a remote
+// merge). This is benign: callers treat it as "no remote ref to compare against" rather than a
+// transport failure.
+var ErrRemoteRefNotFound = errors.New("remote ref not found")
 
 // BranchSyncStatus represents the sync status between a local branch and its remote tracking branch
 type BranchSyncStatus string
@@ -735,11 +742,59 @@ func CompareBranchWithRemote(branch string) (BranchSyncStatus, int, error) {
 
 // FetchBranch fetches a specific branch from a remote.
 // This is a targeted fetch that only updates the specified branch reference.
+//
+// On failure it classifies the git error:
+//   - If stderr indicates the branch does not exist on the remote, it wraps the benign
+//     sentinel ErrRemoteRefNotFound (check with errors.Is).
+//   - Any other non-zero exit (transport/auth failure) returns a fatal error carrying the
+//     trimmed stderr.
 func FetchBranch(remote, branch string) error {
 	cmd := exec.Command("git", "fetch", remote, branch)
+	// Pin the locale so isRemoteRefNotFound classifies stderr against git's English phrasing,
+	// regardless of the user's LANG/LC_* settings. A localized "missing ref" message would
+	// otherwise be misclassified as a fatal transport failure.
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to fetch branch '%s' from '%s': %s", branch, remote, strings.TrimSpace(string(output)))
+		stderr := strings.TrimSpace(string(output))
+		if isRemoteRefNotFound(stderr) {
+			// Join the benign sentinel with the underlying exec error so callers can classify via
+			// errors.Is(ErrRemoteRefNotFound) while the original error stays available for diagnostics.
+			return fmt.Errorf("fetch branch '%s' from '%s': %s: %w", branch, remote, stderr, errors.Join(ErrRemoteRefNotFound, err))
+		}
+		return fmt.Errorf("failed to fetch branch '%s' from '%s': %s: %w", branch, remote, stderr, err)
+	}
+	return nil
+}
+
+// isRemoteRefNotFound reports whether git stderr indicates the requested ref does not exist on
+// the remote (as opposed to a transport/auth failure). Matching is case-insensitive.
+func isRemoteRefNotFound(stderr string) bool {
+	lowered := strings.ToLower(stderr)
+	return strings.Contains(lowered, "couldn't find remote ref") ||
+		strings.Contains(lowered, "could not find remote ref") ||
+		strings.Contains(lowered, "no such ref") ||
+		strings.Contains(lowered, "not our ref")
+}
+
+// HasTrackingBranch reports whether the given local branch has a remote tracking branch
+// configured. It is a thin wrapper over GetTrackingBranch that returns false on any error.
+func HasTrackingBranch(branch string) bool {
+	_, err := GetTrackingBranch(branch)
+	return err == nil
+}
+
+// DeleteRemoteTrackingRef removes a stale remote-tracking ref (refs/remotes/<remote>/<branch>)
+// from the local repository. It is used to prune a tracking ref once the corresponding remote
+// branch is found to be gone. Errors are returned so callers may log them, but they are safe to
+// ignore (the ref may already be absent).
+func DeleteRemoteTrackingRef(remote, branch string) error {
+	ref := fmt.Sprintf("refs/remotes/%s/%s", remote, branch)
+	cmd := exec.Command("git", "update-ref", "-d", ref)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		// Wrap the underlying exec error with %w so the exit status stays available for diagnostics,
+		// mirroring FetchBranch's error wrapping, while still surfacing the trimmed git output.
+		return fmt.Errorf("failed to delete remote tracking ref '%s': %s: %w", ref, strings.TrimSpace(string(output)), err)
 	}
 	return nil
 }
