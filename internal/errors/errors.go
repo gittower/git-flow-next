@@ -28,11 +28,6 @@ type Error interface {
 	ExitCode() ExitCode
 }
 
-// ExitCoder is an interface for errors that can provide an exit code
-type ExitCoder interface {
-	ExitCode() uint8
-}
-
 // NotInitializedError indicates that git-flow is not initialized
 type NotInitializedError struct{}
 
@@ -139,17 +134,51 @@ func (e *GitError) Unwrap() error {
 	return e.Err
 }
 
-// MergeInProgressError represents an error when a merge is already in progress
+// MergeInProgressError represents an error when a git-flow operation is already
+// in progress. It is owner-aware: Action names the owning command ("finish",
+// "update", "integrate") and BranchType (when the owner is a topic type) lets
+// the message print the exact resume/abort commands for that owner.
 type MergeInProgressError struct {
-	BranchName string
+	Action     string // owning command: "finish", "update", or "integrate"
+	BranchName string // full branch name the operation is running on
+	BranchType string // topic branch type when applicable; empty for base/top-level
+}
+
+// recoveryCommand returns the base git-flow command that owns the in-progress
+// operation (without the --continue/--abort suffix), tailored to the owner:
+//   - finish:    git flow <type> finish
+//   - integrate: git flow integrate
+//   - update:    git flow <type> update (topic) or git flow update (base/top-level)
+func (e *MergeInProgressError) recoveryCommand() string {
+	switch e.Action {
+	case "finish":
+		if e.BranchType != "" {
+			return fmt.Sprintf("git flow %s finish", e.BranchType)
+		}
+		return "git flow finish"
+	case "integrate":
+		return "git flow integrate"
+	case "update":
+		if e.BranchType != "" {
+			return fmt.Sprintf("git flow %s update", e.BranchType)
+		}
+		return "git flow update"
+	default:
+		return "git flow"
+	}
 }
 
 func (e *MergeInProgressError) Error() string {
-	return fmt.Sprintf("a merge is already in progress for branch '%s'. Use --continue or --abort", e.BranchName)
+	base := e.recoveryCommand()
+	return fmt.Sprintf(`a %s operation is already in progress for '%s'.
+It must be resolved before running another git-flow operation.
+  To resume: %s --continue
+  To abort:  %s --abort`,
+		e.Action, e.BranchName, base, base)
 }
 
-func (e *MergeInProgressError) ExitCode() uint8 {
-	return 1
+func (e *MergeInProgressError) ExitCode() ExitCode {
+	return ExitCodeGitError
 }
 
 // NoMergeInProgressError represents an error when no merge is in progress
@@ -159,8 +188,23 @@ func (e *NoMergeInProgressError) Error() string {
 	return "no merge in progress. Nothing to continue or abort"
 }
 
-func (e *NoMergeInProgressError) ExitCode() uint8 {
-	return 1
+func (e *NoMergeInProgressError) ExitCode() ExitCode {
+	return ExitCodeGitError
+}
+
+// UnrecognizedOperationError represents an in-progress git-flow state whose
+// Action is empty or unknown. It is never auto-cleared; the user must resolve it
+// manually or remove the state file.
+type UnrecognizedOperationError struct {
+	BranchName string
+}
+
+func (e *UnrecognizedOperationError) Error() string {
+	return fmt.Sprintf("an unrecognized git-flow operation is in progress for '%s'; resolve it manually or remove the state file (.git/gitflow/state/merge.json)", e.BranchName)
+}
+
+func (e *UnrecognizedOperationError) ExitCode() ExitCode {
+	return ExitCodeGitError
 }
 
 // InvalidBranchNameError represents an error when an invalid branch name is provided
@@ -223,8 +267,8 @@ func (e *UnresolvedConflictsError) Error() string {
 	return "there are still unresolved conflicts. Resolve them and try again"
 }
 
-func (e *UnresolvedConflictsError) ExitCode() uint8 {
-	return 1
+func (e *UnresolvedConflictsError) ExitCode() ExitCode {
+	return ExitCodeGitError
 }
 
 // RemoteBranchNotFoundError indicates the branch doesn't exist on the remote
