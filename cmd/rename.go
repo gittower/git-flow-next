@@ -25,6 +25,17 @@ func RenameCommand(branchType string, oldName string, newName string) {
 
 // executeRename performs the actual branch renaming logic and returns any errors
 func executeRename(branchType string, oldName string, newName string) error {
+	// Validate that git-flow is initialized before resolving branch types.
+	// LoadConfig falls back to DefaultConfig when uninitialized, so this gate
+	// must run first or the default branch types mask the uninitialized state.
+	initialized, err := config.IsInitialized()
+	if err != nil {
+		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+	}
+	if !initialized {
+		return &errors.NotInitializedError{}
+	}
+
 	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {

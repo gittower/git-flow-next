@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
@@ -106,9 +107,11 @@ func TestDeleteCurrentFeature(t *testing.T) {
 
 // TestDeleteNonExistentFeature tests the behavior when attempting to delete a branch that doesn't exist.
 // Steps:
-// 1. Sets up a test repository and initializes git-flow
-// 2. Attempts to delete a non-existent branch
-// 3. Verifies the operation fails with appropriate error
+//  1. Sets up a test repository and initializes git-flow
+//  2. Attempts to delete a non-existent branch
+//  3. Verifies the operation fails with a branch-not-found error (exit code 5),
+//     not the "not initialized" error — proving the uninitialized gate does not
+//     over-trigger in an initialized repository
 func TestDeleteNonExistentFeature(t *testing.T) {
 	// Setup
 	dir := testutil.SetupTestRepo(t)
@@ -124,6 +127,20 @@ func TestDeleteNonExistentFeature(t *testing.T) {
 	output, err = testutil.RunGitFlow(t, dir, "feature", "delete", "nonexistent")
 	if err == nil {
 		t.Fatal("Expected delete to fail for non-existent branch")
+	}
+
+	// It must fail as branch-not-found, not as "not initialized"
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeBranchNotFound) {
+			t.Errorf("Expected exit code %d (branch not found), got %d", errors.ExitCodeBranchNotFound, exitErr.ExitCode)
+		}
+	} else {
+		t.Error("Expected ExitError")
+	}
+
+	// Verify the initialized repo does not report the uninitialized error
+	if strings.Contains(output, "not initialized") {
+		t.Errorf("Did not expect 'not initialized' error in an initialized repo, got: %s", output)
 	}
 }
 
@@ -1567,5 +1584,81 @@ func TestDeleteFeatureMergedRemotely(t *testing.T) {
 	}
 	if testutil.BranchExists(t, dir, "feature/merged-remote") {
 		t.Error("Expected feature branch to be deleted after fast-forwarding the parent")
+	}
+}
+
+// TestDeleteWithoutInitialization tests the delete command in a repository where
+// git-flow has not been initialized.
+// Steps:
+//  1. Sets up a plain Git repository without running git flow init
+//  2. Attempts to delete a feature branch
+//  3. Verifies the command fails with the "not initialized" error and exit code,
+//     rather than a misleading "branch does not exist" error
+func TestDeleteWithoutInitialization(t *testing.T) {
+	// Setup: plain repo, git-flow NOT initialized
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Attempt to delete a feature branch without initialization
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "foo")
+	if err == nil {
+		t.Fatal("Expected delete to fail without git-flow initialization, but it succeeded")
+	}
+
+	// Check exit code
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeNotInitialized) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeNotInitialized, exitErr.ExitCode)
+		}
+	} else {
+		t.Error("Expected ExitError")
+	}
+
+	// Verify error message is the "not initialized" message, not "does not exist"
+	if !strings.Contains(output, "Error: git flow is not initialized") {
+		t.Errorf("Expected 'not initialized' error, got: %s", output)
+	}
+	if strings.Contains(output, "does not exist") {
+		t.Errorf("Expected no misleading 'does not exist' error, got: %s", output)
+	}
+
+	// Verify no branch was created and git-flow is still not initialized
+	if testutil.BranchExists(t, dir, "feature/foo") {
+		t.Error("Expected no branch to be created, but 'feature/foo' exists")
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "--get", "gitflow.version"); err == nil {
+		t.Error("Expected git-flow to still not be initialized after failed command")
+	}
+}
+
+// TestDeleteHotfixWithoutInitialization tests that the delete command's
+// initialization gate is branch-type agnostic by exercising a non-feature type.
+// Steps:
+// 1. Sets up a plain Git repository without running git flow init
+// 2. Attempts to delete a hotfix branch
+// 3. Verifies the command fails with the "not initialized" error and exit code
+func TestDeleteHotfixWithoutInitialization(t *testing.T) {
+	// Setup: plain repo, git-flow NOT initialized
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Attempt to delete a hotfix branch without initialization
+	output, err := testutil.RunGitFlow(t, dir, "hotfix", "delete", "x")
+	if err == nil {
+		t.Fatal("Expected delete to fail without git-flow initialization, but it succeeded")
+	}
+
+	// Check exit code
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeNotInitialized) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeNotInitialized, exitErr.ExitCode)
+		}
+	} else {
+		t.Error("Expected ExitError")
+	}
+
+	// Verify error message
+	if !strings.Contains(output, "Error: git flow is not initialized") {
+		t.Errorf("Expected 'not initialized' error, got: %s", output)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
@@ -1665,5 +1666,139 @@ func TestFinishWithMultiValueBaseConfigWarns(t *testing.T) {
 	// Verify branch is still finished and deleted (warning is non-fatal)
 	if testutil.BranchExists(t, dir, "feature/multi-base") {
 		t.Error("Expected feature branch to be deleted after finish")
+	}
+}
+
+// TestFinishWithoutInitialization tests the finish command in a repository where
+// git-flow has not been initialized.
+// Steps:
+//  1. Sets up a plain Git repository without running git flow init
+//  2. Attempts to finish a feature branch
+//  3. Verifies the command fails with the "not initialized" error and exit code,
+//     rather than a misleading "branch does not exist" error
+func TestFinishWithoutInitialization(t *testing.T) {
+	// Setup: plain repo, git-flow NOT initialized
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Attempt to finish a feature branch without initialization
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "foo")
+	if err == nil {
+		t.Fatal("Expected finish to fail without git-flow initialization, but it succeeded")
+	}
+
+	// Check exit code
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeNotInitialized) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeNotInitialized, exitErr.ExitCode)
+		}
+	} else {
+		t.Error("Expected ExitError")
+	}
+
+	// Verify error message is the "not initialized" message, not "does not exist"
+	if !strings.Contains(output, "Error: git flow is not initialized") {
+		t.Errorf("Expected 'not initialized' error, got: %s", output)
+	}
+	if strings.Contains(output, "does not exist") {
+		t.Errorf("Expected no misleading 'does not exist' error, got: %s", output)
+	}
+}
+
+// TestFinishAbortWithoutInitialization tests that finish --abort in an
+// uninitialized repository reports "not initialized" before touching merge state.
+// Steps:
+//  1. Sets up a plain Git repository without running git flow init (no merge state)
+//  2. Runs finish --abort
+//  3. Verifies the command fails with the "not initialized" error and exit code,
+//     confirming the gate fires before any merge-state handling
+func TestFinishAbortWithoutInitialization(t *testing.T) {
+	// Setup: plain repo, git-flow NOT initialized
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Run finish --abort without initialization
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "--abort")
+	if err == nil {
+		t.Fatal("Expected finish --abort to fail without git-flow initialization, but it succeeded")
+	}
+
+	// Check exit code
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeNotInitialized) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeNotInitialized, exitErr.ExitCode)
+		}
+	} else {
+		t.Error("Expected ExitError")
+	}
+
+	// Verify error message
+	if !strings.Contains(output, "Error: git flow is not initialized") {
+		t.Errorf("Expected 'not initialized' error, got: %s", output)
+	}
+}
+
+// TestFinishContinueWithoutInitialization tests that finish --continue in an
+// uninitialized repository reports "not initialized" before touching merge state.
+// Steps:
+//  1. Sets up a plain Git repository without running git flow init (no merge state)
+//  2. Runs finish --continue
+//  3. Verifies the command fails with the "not initialized" error and exit code,
+//     confirming the gate fires before any merge-state handling
+func TestFinishContinueWithoutInitialization(t *testing.T) {
+	// Setup: plain repo, git-flow NOT initialized
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Run finish --continue without initialization
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "--continue")
+	if err == nil {
+		t.Fatal("Expected finish --continue to fail without git-flow initialization, but it succeeded")
+	}
+
+	// Check exit code
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeNotInitialized) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeNotInitialized, exitErr.ExitCode)
+		}
+	} else {
+		t.Error("Expected ExitError")
+	}
+
+	// Verify error message
+	if !strings.Contains(output, "Error: git flow is not initialized") {
+		t.Errorf("Expected 'not initialized' error, got: %s", output)
+	}
+}
+
+// TestFinishReleaseWithoutInitialization tests that the finish command's
+// initialization gate is branch-type agnostic by exercising a non-feature type.
+// Steps:
+// 1. Sets up a plain Git repository without running git flow init
+// 2. Attempts to finish a release branch
+// 3. Verifies the command fails with the "not initialized" error and exit code
+func TestFinishReleaseWithoutInitialization(t *testing.T) {
+	// Setup: plain repo, git-flow NOT initialized
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Attempt to finish a release branch without initialization
+	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0")
+	if err == nil {
+		t.Fatal("Expected release finish to fail without git-flow initialization, but it succeeded")
+	}
+
+	// Check exit code
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeNotInitialized) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeNotInitialized, exitErr.ExitCode)
+		}
+	} else {
+		t.Error("Expected ExitError")
+	}
+
+	// Verify error message
+	if !strings.Contains(output, "Error: git flow is not initialized") {
+		t.Errorf("Expected 'not initialized' error, got: %s", output)
 	}
 }
