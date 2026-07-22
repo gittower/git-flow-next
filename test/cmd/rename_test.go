@@ -1,8 +1,10 @@
 package cmd_test
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
@@ -187,5 +189,52 @@ func TestRenameWithInvalidBranchType(t *testing.T) {
 	output, err = testutil.RunGitFlow(t, dir, "invalid", "rename", "old-name", "new-name")
 	if err == nil {
 		t.Fatal("Expected rename to fail with invalid branch type")
+	}
+}
+
+// TestRenameWithoutInitialization tests the rename command in a repository where
+// git-flow has not been initialized.
+// Steps:
+//  1. Sets up a plain Git repository without running git flow init
+//  2. Attempts to rename a feature branch
+//  3. Verifies the command fails with the "not initialized" error and exit code,
+//     rather than a misleading "branch does not exist" error
+func TestRenameWithoutInitialization(t *testing.T) {
+	// Setup: plain repo, git-flow NOT initialized
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Attempt to rename a feature branch without initialization
+	output, err := testutil.RunGitFlow(t, dir, "feature", "rename", "foo", "bar")
+	if err == nil {
+		t.Fatal("Expected rename to fail without git-flow initialization, but it succeeded")
+	}
+
+	// Check exit code
+	if exitErr, ok := err.(*testutil.ExitError); ok {
+		if exitErr.ExitCode != int(errors.ExitCodeNotInitialized) {
+			t.Errorf("Expected exit code %d, got %d", errors.ExitCodeNotInitialized, exitErr.ExitCode)
+		}
+	} else {
+		t.Error("Expected ExitError")
+	}
+
+	// Verify error message is the "not initialized" message, not "does not exist"
+	if !strings.Contains(output, "Error: git flow is not initialized") {
+		t.Errorf("Expected 'not initialized' error, got: %s", output)
+	}
+	if strings.Contains(output, "does not exist") {
+		t.Errorf("Expected no misleading 'does not exist' error, got: %s", output)
+	}
+
+	// Verify neither branch was created and git-flow is still not initialized
+	if testutil.BranchExists(t, dir, "feature/foo") {
+		t.Error("Expected no branch to be created, but 'feature/foo' exists")
+	}
+	if testutil.BranchExists(t, dir, "feature/bar") {
+		t.Error("Expected no branch to be created, but 'feature/bar' exists")
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "--get", "gitflow.version"); err == nil {
+		t.Error("Expected git-flow to still not be initialized after failed command")
 	}
 }
