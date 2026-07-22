@@ -66,6 +66,10 @@ const (
 	stepCreateTag      = "create_tag"
 	stepUpdateChildren = "update_children"
 	stepDeleteBranch   = "delete_branch"
+	// stepIntegrateDone is the terminal step for the integrate operation. Unlike
+	// finish, integrate never deletes the integrated branch, so the state
+	// machine terminates here after checking out the parent and clearing state.
+	stepIntegrateDone = "integrate_done"
 )
 
 // Strategy constants
@@ -328,6 +332,8 @@ func executeSteps(cfg *config.Config, state *mergestate.MergeState, branchConfig
 			err = handleUpdateChildrenStep(cfg, state, branchConfig, resolvedOptions)
 		case stepDeleteBranch:
 			return handleDeleteBranchStep(cfg, state, resolvedOptions) // Final step
+		case stepIntegrateDone:
+			return handleIntegrateDoneStep(state) // Final step (integrate)
 		default:
 			return &errors.GitError{Operation: fmt.Sprintf("unknown step '%s'", state.CurrentStep), Err: nil}
 		}
@@ -529,9 +535,29 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 }
 
 func handleAbort(state *mergestate.MergeState) error {
-	// Abort the merge based on strategy
+	// Choose which git operation to abort. During the child-update step the
+	// in-progress operation uses the current child's downstream strategy, which
+	// can differ from the parent merge strategy in state.MergeStrategy. Aborting
+	// with the wrong strategy (e.g. a merge-abort while a rebase is in progress)
+	// leaves a stray operation behind, so resolve the child's strategy here.
+	strategy := state.MergeStrategy
+	if state.CurrentStep == stepUpdateChildren {
+		currentChild := state.CurrentChildBranch
+		if currentChild == "" {
+			if cur, curErr := git.GetCurrentBranch(); curErr == nil {
+				currentChild = cur
+			}
+		}
+		if state.ChildStrategies != nil && currentChild != "" {
+			if s, ok := state.ChildStrategies[currentChild]; ok && s != "" {
+				strategy = s
+			}
+		}
+	}
+
+	// Abort the in-progress operation based on the resolved strategy
 	var err error
-	switch state.MergeStrategy {
+	switch strategy {
 	case strategyMerge:
 		err = git.MergeAbort()
 	case strategyRebase:
@@ -688,9 +714,15 @@ func handleUpdateChildrenStep(cfg *config.Config, state *mergestate.MergeState, 
 	// Find next child branch to update
 	nextBranch := findNextBranchToUpdate(state)
 
-	// If no more branches to update, move to final step
+	// If no more branches to update, move to the appropriate terminal step.
+	// Integrate never deletes the integrated branch, so it terminates via
+	// stepIntegrateDone instead of stepDeleteBranch.
 	if nextBranch == "" {
-		state.CurrentStep = stepDeleteBranch
+		if state.Action == "integrate" {
+			state.CurrentStep = stepIntegrateDone
+		} else {
+			state.CurrentStep = stepDeleteBranch
+		}
 		if err := mergestate.SaveMergeState(state); err != nil {
 			return &errors.GitError{Operation: "save merge state", Err: err}
 		}
@@ -840,6 +872,24 @@ func pushFinishedBranches(cfg *config.Config, state *mergestate.MergeState, reso
 		fmt.Printf("  %s (tag) -> %s\n", resolvedOptions.TagName, remote)
 	}
 
+	return nil
+}
+
+// handleIntegrateDoneStep terminates an integrate operation. Unlike finish, it
+// never deletes the integrated branch (base branches are permanent): it checks
+// out the parent branch and clears the merge state.
+func handleIntegrateDoneStep(state *mergestate.MergeState) error {
+	// Ensure we end up on the parent branch.
+	if err := git.Checkout(state.ParentBranch); err != nil {
+		return &errors.GitError{Operation: fmt.Sprintf("checkout parent branch '%s'", state.ParentBranch), Err: err}
+	}
+
+	// Clear the merge state: all merges, tags, and child updates are complete.
+	if err := mergestate.ClearMergeState(); err != nil {
+		return &errors.GitError{Operation: "clear merge state", Err: err}
+	}
+
+	fmt.Printf("Successfully integrated '%s' into '%s' and updated %d child base branch(es)\n", state.FullBranchName, state.ParentBranch, len(state.UpdatedBranches))
 	return nil
 }
 
@@ -1000,8 +1050,14 @@ func isChildUpdated(state *mergestate.MergeState, childName string) bool {
 func generateConflictMessage(state *mergestate.MergeState, cfg *config.Config, resolvedOptions *config.ResolvedFinishOptions) string {
 	var msg strings.Builder
 
+	isIntegrate := state.Action == "integrate"
+
 	// Header
-	msg.WriteString(fmt.Sprintf("Merge conflict detected while finishing %s/%s\n\n", state.BranchType, state.BranchName))
+	if isIntegrate {
+		msg.WriteString(fmt.Sprintf("Merge conflict detected while integrating '%s' into '%s'\n\n", state.FullBranchName, state.ParentBranch))
+	} else {
+		msg.WriteString(fmt.Sprintf("Merge conflict detected while finishing %s/%s\n\n", state.BranchType, state.BranchName))
+	}
 
 	// What happened section
 	msg.WriteString("What happened:\n")
@@ -1018,7 +1074,11 @@ func generateConflictMessage(state *mergestate.MergeState, cfg *config.Config, r
 
 	// Where we are section - show all steps as natural progression
 	msg.WriteString("\nWhere we are:\n")
-	msg.WriteString("  ✓ Started finish operation\n")
+	if isIntegrate {
+		msg.WriteString("  ✓ Started integrate operation\n")
+	} else {
+		msg.WriteString("  ✓ Started finish operation\n")
+	}
 
 	// Merge step
 	if state.CurrentStep == stepMerge {
@@ -1052,19 +1112,26 @@ func generateConflictMessage(state *mergestate.MergeState, cfg *config.Config, r
 		}
 	}
 
-	// Delete branch step
-	if state.CurrentStep == stepDeleteBranch {
-		msg.WriteString(fmt.Sprintf("  ✓ Delete %s branch\n", state.BranchType))
-	} else {
-		msg.WriteString(fmt.Sprintf("  ⧖ Delete %s branch\n", state.BranchType))
+	// Delete branch step (finish only — integrate never deletes the branch)
+	if !isIntegrate {
+		if state.CurrentStep == stepDeleteBranch {
+			msg.WriteString(fmt.Sprintf("  ✓ Delete %s branch\n", state.BranchType))
+		} else {
+			msg.WriteString(fmt.Sprintf("  ⧖ Delete %s branch\n", state.BranchType))
+		}
 	}
 
 	// Resolution instructions
 	msg.WriteString("\nTo continue:\n")
 	msg.WriteString("  1. Resolve the conflicts in your files\n")
 	msg.WriteString("  2. Stage resolved files: git add <files>\n")
-	msg.WriteString(fmt.Sprintf("  3. Continue: git flow %s finish --continue %s\n", state.BranchType, state.BranchName))
-	msg.WriteString(fmt.Sprintf("\nTo abort: git flow %s finish --abort %s", state.BranchType, state.BranchName))
+	if isIntegrate {
+		msg.WriteString("  3. Continue: git flow integrate --continue\n")
+		msg.WriteString("\nTo abort: git flow integrate --abort")
+	} else {
+		msg.WriteString(fmt.Sprintf("  3. Continue: git flow %s finish --continue %s\n", state.BranchType, state.BranchName))
+		msg.WriteString(fmt.Sprintf("\nTo abort: git flow %s finish --abort %s", state.BranchType, state.BranchName))
+	}
 
 	return msg.String()
 }

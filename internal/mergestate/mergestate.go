@@ -56,6 +56,16 @@ type MergeState struct {
 	MergeMessage  string `json:"mergeMessage,omitempty"`  // Custom commit message for upstream merge
 	UpdateMessage string `json:"updateMessage,omitempty"` // Custom commit message for child updates
 
+	// Persisted tag decision. The integrate command resolves tagging from CLI
+	// flags and config that are not repeated on --continue, so the decision is
+	// saved here to recreate the same tag when resuming.
+	ShouldTag      bool   `json:"shouldTag,omitempty"`
+	TagName        string `json:"tagName,omitempty"`
+	TagMessage     string `json:"tagMessage,omitempty"`
+	TagMessageFile string `json:"tagMessageFile,omitempty"`
+	ShouldSign     bool   `json:"shouldSign,omitempty"`
+	SigningKey     string `json:"signingKey,omitempty"`
+
 	// Hook options
 	NoVerify bool `json:"noVerify,omitempty"` // Skip pre-commit and commit-msg hooks
 }
