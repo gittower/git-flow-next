@@ -766,7 +766,9 @@ func DeleteRemoteTrackingRef(remote, branch string) error {
 	ref := fmt.Sprintf("refs/remotes/%s/%s", remote, branch)
 	cmd := exec.Command("git", "update-ref", "-d", ref)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to delete remote tracking ref '%s': %s", ref, strings.TrimSpace(string(output)))
+		// Wrap the underlying exec error with %w so the exit status stays available for diagnostics,
+		// mirroring FetchBranch's error wrapping, while still surfacing the trimmed git output.
+		return fmt.Errorf("failed to delete remote tracking ref '%s': %s: %w", ref, strings.TrimSpace(string(output)), err)
 	}
 	return nil
 }
