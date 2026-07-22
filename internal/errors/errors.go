@@ -200,6 +200,12 @@ type UnrecognizedOperationError struct {
 }
 
 func (e *UnrecognizedOperationError) Error() string {
+	// BranchName is best-effort: the loadErr/unparseable path cannot recover a
+	// name and passes "". Omit the "for '<name>'" clause entirely in that case
+	// rather than printing an unhelpful "for ''".
+	if e.BranchName == "" {
+		return "an unrecognized git-flow operation is in progress; resolve it manually or remove the state file (.git/gitflow/state/merge.json)"
+	}
 	return fmt.Sprintf("an unrecognized git-flow operation is in progress for '%s'; resolve it manually or remove the state file (.git/gitflow/state/merge.json)", e.BranchName)
 }
 

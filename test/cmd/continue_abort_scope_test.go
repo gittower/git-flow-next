@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
@@ -732,4 +733,84 @@ func TestTopLevelUpdateForeignRefusalExitsThree(t *testing.T) {
 	setupIntegrateInProgress(t, dir)
 
 	assertNonDestructiveRefusal(t, dir, []string{"update", "--continue"}, "integrate", markerMergeHead)
+}
+
+// setupLegacyUpdateState leaves the repo in a genuine update merge conflict, then
+// overwrites the saved state with a legacy pre-#143 update state: valid JSON with a
+// recognized Action="update" but an empty BranchType (one of the critical fields
+// #143 now populates), keeping a real FullBranchName and CurrentStep="merge".
+// MERGE_HEAD stays present, so the state is parseable and owner-matched yet
+// structurally incomplete — the case that previously fell through to the owner
+// path and triggered IsMergeInProgress's destructive auto-clear.
+func setupLegacyUpdateState(t *testing.T, dir string) {
+	t.Helper()
+	setupUpdateInProgressMerge(t, dir)
+	state, err := testutil.LoadMergeState(t, dir)
+	if err != nil || state == nil {
+		t.Fatalf("expected saved update state, err=%v", err)
+	}
+	state.BranchType = ""
+	state.FullBranchName = "feature/x"
+	state.CurrentStep = "merge"
+	testutil.WriteMergeState(t, dir, state)
+	if !integMergeHeadExists(t, dir) {
+		t.Fatalf("expected MERGE_HEAD still present after rewriting state")
+	}
+}
+
+// TestLegacyUpdateStateRefusesOwnerContinueNonDestructively verifies that the OWNER
+// (feature update --continue) is refused non-destructively when the state is a legacy
+// pre-#143 update state (recognized Action="update" but empty BranchType). Without the
+// structural-completeness guard the owner check would match, the caller's
+// IsMergeInProgress would reject the empty BranchType and DELETE the state file while
+// MERGE_HEAD is still present (a destructive refusal).
+// Steps:
+//  1. Sets up a genuine update merge conflict, then overwrites the state with a
+//     legacy update state (Action=update, BranchType="", CurrentStep=merge).
+//  2. Runs 'git flow feature update --continue x' (the owner surface).
+//  3. Verifies exit 3, a generic unrecognized-operation refusal, state bytes
+//     byte-identical, MERGE_HEAD kept, HEAD/branch/refs unchanged.
+func TestLegacyUpdateStateRefusesOwnerContinueNonDestructively(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupLegacyUpdateState(t, dir)
+
+	assertUnparseableStateRefusal(t, dir, []string{"feature", "update", "--continue", "x"})
+}
+
+// TestLegacyUpdateStateRefusesOwnerAbortNonDestructively verifies the same
+// non-destructive refusal for the owner --abort surface: a structurally-incomplete
+// legacy update state over an active git merge must not be auto-cleared, and the git
+// operation is left untouched (exit 3, not a silent no-op).
+// Steps:
+//  1. Sets up a genuine update merge conflict, then overwrites the state with a
+//     legacy update state (Action=update, BranchType="", CurrentStep=merge).
+//  2. Runs 'git flow feature update --abort x' (the owner surface).
+//  3. Verifies exit 3, a generic unrecognized-operation refusal, state bytes
+//     byte-identical, MERGE_HEAD kept, HEAD/branch/refs unchanged.
+func TestLegacyUpdateStateRefusesOwnerAbortNonDestructively(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupLegacyUpdateState(t, dir)
+
+	assertUnparseableStateRefusal(t, dir, []string{"feature", "update", "--abort", "x"})
+}
+
+// TestUnrecognizedOperationErrorOmitsEmptyBranchName verifies the cosmetic fix: when
+// BranchName is empty (the loadErr/unparseable path constructs UnrecognizedOperationError{}),
+// the message omits the "for '<name>'" clause entirely rather than printing "for ”".
+// When BranchName is set, the message still names the branch.
+func TestUnrecognizedOperationErrorOmitsEmptyBranchName(t *testing.T) {
+	empty := (&errors.UnrecognizedOperationError{}).Error()
+	if strings.Contains(empty, "for ''") {
+		t.Errorf("empty-BranchName message must not contain \"for ''\", got:\n%s", empty)
+	}
+	if !strings.Contains(empty, "unrecognized git-flow operation") {
+		t.Errorf("expected unrecognized-operation message, got:\n%s", empty)
+	}
+
+	named := (&errors.UnrecognizedOperationError{BranchName: "feature/x"}).Error()
+	if !strings.Contains(named, "for 'feature/x'") {
+		t.Errorf("expected named clause \"for 'feature/x'\", got:\n%s", named)
+	}
 }

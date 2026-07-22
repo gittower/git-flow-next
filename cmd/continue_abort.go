@@ -49,6 +49,20 @@ func refuseIfForeignOperation(cfg *config.Config, currentCommand string) error {
 		return nil
 	}
 
+	// Structural-completeness guard (mirrors the loadErr guard above). A state can
+	// parse and carry a recognized Action yet still be missing a critical field —
+	// e.g. a legacy pre-#143 update state with Action="update" but an empty
+	// BranchType. Such a state matches the owner check below and returns nil, after
+	// which the caller's IsMergeInProgress rejects the incomplete state via
+	// isStateValid and auto-clears the file while the git marker is still present —
+	// a destructive refusal. These are exactly the critical fields isStateValid
+	// requires, so refuse non-destructively before the owner check whenever any is
+	// empty. Valid new update/finish/integrate states always populate all three, so
+	// they fall through to the owner/foreign dispatch unchanged.
+	if rawState.BranchType == "" || rawState.FullBranchName == "" || rawState.CurrentStep == "" {
+		return &errors.UnrecognizedOperationError{BranchName: rawState.FullBranchName}
+	}
+
 	if rawState.Action == currentCommand {
 		// Own operation: the caller proceeds to its own continue/abort dispatch.
 		return nil
