@@ -101,21 +101,29 @@ After acceptance, verify `spec.md` and any comment body against the
 1. Create the spec issue via `mcp__github__create_issue`: title per
    ISSUE_GUIDELINES.md (imperative, specific), body from `spec.md`, labels:
    `spec` plus `bug` or `enhancement`
-2. For breakdowns: create sub-issues first, then the parent with the
-   Breakdown task list referencing their numbers
-3. Cross-link and close the originating user report, if any:
+2. For breakdowns: create the sub-specs first, then the parent spec with the
+   Breakdown task list referencing their numbers, and attach each sub-spec as
+   a native sub-issue of the parent spec (same mechanics as step 3)
+3. Link the spec to the originating user report, if any — **keep the report
+   open**:
    - The spec body already carries `Refs #<n>`
+   - Attach the spec as a native GitHub sub-issue of the report (report is the
+     parent, spec is the child):
+     ```bash
+     SPEC_ID=$(gh api repos/gittower/git-flow-next/issues/<spec#> --jq '.id')
+     gh api repos/gittower/git-flow-next/issues/<report#>/sub_issues \
+       -F sub_issue_id="$SPEC_ID"
+     ```
+     `sub_issue_id` is the report child's REST database `id`, **not** the
+     issue number — fetch it as shown.
    - Comment on the user report via `mcp__github__add_issue_comment`,
-     addressing the reporter: the work is now tracked in the spec issue
-     (link it) and this report is being closed in its favor so there is a
-     single source of truth
-   - Close the originating report
-     (`gh issue close <n> --reason "not planned"`) — it is superseded by
-     the spec issue, which is where the fix will land. If a maintainer wants
-     a specific report kept open, they can say so at the acceptance gate.
-   - When the spec later ships, the fix's own `Refs`/`Resolves` trailers and
-     a closing note on the spec issue record completion; the original report
-     is already consolidated.
+     addressing the reporter: the request is accepted and now specced in the
+     spec issue (link it, note it's attached as a sub-issue); the report stays
+     open and is the place to follow progress.
+   - Leave the report open. It closes when the spec ships: the fix PR carries
+     `Resolves #<spec>` (closing the spec), after which you close the report
+     with a short "shipped in `<version>`" note. Both end up closed once the
+     work lands.
 
 ### 7. Report
 

@@ -170,25 +170,33 @@ must be concrete enough to be turned into a test without guessing.>
 keys, compatibility constraints. Not an implementation plan.>
 ```
 
-### Sub-Issues
+### Breakdown into Sub-Specs
 
-Break a spec into sub-issues when it can't be delivered as a single
-reviewable PR. Each sub-issue is itself a complete spec (own goal, behavior,
-test scenarios) and independently implementable. The parent spec keeps the
-overall goal and a task list linking the sub-issues:
+Break a spec into sub-specs when it can't be delivered as a single
+reviewable PR. Each sub-spec is itself a complete spec (own goal, behavior,
+test scenarios) and independently implementable. Attach each as a native
+GitHub sub-issue of the parent spec, and keep a human-readable task list in
+the parent linking them:
 
 ```
 ### Breakdown
-- [ ] #<n> — <sub-issue title>
-- [ ] #<n> — <sub-issue title>
+- [ ] #<n> — <sub-spec title>
+- [ ] #<n> — <sub-spec title>
 ```
 
 ### Relation to User Reports
 
-User-reported issues stay open as the conversation with the reporter. When a
-report is accepted, the spec is created as a **separate issue** with the
-full detail, cross-linked in both directions ("Refs #N"). The user issue is
-closed when the spec ships.
+A user report (bug or feature, often from someone else) stays open as the
+durable, reporter-facing record. When a report is accepted, the spec is
+created as a **separate issue** and attached to the report as a native GitHub
+sub-issue — the report is the parent, the spec is the child — with the spec
+body also carrying "Refs #N". The report stays the place to follow progress;
+the spec is the implementation source of truth beneath it.
+
+The report closes when the spec ships: the fix PR carries "Resolves #<spec>"
+(closing the spec), then the report is closed with a short "shipped in
+<version>" note. Nesting is expected — a report parents a spec, which in turn
+parents its sub-specs.
 
 ## What to Avoid
 
