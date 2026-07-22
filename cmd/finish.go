@@ -103,6 +103,10 @@ func FinishCommand(branchType string, name string, continueOp bool, abortOp bool
 
 // executeFinish performs the actual branch finishing logic and returns any errors
 func executeFinish(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) error {
+	// Note: the git-flow initialization gate runs in the finish command handler
+	// (cmd/topicbranch.go), before the current-branch name detection that would
+	// otherwise emit a misleading error in an uninitialized repository.
+
 	// Get configuration early
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -217,14 +221,8 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 }
 
 func finishBranch(cfg *config.Config, branchType string, name string, branchConfig config.BranchConfig, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) error {
-	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
-	if err != nil {
-		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
-	}
-	if !initialized {
-		return &errors.NotInitializedError{}
-	}
+	// Note: the git-flow initialization gate lives in the finish command handler
+	// (cmd/topicbranch.go), which is the only path that reaches finishBranch.
 
 	// Validate inputs
 	if name == "" {

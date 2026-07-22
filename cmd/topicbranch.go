@@ -121,6 +121,22 @@ func registerBranchCommand(branchType string) {
 		Example: fmt.Sprintf("  git flow %s finish\n  git flow %s finish my-feature\n  git flow %s finish other/branch -f", branchType, branchType, branchType),
 		Args:    cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			// Validate that git-flow is initialized before any branch-name
+			// detection. LoadConfig falls back to DefaultConfig when
+			// uninitialized, so without this gate the detection below (and the
+			// downstream finish logic) would emit a misleading "branch does not
+			// exist"/"not a branch" error instead of "not initialized".
+			initialized, err := config.IsInitialized()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.GitError{Operation: "check if git-flow is initialized", Err: err})
+				os.Exit(int(errors.ExitCodeGitError))
+			}
+			if !initialized {
+				notInit := &errors.NotInitializedError{}
+				fmt.Fprintf(os.Stderr, "Error: %v\n", notInit)
+				os.Exit(int(notInit.ExitCode()))
+			}
+
 			// Get flags
 			continueOp, _ := cmd.Flags().GetBool("continue")
 			abortOp, _ := cmd.Flags().GetBool("abort")
