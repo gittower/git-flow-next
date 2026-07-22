@@ -77,6 +77,12 @@ func TestFinishFeatureBranchBehindRemote(t *testing.T) {
 		t.Fatalf("Failed to fetch: %v", err)
 	}
 
+	// Record develop's SHA before finishing
+	developBefore, err := testutil.RunGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop SHA: %v", err)
+	}
+
 	// Attempt to finish the feature branch
 	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "test-behind")
 
@@ -90,14 +96,23 @@ func TestFinishFeatureBranchBehindRemote(t *testing.T) {
 		t.Errorf("Expected error message to mention 'behind'. Output: %s", output)
 	}
 
-	// Verify error message suggests update command
-	if !strings.Contains(output, "git flow feature update") {
-		t.Errorf("Expected error message to suggest update command. Output: %s", output)
+	// Verify error message suggests pulling the remote changes
+	if !strings.Contains(output, "git pull") {
+		t.Errorf("Expected error message to suggest 'git pull'. Output: %s", output)
 	}
 
 	// Verify error message suggests --force option
 	if !strings.Contains(output, "--force") {
 		t.Errorf("Expected error message to suggest --force option. Output: %s", output)
+	}
+
+	// Verify the merge did not happen: develop is unchanged
+	developAfter, err := testutil.RunGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop SHA after: %v", err)
+	}
+	if developBefore != developAfter {
+		t.Errorf("Expected develop to be unchanged after aborted finish. Before: %s After: %s", developBefore, developAfter)
 	}
 
 	// Verify branch still exists (finish was aborted)
@@ -106,14 +121,16 @@ func TestFinishFeatureBranchBehindRemote(t *testing.T) {
 	}
 }
 
-// TestFinishFeatureBranchAheadOfRemote tests that finish succeeds when local is ahead of remote.
+// TestFinishFeatureBranchAheadOfRemote tests that finish aborts when local is ahead of remote.
+// This is Scenario 9: being ahead now aborts (previously a silent note that proceeded and merged).
 // Steps:
 // 1. Sets up a test repository with remote and initializes git-flow
 // 2. Creates a feature branch and pushes it with tracking
-// 3. Adds a local commit without pushing
-// 4. Finishes the feature branch
-// 5. Verifies the operation succeeds
-// 6. Verifies the note about being ahead is shown
+// 3. Adds a local commit without pushing (ahead by 1)
+// 4. Records develop's SHA before finishing
+// 5. Attempts to finish the feature branch
+// 6. Verifies the operation fails with an "ahead" message including the commit count
+// 7. Verifies the merge did not happen (develop unchanged, branch still exists)
 func TestFinishFeatureBranchAheadOfRemote(t *testing.T) {
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -142,7 +159,7 @@ func TestFinishFeatureBranchAheadOfRemote(t *testing.T) {
 		t.Fatalf("Failed to push branch: %v", err)
 	}
 
-	// Add another local commit without pushing
+	// Add another local commit without pushing (ahead by 1)
 	testutil.WriteFile(t, dir, "local.txt", "local content")
 	_, err = testutil.RunGit(t, dir, "add", "local.txt")
 	if err != nil {
@@ -153,41 +170,55 @@ func TestFinishFeatureBranchAheadOfRemote(t *testing.T) {
 		t.Fatalf("Failed to commit: %v", err)
 	}
 
-	// Finish the feature branch
+	// Record develop's SHA before finishing
+	developBefore, err := testutil.RunGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop SHA: %v", err)
+	}
+
+	// Attempt to finish the feature branch
 	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "test-ahead")
-	if err != nil {
-		t.Fatalf("Expected finish to succeed when ahead of remote. Error: %v\nOutput: %s", err, output)
+
+	// Verify failure
+	if err == nil {
+		t.Errorf("Expected finish to fail when ahead of remote. Output: %s", output)
 	}
 
-	// Verify note about being ahead is shown
+	// Verify error message mentions being ahead with the commit count
 	if !strings.Contains(output, "ahead") {
-		t.Errorf("Expected note about being ahead of remote. Output: %s", output)
+		t.Errorf("Expected error message to mention 'ahead'. Output: %s", output)
+	}
+	if !strings.Contains(output, "1 commit") {
+		t.Errorf("Expected error message to include the commit count. Output: %s", output)
 	}
 
-	// Verify branch is deleted
-	if testutil.BranchExists(t, dir, "feature/test-ahead") {
-		t.Error("Expected feature branch to be deleted")
-	}
-
-	// Verify changes are merged into develop
-	_, err = testutil.RunGit(t, dir, "checkout", "develop")
+	// Verify the merge did not happen: develop is unchanged
+	developAfter, err := testutil.RunGit(t, dir, "rev-parse", "develop")
 	if err != nil {
-		t.Fatalf("Failed to checkout develop: %v", err)
+		t.Fatalf("Failed to get develop SHA after: %v", err)
+	}
+	if developBefore != developAfter {
+		t.Errorf("Expected develop to be unchanged after aborted finish. Before: %s After: %s", developBefore, developAfter)
 	}
 
-	if !testutil.FileExists(t, dir, "local.txt") {
-		t.Error("Expected local.txt to exist in develop branch")
+	// Verify branch still exists (finish was aborted)
+	if !testutil.BranchExists(t, dir, "feature/test-ahead") {
+		t.Error("Expected feature branch to still exist after aborted finish")
 	}
 }
 
-// TestFinishFeatureBranchDivergedFromRemote tests that finish fails when branches have diverged.
+// TestFinishFeatureBranchDivergedFromRemote tests that finish aborts with a diverged-specific
+// message when branches have diverged. This is Scenario 10: diverged now renders its own message
+// rather than reusing the plain "behind" wording.
 // Steps:
 // 1. Sets up a test repository with remote and initializes git-flow
 // 2. Creates a feature branch and pushes it with tracking
 // 3. Simulates divergence: remote gets commit, local gets different commit
 // 4. Fetches to update remote refs
-// 5. Attempts to finish the feature branch
-// 6. Verifies the operation fails with appropriate error
+// 5. Records develop's SHA before finishing
+// 6. Attempts to finish the feature branch
+// 7. Verifies the operation fails with a diverged-specific message (not "behind")
+// 8. Verifies the merge did not happen (develop unchanged, branch still exists)
 func TestFinishFeatureBranchDivergedFromRemote(t *testing.T) {
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -260,6 +291,12 @@ func TestFinishFeatureBranchDivergedFromRemote(t *testing.T) {
 		t.Fatalf("Failed to fetch: %v", err)
 	}
 
+	// Record develop's SHA before finishing
+	developBefore, err := testutil.RunGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop SHA: %v", err)
+	}
+
 	// Attempt to finish the feature branch
 	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "test-diverged")
 
@@ -268,9 +305,21 @@ func TestFinishFeatureBranchDivergedFromRemote(t *testing.T) {
 		t.Error("Expected finish to fail when diverged from remote")
 	}
 
-	// Verify error message mentions being behind (diverged branches are also behind)
-	if !strings.Contains(output, "behind") {
-		t.Errorf("Expected error message to mention 'behind'. Output: %s", output)
+	// Verify error message describes divergence and is NOT the plain "behind" wording
+	if !strings.Contains(output, "diverged") {
+		t.Errorf("Expected error message to mention 'diverged'. Output: %s", output)
+	}
+	if strings.Contains(output, "behind") {
+		t.Errorf("Expected a diverged-specific message, not the 'behind' wording. Output: %s", output)
+	}
+
+	// Verify the merge did not happen: develop is unchanged
+	developAfter, err := testutil.RunGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop SHA after: %v", err)
+	}
+	if developBefore != developAfter {
+		t.Errorf("Expected develop to be unchanged after aborted finish. Before: %s After: %s", developBefore, developAfter)
 	}
 
 	// Verify branch still exists (finish was aborted)
@@ -427,21 +476,34 @@ func TestFinishFeatureBranchForceBypassesRemoteCheck(t *testing.T) {
 	}
 }
 
-// TestFinishContinueSkipsRemoteCheck tests that --continue doesn't re-check remote status.
+// TestFinishContinueSkipsRemoteCheck tests that --continue does not re-run the fetch/sync preflight.
+// This is Scenario 23: the preflight is gated to the initial finish only. The topic is pushed in
+// sync so the initial finish passes the preflight and can then reach a merge conflict. The remote is
+// then broken; if --continue re-ran the preflight it would fatally abort on the unreachable remote.
+// keepremote is enabled so the unrelated remote-branch deletion (which would also fail on the broken
+// remote) does not mask the behavior under test.
 // Steps:
-// 1. Sets up a test repository with remote and initializes git-flow
-// 2. Creates merge conflict scenario
-// 3. Attempts finish (will conflict)
-// 4. Simulates remote getting ahead while conflict is being resolved
-// 5. Resolves conflict and continues with --continue
-// 6. Verifies continue succeeds (no remote re-check)
+// 1. Sets up a test repository with remote and initializes git-flow; enables keepremote
+// 2. Creates conflicting develop + feature changes; pushes the feature in sync
+// 3. Runs the initial finish, which passes the preflight then hits a merge conflict
+// 4. Verifies the conflict via .git/MERGE_HEAD
+// 5. Breaks the remote so any fetch would fatally fail
+// 6. Resolves the conflict and runs --continue
+// 7. Verifies continue completes without fetching or a transport abort, and clears the merge state
 func TestFinishContinueSkipsRemoteCheck(t *testing.T) {
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
+	// Keep the remote branch so the delete step does not touch the (soon-broken) remote —
+	// this isolates the test to the preflight-skip behavior.
+	_, err := testutil.RunGit(t, dir, "config", "gitflow.feature.finish.keepremote", "true")
+	if err != nil {
+		t.Fatalf("Failed to set keepremote config: %v", err)
+	}
+
 	// Create conflicting content in develop
-	_, err := testutil.RunGit(t, dir, "checkout", "develop")
+	_, err = testutil.RunGit(t, dir, "checkout", "develop")
 	if err != nil {
 		t.Fatalf("Failed to checkout develop: %v", err)
 	}
@@ -471,13 +533,13 @@ func TestFinishContinueSkipsRemoteCheck(t *testing.T) {
 		t.Fatalf("Failed to commit feature changes: %v", err)
 	}
 
-	// Push the feature branch with tracking
+	// Push the feature branch with tracking (in sync — the preflight will pass)
 	_, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test-continue-remote")
 	if err != nil {
 		t.Fatalf("Failed to push branch: %v", err)
 	}
 
-	// Add more conflicting changes to develop
+	// Add more conflicting changes to develop so the merge will conflict
 	_, err = testutil.RunGit(t, dir, "checkout", "develop")
 	if err != nil {
 		t.Fatalf("Failed to checkout develop: %v", err)
@@ -498,7 +560,7 @@ func TestFinishContinueSkipsRemoteCheck(t *testing.T) {
 		t.Fatalf("Failed to checkout feature branch: %v", err)
 	}
 
-	// Try to finish (will conflict)
+	// Try to finish (default fetch=true) — passes the preflight, then hits the conflict
 	output, _ := testutil.RunGitFlow(t, dir, "feature", "finish", "test-continue-remote")
 
 	// Verify conflict was detected
@@ -506,37 +568,15 @@ func TestFinishContinueSkipsRemoteCheck(t *testing.T) {
 		t.Fatalf("Expected merge conflict to be detected. Output: %s", output)
 	}
 
-	// Simulate remote getting ahead while conflict is being resolved
-	secondDir := t.TempDir()
-	_, err = testutil.RunGit(t, secondDir, "clone", remoteDir, ".")
-	if err != nil {
-		t.Fatalf("Failed to clone: %v", err)
-	}
-	testutil.ConfigureGitIdentity(t, secondDir)
-
-	_, err = testutil.RunGit(t, secondDir, "checkout", "feature/test-continue-remote")
-	if err != nil {
-		t.Fatalf("Failed to checkout feature branch in second repo: %v", err)
+	// Verify the conflict via .git/MERGE_HEAD (not just output text)
+	if !testutil.FileExists(t, dir, ".git/MERGE_HEAD") {
+		t.Fatalf("Expected .git/MERGE_HEAD to exist during the merge conflict")
 	}
 
-	testutil.WriteFile(t, secondDir, "remote-while-resolving.txt", "remote content")
-	_, err = testutil.RunGit(t, secondDir, "add", "remote-while-resolving.txt")
+	// Break the remote so any fetch during continue would fatally fail
+	_, err = testutil.RunGit(t, dir, "remote", "set-url", "origin", "./nonexistent-remote-repo.git")
 	if err != nil {
-		t.Fatalf("Failed to add file in second repo: %v", err)
-	}
-	_, err = testutil.RunGit(t, secondDir, "commit", "-m", "Remote commit while resolving")
-	if err != nil {
-		t.Fatalf("Failed to commit in second repo: %v", err)
-	}
-	_, err = testutil.RunGit(t, secondDir, "push", "origin", "feature/test-continue-remote")
-	if err != nil {
-		t.Fatalf("Failed to push from second repo: %v", err)
-	}
-
-	// Fetch in original repo to update remote refs (now local is behind)
-	_, err = testutil.RunGit(t, dir, "fetch", "origin")
-	if err != nil {
-		t.Fatalf("Failed to fetch: %v", err)
+		t.Fatalf("Failed to break remote: %v", err)
 	}
 
 	// Resolve conflict
@@ -546,15 +586,25 @@ func TestFinishContinueSkipsRemoteCheck(t *testing.T) {
 		t.Fatalf("Failed to resolve conflict: %v", err)
 	}
 
-	// Continue finish operation (should succeed despite being behind remote now)
+	// Continue finish operation (must not fetch or abort on the broken remote)
 	continueOutput, err := testutil.RunGitFlow(t, dir, "feature", "finish", "--continue", "test-continue-remote")
 	if err != nil {
-		t.Fatalf("Expected continue to succeed without re-checking remote. Error: %v\nOutput: %s", err, continueOutput)
+		t.Fatalf("Expected continue to succeed without re-running the preflight. Error: %v\nOutput: %s", err, continueOutput)
+	}
+
+	// Verify no fetch occurred during continue
+	if strings.Contains(continueOutput, "Fetching from remote") {
+		t.Errorf("Expected no fetch during --continue. Output: %s", continueOutput)
 	}
 
 	// Verify successful completion
 	if !strings.Contains(continueOutput, "Successfully finished") {
 		t.Errorf("Expected successful finish message after continue. Output: %s", continueOutput)
+	}
+
+	// Verify the merge state is cleared
+	if testutil.FileExists(t, dir, ".git/MERGE_HEAD") {
+		t.Errorf("Expected .git/MERGE_HEAD to be cleared after continue")
 	}
 
 	// Verify branch deleted
@@ -604,6 +654,11 @@ func TestFinishFeatureBranchEqualToRemote(t *testing.T) {
 		t.Fatalf("Expected finish to succeed when equal to remote. Error: %v\nOutput: %s", err, output)
 	}
 
+	// Verify fetch ran (default fetch=true with a reachable remote) — Scenario 3
+	if !strings.Contains(output, "Fetching from remote") {
+		t.Errorf("Expected fetch to occur before the in-sync finish. Output: %s", output)
+	}
+
 	// Verify no warning about being ahead or behind
 	if strings.Contains(output, "ahead") || strings.Contains(output, "behind") {
 		t.Errorf("Expected no warning about ahead/behind when equal to remote. Output: %s", output)
@@ -625,104 +680,143 @@ func TestFinishFeatureBranchEqualToRemote(t *testing.T) {
 	}
 }
 
-// TestFinishFetchFailsButSyncCheckStillRuns tests that when fetch fails, the sync check still runs.
+// TestFinishNoFetchStillRunsSyncCheck tests that --no-fetch skips the fetch but still runs
+// the sync check (Scenario 22). This replaces the old TestFinishFetchFailsButSyncCheckStillRuns,
+// which asserted a broken-URL fetch failure was non-fatal — a transport fetch failure is now
+// fatal (see TestFinishUnreachableRemoteAborts, Scenario 5). Here --no-fetch skips the fetch, so
+// the sync check runs against existing (stale) tracking data and still aborts on "behind".
 // Steps:
 // 1. Sets up a test repository with remote and initializes git-flow
-// 2. Creates a feature branch and pushes it with tracking
-// 3. Simulates remote changes by cloning, committing, and pushing
-// 4. Fetches in original repo to update remote refs (so sync check has data)
-// 5. Breaks the remote URL so subsequent fetch fails
-// 6. Attempts to finish with --fetch flag (fetch is disabled by default)
-// 7. Verifies fetch failure is non-fatal (note is printed)
-// 8. Verifies sync check still runs and catches "behind" state
-func TestFinishFetchFailsButSyncCheckStillRuns(t *testing.T) {
+// 2. Creates a feature branch, commits, and pushes it with tracking
+// 3. Resets the local branch back one commit so it is behind the remote by 1
+// 4. Records develop's SHA before finishing
+// 5. Runs finish with --no-fetch
+// 6. Verifies no fetch occurred but the sync check still aborts with "behind"
+// 7. Verifies the merge did not happen (develop unchanged, branch still exists)
+func TestFinishNoFetchStillRunsSyncCheck(t *testing.T) {
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
 	// Create feature branch
-	_, err := testutil.RunGitFlow(t, dir, "feature", "start", "test-fetch-fail")
+	_, err := testutil.RunGitFlow(t, dir, "feature", "start", "test-no-fetch-sync")
 	if err != nil {
 		t.Fatalf("Failed to create feature branch: %v", err)
 	}
 
-	// Add a commit to the feature branch
+	// Add a commit and push with tracking
 	testutil.WriteFile(t, dir, "feature.txt", "feature content")
-	_, err = testutil.RunGit(t, dir, "add", "feature.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "add", "feature.txt"); err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "Add feature file")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "Add feature file"); err != nil {
 		t.Fatalf("Failed to commit: %v", err)
 	}
-
-	// Push with tracking
-	_, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test-fetch-fail")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test-no-fetch-sync"); err != nil {
 		t.Fatalf("Failed to push branch: %v", err)
 	}
 
-	// Clone to a second working copy and make changes
-	secondDir := t.TempDir()
-	_, err = testutil.RunGit(t, secondDir, "clone", remoteDir, ".")
-	if err != nil {
-		t.Fatalf("Failed to clone: %v", err)
-	}
-	testutil.ConfigureGitIdentity(t, secondDir)
-
-	_, err = testutil.RunGit(t, secondDir, "checkout", "feature/test-fetch-fail")
-	if err != nil {
-		t.Fatalf("Failed to checkout feature branch in second repo: %v", err)
+	// Reset local branch back one commit so it is behind the remote by 1
+	if _, err = testutil.RunGit(t, dir, "reset", "--hard", "HEAD~1"); err != nil {
+		t.Fatalf("Failed to reset branch: %v", err)
 	}
 
-	testutil.WriteFile(t, secondDir, "remote-change.txt", "remote content")
-	_, err = testutil.RunGit(t, secondDir, "add", "remote-change.txt")
+	// Record develop's SHA before finishing
+	developBefore, err := testutil.RunGit(t, dir, "rev-parse", "develop")
 	if err != nil {
-		t.Fatalf("Failed to add file in second repo: %v", err)
-	}
-	_, err = testutil.RunGit(t, secondDir, "commit", "-m", "Remote commit")
-	if err != nil {
-		t.Fatalf("Failed to commit in second repo: %v", err)
-	}
-	_, err = testutil.RunGit(t, secondDir, "push", "origin", "feature/test-fetch-fail")
-	if err != nil {
-		t.Fatalf("Failed to push from second repo: %v", err)
+		t.Fatalf("Failed to get develop SHA: %v", err)
 	}
 
-	// Fetch in original repo to update remote refs (so sync check has data to work with)
-	_, err = testutil.RunGit(t, dir, "fetch", "origin")
-	if err != nil {
-		t.Fatalf("Failed to fetch: %v", err)
-	}
+	// Finish with --no-fetch: the fetch is skipped but the sync check still runs
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "--no-fetch", "test-no-fetch-sync")
 
-	// Break the remote URL so fetch will fail
-	_, err = testutil.RunGit(t, dir, "remote", "set-url", "origin", "/nonexistent/path/that/does/not/exist")
-	if err != nil {
-		t.Fatalf("Failed to change remote URL: %v", err)
-	}
-
-	// Attempt to finish with fetch explicitly enabled
-	// Fetch should fail but sync check should still run with previously fetched refs
-	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "--fetch", "test-fetch-fail")
-
-	// Verify failure due to being behind (not due to fetch failure)
+	// Verify failure due to being behind
 	if err == nil {
-		t.Error("Expected finish to fail when behind remote")
+		t.Errorf("Expected finish to fail when behind remote. Output: %s", output)
 	}
 
-	// Verify fetch failure note is printed (non-fatal)
-	if !strings.Contains(output, "Could not fetch") {
-		t.Errorf("Expected output to mention fetch failure. Output: %s", output)
+	// Verify no fetch occurred
+	if strings.Contains(output, "Fetching from remote") {
+		t.Errorf("Expected no fetch with --no-fetch. Output: %s", output)
 	}
 
-	// Verify sync check still ran and caught the "behind" state
+	// Verify the sync check still ran and caught the "behind" state
 	if !strings.Contains(output, "behind") {
 		t.Errorf("Expected error message to mention 'behind' (sync check should still run). Output: %s", output)
 	}
 
+	// Verify the merge did not happen: develop is unchanged
+	developAfter, err := testutil.RunGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop SHA after: %v", err)
+	}
+	if developBefore != developAfter {
+		t.Errorf("Expected develop to be unchanged after aborted finish. Before: %s After: %s", developBefore, developAfter)
+	}
+
 	// Verify branch still exists (finish was aborted)
-	if !testutil.BranchExists(t, dir, "feature/test-fetch-fail") {
+	if !testutil.BranchExists(t, dir, "feature/test-no-fetch-sync") {
+		t.Error("Expected feature branch to still exist after aborted finish")
+	}
+}
+
+// TestFinishCompareErrorAborts verifies that when a tracking branch exists but the sync comparison
+// itself fails (e.g. a corrupt/dangling tracking ref), finish fails closed rather than merging
+// against an undetermined sync status. This exercises the compare-error branch of the preflight,
+// which HasTrackingBranch gates entry into, so reaching a compare error is unexpected and fatal.
+// Steps:
+//  1. Sets up a test repository with remote and initializes git-flow
+//  2. Creates a feature branch, commits, and pushes it (establishes a tracking ref)
+//  3. Corrupts the loose remote-tracking ref to point at a nonexistent object, so @{upstream} still
+//     resolves by name (HasTrackingBranch stays true) but rev-list can no longer compare
+//  4. Finishes with --no-fetch (so the corrupt ref is not repaired by a fetch)
+//  5. Verifies finish fails, names the sync-status determination, and does not merge
+func TestFinishCompareErrorAborts(t *testing.T) {
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "start", "test-compare-error"); err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+	commitFeatureAndPush(t, dir, "feature.txt", "feature content", "Add feature file", "feature/test-compare-error")
+
+	// Corrupt the loose remote-tracking ref: point it at a nonexistent object. @{upstream} still
+	// resolves the tracking name (so HasTrackingBranch stays true), but rev-list can no longer walk
+	// the ref, forcing CompareBranchWithRemote to fail.
+	trackingRef := ".git/refs/remotes/origin/feature/test-compare-error"
+	if _, err := testutil.RunGit(t, dir, "rev-parse", "--verify", "origin/feature/test-compare-error"); err != nil {
+		t.Fatalf("Precondition failed: expected a loose tracking ref to exist: %v", err)
+	}
+	if err := testutil.WriteFile(t, dir, trackingRef, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n"); err != nil {
+		t.Fatalf("Failed to corrupt tracking ref: %v", err)
+	}
+
+	developBefore, err := testutil.RunGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop SHA: %v", err)
+	}
+
+	// --no-fetch so the corrupt ref is not repaired by a fetch before the sync check
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "--no-fetch", "test-compare-error")
+	if err == nil {
+		t.Errorf("Expected finish to fail when the sync status cannot be determined. Output: %s", output)
+	}
+
+	// Verify the failure is the sync-status determination (not a merge or unrelated error)
+	if !strings.Contains(output, "determine sync status") {
+		t.Errorf("Expected the error to name the sync-status determination. Output: %s", output)
+	}
+
+	// Verify no merge happened: develop unchanged and the branch still exists
+	developAfter, err := testutil.RunGit(t, dir, "rev-parse", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get develop SHA after: %v", err)
+	}
+	if developBefore != developAfter {
+		t.Errorf("Expected develop unchanged after aborted finish. Before: %s After: %s", developBefore, developAfter)
+	}
+	if !testutil.BranchExists(t, dir, "feature/test-compare-error") {
 		t.Error("Expected feature branch to still exist after aborted finish")
 	}
 }

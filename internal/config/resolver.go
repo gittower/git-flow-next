@@ -437,13 +437,15 @@ func resolveFinishNoFF(cfg *Config, branchType string, mergeOpts *MergeStrategyO
 	return noFF
 }
 
-// resolveFinishShouldFetch resolves whether to fetch from remote before finishing
-func resolveFinishShouldFetch(cfg *Config, branchType string, fetch *bool) bool {
-	// Layer 1: Default is to fetch (ensures sync check has accurate data)
-	shouldFetch := true
+// resolveShouldFetch resolves whether to fetch from the remote before a command runs, using the
+// standard precedence: Layer-1 default (per command) -> gitflow.<type>.<cmd>.fetch config ->
+// CLI flag. Shared by finish (default true) and start (default false).
+func resolveShouldFetch(cfg *Config, branchType, cmd string, defaultFetch bool, fetch *bool) bool {
+	// Layer 1: Command default
+	shouldFetch := defaultFetch
 
-	// Layer 2: Check command-specific config (can set true OR false)
-	configKey := fmt.Sprintf("gitflow.%s.finish.fetch", branchType)
+	// Layer 2: Command-specific config (can set true OR false)
+	configKey := fmt.Sprintf("gitflow.%s.%s.fetch", branchType, cmd)
 	if value, exists := cfg.CommandConfig[configKey]; exists {
 		shouldFetch = value == "true"
 	}
@@ -454,6 +456,18 @@ func resolveFinishShouldFetch(cfg *Config, branchType string, fetch *bool) bool 
 	}
 
 	return shouldFetch
+}
+
+// resolveFinishShouldFetch resolves whether to fetch from remote before finishing.
+// The default is true (ensures the sync check runs against accurate data).
+func resolveFinishShouldFetch(cfg *Config, branchType string, fetch *bool) bool {
+	return resolveShouldFetch(cfg, branchType, "finish", true, fetch)
+}
+
+// ResolveStartShouldFetch resolves whether to fetch from remote before starting a branch.
+// The default is false (start does not fetch unless explicitly enabled).
+func ResolveStartShouldFetch(cfg *Config, branchType string, fetch *bool) bool {
+	return resolveShouldFetch(cfg, branchType, "start", false, fetch)
 }
 
 // resolveFinishNoVerify resolves whether to skip pre-commit and commit-msg hooks

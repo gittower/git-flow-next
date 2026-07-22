@@ -112,22 +112,14 @@ func start(branchType string, name string, base string, shouldFetch *bool) error
 
 // executeStart performs the actual start operation (called within hooks wrapper)
 func executeStart(branchType string, name string, base string, shouldFetch *bool, cfg *config.Config, branchConfig config.BranchConfig, fullBranchName string, startPoint string) error {
-	// Determine if we should fetch
-	fetchFromConfig := false
-	if shouldFetch == nil {
-		// If not explicitly specified, check config
-		configKey := fmt.Sprintf("gitflow.%s.start.fetch", branchType)
-		fetchConfig, err := git.GetConfig(configKey)
-		if err == nil && fetchConfig == "true" {
-			fetchFromConfig = true
-		}
-	}
-
-	// Perform fetch if requested
+	// Determine if we should fetch using the shared resolver (default false for start):
+	// Layer 1 default -> gitflow.<type>.start.fetch config -> CLI flag.
 	remoteName := cfg.Remote
-	if shouldFetch != nil && *shouldFetch || shouldFetch == nil && fetchFromConfig {
+	if config.ResolveStartShouldFetch(cfg, branchType, shouldFetch) {
+		// Skip silently when no remote is configured (no "Fetching" line, no error).
 		if git.RemoteExists(remoteName) {
 			fmt.Printf("Fetching from %s...\n", remoteName)
+			// Non-fatal: a failed fetch is a warning; start has no sync gate.
 			if err := git.Fetch(remoteName); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 			}
