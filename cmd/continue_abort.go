@@ -17,14 +17,32 @@ import (
 // IsMergeInProgress auto-clear path), or the state is owned by currentCommand.
 //
 // An unknown or empty Action with a real git operation in progress is refused
-// non-destructively via UnrecognizedOperationError and never auto-cleared.
+// non-destructively via UnrecognizedOperationError and never auto-cleared. The
+// same applies when the state file exists but fails to parse (e.g. a truncated
+// write from a crash mid-save): if git is genuinely mid-operation the file must
+// not be destroyed, so it is refused rather than left to IsMergeInProgress, which
+// would delete it while the git marker is still present.
 func refuseIfForeignOperation(cfg *config.Config, currentCommand string) error {
-	rawState, _ := mergestate.LoadMergeState()
+	rawState, loadErr := mergestate.LoadMergeState()
+
+	gitInProgress := git.IsGitMergeInProgress() || git.IsGitRebaseInProgress() || git.IsGitSquashMergeInProgress()
+
+	if loadErr != nil {
+		// The state file exists but could not be parsed. If a real git operation
+		// is underway, refuse non-destructively so IsMergeInProgress does not
+		// auto-clear the file while the marker is still present. If nothing is in
+		// progress, it is a truly stale corrupt file with no active operation to
+		// protect — leave it to the normal auto-clear path.
+		if gitInProgress {
+			return &errors.UnrecognizedOperationError{}
+		}
+		return nil
+	}
+
 	if rawState == nil {
 		return nil
 	}
 
-	gitInProgress := git.IsGitMergeInProgress() || git.IsGitRebaseInProgress() || git.IsGitSquashMergeInProgress()
 	if !gitInProgress {
 		// No real operation underway: a stale state file. Let the normal
 		// IsMergeInProgress path detect and auto-clear it.

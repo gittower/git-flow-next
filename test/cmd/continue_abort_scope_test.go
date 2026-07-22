@@ -388,11 +388,11 @@ func TestFinishConflictRefusesUpdateAbort(t *testing.T) {
 // TestUpdateConflictRefusesFinishAbort verifies feature finish --abort is refused
 // over an update conflict (the core bug fix) and the update owner stays abortable.
 // Steps:
-// 1. Sets up an update merge conflict (Action=update, MERGE_HEAD present).
-// 2. Runs 'git flow feature finish --abort x'.
-// 3. Verifies non-destructive refusal naming the update owner (set F, exit 3);
-//    the update merge is NOT aborted.
-// 4. Runs 'git flow feature update --abort x' and verifies it cleanly aborts.
+//  1. Sets up an update merge conflict (Action=update, MERGE_HEAD present).
+//  2. Runs 'git flow feature finish --abort x'.
+//  3. Verifies non-destructive refusal naming the update owner (set F, exit 3);
+//     the update merge is NOT aborted.
+//  4. Runs 'git flow feature update --abort x' and verifies it cleanly aborts.
 func TestUpdateConflictRefusesFinishAbort(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -610,13 +610,100 @@ func TestBogusActionRefusedNonDestructively(t *testing.T) {
 	assertUnrecognizedRefusal(t, dir, []string{"integrate", "--continue"})
 }
 
+// writeRawState overwrites the merge-state file with raw bytes, simulating a
+// truncated JSON write from a crash mid-save. It bypasses the normal marshaller so
+// the file exists but fails to parse.
+func writeRawState(t *testing.T, dir, content string) {
+	t.Helper()
+	p := filepath.Join(integGitDir(t, dir), "gitflow", "state", "merge.json")
+	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write raw state file: %v", err)
+	}
+}
+
+// assertUnparseableStateRefusal runs cmdArgs against a genuine git operation whose
+// git-flow state file is unparseable (truncated). It asserts the spec's set F for
+// the unrecognized case: exit 3, a generic "unrecognized git-flow operation"
+// message, the state-file bytes byte-identical, MERGE_HEAD still present, and the
+// current branch, HEAD, and all refs unchanged. Nothing is auto-cleared.
+func assertUnparseableStateRefusal(t *testing.T, dir string, cmdArgs []string) {
+	t.Helper()
+	stateBefore := readStateBytes(t, dir)
+	branchBefore := symbolicHead(t, dir)
+	headBefore := integRevParse(t, dir, "HEAD")
+	refsBefore := showRef(t, dir)
+	if !integMergeHeadExists(t, dir) {
+		t.Fatalf("precondition failed: MERGE_HEAD not present before refusal")
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, cmdArgs...)
+	if code := scopeExitCode(err); code != 3 {
+		t.Fatalf("expected exit 3, got %d (err=%v)\n%s", code, err, out)
+	}
+	if !strings.Contains(out, "unrecognized git-flow operation") {
+		t.Errorf("expected 'unrecognized git-flow operation' message, got:\n%s", out)
+	}
+	if got := readStateBytes(t, dir); got != stateBefore {
+		t.Errorf("state file changed (should be byte-identical).\nbefore: %s\nafter:  %s", stateBefore, got)
+	}
+	if !integMergeHeadExists(t, dir) {
+		t.Errorf("MERGE_HEAD missing after refusal (state was destructively cleared)")
+	}
+	if got := symbolicHead(t, dir); got != branchBefore {
+		t.Errorf("current branch changed: before %q, after %q", branchBefore, got)
+	}
+	if got := integRevParse(t, dir, "HEAD"); got != headBefore {
+		t.Errorf("HEAD moved: before %s, after %s", headBefore, got)
+	}
+	if got := showRef(t, dir); got != refsBefore {
+		t.Errorf("refs changed.\nbefore:\n%s\nafter:\n%s", refsBefore, got)
+	}
+}
+
+// TestTruncatedStateRefusesContinueNonDestructively verifies that --continue over a
+// genuine git operation whose state file is truncated/unparseable is refused
+// non-destructively, rather than falling through to IsMergeInProgress and deleting
+// the state file while the git marker is still present (destructive refusal).
+// Steps:
+//  1. Sets up a finish merge conflict (MERGE_HEAD present), then overwrites the
+//     state file with truncated JSON.
+//  2. Runs 'git flow feature finish --continue x'.
+//  3. Verifies exit 3, a generic unrecognized-operation refusal, state bytes
+//     byte-identical, MERGE_HEAD kept, HEAD/branch/refs unchanged.
+func TestTruncatedStateRefusesContinueNonDestructively(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupFinishInProgress(t, dir)
+	writeRawState(t, dir, `{"action":"finish","branchType":"fea`)
+
+	assertUnparseableStateRefusal(t, dir, []string{"feature", "finish", "--continue", "x"})
+}
+
+// TestTruncatedStateRefusesAbortNonDestructively verifies the same non-destructive
+// refusal for --abort: a truncated state file over an active git merge must not be
+// auto-cleared, and the git operation is left untouched (exit 3, not a silent no-op).
+// Steps:
+//  1. Sets up a finish merge conflict (MERGE_HEAD present), then overwrites the
+//     state file with truncated JSON.
+//  2. Runs 'git flow feature finish --abort x'.
+//  3. Verifies exit 3, a generic unrecognized-operation refusal, state bytes
+//     byte-identical, MERGE_HEAD kept, HEAD/branch/refs unchanged.
+func TestTruncatedStateRefusesAbortNonDestructively(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupFinishInProgress(t, dir)
+	writeRawState(t, dir, `{"action":"finish","branchType":"fea`)
+
+	assertUnparseableStateRefusal(t, dir, []string{"feature", "finish", "--abort", "x"})
+}
+
 // TestForeignRefusalMessageContent verifies the foreign refusal message names the
 // owner and prints the exact recovery commands.
 // Steps:
-// 1. Sets up an integrate merge conflict (Action=integrate).
-// 2. Runs 'git flow feature finish --continue x'.
-// 3. Verifies the message contains 'integrate', 'git flow integrate --continue',
-//    and 'git flow integrate --abort'.
+//  1. Sets up an integrate merge conflict (Action=integrate).
+//  2. Runs 'git flow feature finish --continue x'.
+//  3. Verifies the message contains 'integrate', 'git flow integrate --continue',
+//     and 'git flow integrate --abort'.
 func TestForeignRefusalMessageContent(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
