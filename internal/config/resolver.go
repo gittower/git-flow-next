@@ -35,6 +35,10 @@ type ResolvedFinishOptions struct {
 
 	// Hook options
 	NoVerify bool // Whether to skip pre-commit and commit-msg hooks
+
+	// Push options
+	PushBranches bool // Whether to push the target and updated child branches after finishing
+	PushTag      bool // Whether to push the created tag after finishing
 }
 
 // TagOptions represents command-line tag options
@@ -74,7 +78,7 @@ type MergeStrategyOptions struct {
 // Layer 1: Branch configuration defaults
 // Layer 2: Command-specific git config (gitflow.<branchtype>.finish.*)
 // Layer 3: Command-line arguments (highest priority)
-func ResolveFinishOptions(cfg *Config, branchType string, branchName string, tagOpts *TagOptions, retentionOpts *BranchRetentionOptions, mergeOpts *MergeStrategyOptions, fetch *bool, noVerify *bool) *ResolvedFinishOptions {
+func ResolveFinishOptions(cfg *Config, branchType string, branchName string, tagOpts *TagOptions, retentionOpts *BranchRetentionOptions, mergeOpts *MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) *ResolvedFinishOptions {
 	branchConfig := cfg.Branches[branchType]
 
 	// Compute full branch name from prefix + branchName
@@ -82,6 +86,11 @@ func ResolveFinishOptions(cfg *Config, branchType string, branchName string, tag
 
 	// Resolve merge strategy components
 	strategy, useRebase, preserveMerges, noFastForward, useSquash := resolveMergeStrategy(cfg, branchConfig, branchType, mergeOpts)
+
+	// Resolve push options. Order matters: pushTag's default derives from the
+	// resolved pushBranches value, so resolve branches first.
+	pushBranches := resolveFinishPush(cfg, branchType, push)
+	pushTagResolved := resolveFinishPushTag(cfg, branchType, pushBranches, pushTag)
 
 	return &ResolvedFinishOptions{
 		// Tag resolution
@@ -115,6 +124,10 @@ func ResolveFinishOptions(cfg *Config, branchType string, branchName string, tag
 
 		// Hook resolution
 		NoVerify: resolveFinishNoVerify(cfg, branchType, noVerify),
+
+		// Push resolution
+		PushBranches: pushBranches,
+		PushTag:      pushTagResolved,
 	}
 }
 
@@ -488,6 +501,49 @@ func resolveFinishNoVerify(cfg *Config, branchType string, noVerify *bool) bool 
 	}
 
 	return skipVerify
+}
+
+// resolveFinishPush resolves whether to push the target and updated child branches
+// after finishing. There is no Layer 1 branch-type property for this operational
+// setting (mirrors resolveFinishNoVerify).
+func resolveFinishPush(cfg *Config, branchType string, push *bool) bool {
+	// Layer 1: Default is not to push
+	pushBranches := false
+
+	// Layer 2: Command-specific config
+	if getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.finish.push", branchType)) {
+		pushBranches = true
+	}
+
+	// Layer 3: Command-line flags override config
+	if push != nil {
+		pushBranches = *push
+	}
+
+	return pushBranches
+}
+
+// resolveFinishPushTag resolves whether to push the created tag after finishing.
+// The default follows the resolved branch-push decision so a bare --push (or push
+// config) also pushes the tag. A gitflow.<type>.finish.pushtag key overrides that
+// default only when explicitly set (distinguishing "unset" from "false"), and the
+// CLI flag wins over both.
+func resolveFinishPushTag(cfg *Config, branchType string, resolvedPush bool, pushTag *bool) bool {
+	// Layer 1: Default derives from the resolved branch-push decision
+	pushTagVal := resolvedPush
+
+	// Layer 2: Command-specific config, honored only when the key exists so an
+	// unset key does not clobber the derived default.
+	if v, ok := cfg.CommandConfig[fmt.Sprintf("gitflow.%s.finish.pushtag", branchType)]; ok {
+		pushTagVal = v == "true"
+	}
+
+	// Layer 3: Command-line flags override config
+	if pushTag != nil {
+		pushTagVal = *pushTag
+	}
+
+	return pushTagVal
 }
 
 // resolveSquashMessage resolves the squash commit message.
