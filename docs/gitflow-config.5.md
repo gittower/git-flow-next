@@ -483,6 +483,11 @@ The finish command supports extensive merge strategy configuration through comma
 : *Type*: boolean
 : *Default*: false
 
+**gitflow.*type*.delete.fetch**
+: Fetch from remote before deleting a topic branch. When enabled, updates local refs so that Git can correctly detect whether the branch has been merged remotely (e.g., via a GitHub PR merge), avoiding the need for `--force`. The parent is fast-forwarded from its remote only when it is the branch currently checked out (`git merge --ff-only` acts on HEAD); delete auto-checks-out the parent when you delete the branch you are on, which is the common case. When no remote is configured, the fetch is skipped silently. A fetch failure against an unreachable remote is a non-fatal note — deletion is not blocked by the fetch itself, but the topic sync check still runs against existing local tracking data and can still abort (behind/diverged) unless `--force` is given. `--no-fetch` skips only the fetch; it does not skip the sync check.
+: *Type*: boolean
+: *Default*: false
+
 ### Remote Push Options
 
 **gitflow.*type*.finish.push**

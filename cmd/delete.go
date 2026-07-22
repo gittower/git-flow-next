@@ -11,8 +11,8 @@ import (
 )
 
 // DeleteCommand handles the deletion of a topic branch
-func DeleteCommand(branchType string, name string, force *bool, remote *bool) {
-	if err := executeDelete(branchType, name, force, remote); err != nil {
+func DeleteCommand(branchType string, name string, force *bool, remote *bool, fetch *bool) {
+	if err := executeDelete(branchType, name, force, remote, fetch); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -25,7 +25,7 @@ func DeleteCommand(branchType string, name string, force *bool, remote *bool) {
 }
 
 // executeDelete performs the actual branch deletion logic and returns any errors
-func executeDelete(branchType string, name string, force *bool, remote *bool) error {
+func executeDelete(branchType string, name string, force *bool, remote *bool, fetch *bool) error {
 	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -73,13 +73,25 @@ func executeDelete(branchType string, name string, force *bool, remote *bool) er
 
 	// Run delete operation wrapped with hooks
 	return hooks.WithHooks(gitDir, branchType, hooks.HookActionDelete, hookCtx, func() error {
-		return performDelete(branchType, name, fullBranchName, branchConfig, force, remote, cfg)
+		return performDelete(branchType, name, fullBranchName, branchConfig, force, remote, fetch, cfg)
 	})
 }
 
 // performDelete performs the actual delete operation (called within hooks wrapper)
-func performDelete(branchType, name, fullBranchName string, branchConfig config.BranchConfig, force *bool, remote *bool, cfg *config.Config) error {
-	// Determine if we should force delete the branch
+func performDelete(branchType, name, fullBranchName string, branchConfig config.BranchConfig, force *bool, remote *bool, fetch *bool, cfg *config.Config) error {
+	// Determine if we should fetch before deleting (flag > config, default false).
+	shouldFetch := false
+	if fetch != nil {
+		shouldFetch = *fetch
+	} else {
+		configKey := fmt.Sprintf("gitflow.%s.delete.fetch", branchType)
+		fetchConfig, err := git.GetConfig(configKey)
+		if err == nil && fetchConfig == "true" {
+			shouldFetch = true
+		}
+	}
+
+	// Determine if we should force delete the branch (flag > config).
 	forceDelete := false
 	if force != nil {
 		// Command line flag takes precedence
@@ -113,13 +125,14 @@ func performDelete(branchType, name, fullBranchName string, branchConfig config.
 		return &errors.RemoteNotConfiguredError{Remote: cfg.Remote, Operation: "delete remote branch"}
 	}
 
-	// Check if we're currently on the branch to be deleted
+	// If we're on the branch to be deleted, switch to its parent first. This happens before the
+	// fetch/sync preflight so that fast-forwarding the parent (see below) operates on HEAD, which
+	// is what `git branch -d` checks a topic against when it has no upstream.
 	currentBranch, err := git.GetCurrentBranch()
 	if err != nil {
 		return &errors.GitError{Operation: "get current branch", Err: err}
 	}
 	if currentBranch == fullBranchName {
-		// If we're on the branch to be deleted, try to switch to its parent
 		parentBranch := branchConfig.Parent
 		if parentBranch != "" {
 			if err := git.Checkout(parentBranch); err != nil {
@@ -128,6 +141,20 @@ func performDelete(branchType, name, fullBranchName string, branchConfig config.
 		} else {
 			return &errors.GitError{Operation: "delete branch", Err: fmt.Errorf("cannot delete the current branch without a parent branch configured")}
 		}
+	}
+
+	// Fetch the parent and topic, fast-forward the parent from its remote (so a branch that was
+	// merged remotely, e.g. via a PR, is recognized as merged by `git branch -d`), and sync-check
+	// the topic. Delete uses the relaxed preflight variant: a fetch failure is a non-fatal note and
+	// a topic that is merely ahead of its remote is tolerated (a non-force `git branch -d` still
+	// guards genuinely unmerged work). A topic that is behind/diverged aborts unless forced.
+	if err := runFetchSyncPreflight(cfg, branchType, cfg.Remote, fullBranchName, name, branchConfig.Parent, shouldFetch, forceDelete, preflightOptions{
+		ffParent:             true,
+		tolerateAhead:        true,
+		fetchFailureNonFatal: true,
+		operation:            "delete",
+	}); err != nil {
+		return err
 	}
 
 	// Delete the branch with appropriate flag

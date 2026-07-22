@@ -295,26 +295,10 @@ func registerBranchCommand(branchType string) {
 			noForce, _ := cmd.Flags().GetBool("no-force")
 			remote, _ := cmd.Flags().GetBool("remote")
 			noRemote, _ := cmd.Flags().GetBool("no-remote")
+			fetch, _ := cmd.Flags().GetBool("fetch")
+			noFetch, _ := cmd.Flags().GetBool("no-fetch")
 
-			// Convert force flags to a single *bool
-			var forcePtr *bool
-			if force {
-				forcePtr = &force
-			} else if noForce {
-				falseBool := false
-				forcePtr = &falseBool
-			}
-
-			// Convert remote flags to a single *bool
-			var remotePtr *bool
-			if remote {
-				remotePtr = &remote
-			} else if noRemote {
-				falseBool := false
-				remotePtr = &falseBool
-			}
-
-			DeleteCommand(branchType, args[0], forcePtr, remotePtr)
+			DeleteCommand(branchType, args[0], getBoolFlag(force, noForce), getBoolFlag(remote, noRemote), getBoolFlag(fetch, noFetch))
 			return nil
 		},
 	}
@@ -324,6 +308,8 @@ func registerBranchCommand(branchType string) {
 	deleteCmd.Flags().Bool("no-force", false, "Don't force delete the branch (overrides config)")
 	deleteCmd.Flags().BoolP("remote", "r", false, "Delete the remote tracking branch")
 	deleteCmd.Flags().Bool("no-remote", false, "Don't delete the remote tracking branch")
+	deleteCmd.Flags().Bool("fetch", false, "Fetch from remote before deleting")
+	deleteCmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before deleting")
 
 	branchCmd.AddCommand(deleteCmd)
 

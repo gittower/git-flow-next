@@ -194,6 +194,21 @@ from the branch push. A missing remote skips the push with a note (finish still
 succeeds); a rejected non-fast-forward push is a hard error, leaving the
 already-completed local finish intact.
 
+### Delete Command Options
+
+| Option | Description | Values | Default |
+|--------|-------------|--------|---------|
+| `fetch` | Fetch (and fast-forward the parent when it is checked out) before delete | `true`, `false` | `false` |
+
+#### Examples
+
+```bash
+# Always fetch before deleting feature branches
+gitflow.feature.delete.fetch=true
+```
+
+When `fetch` is enabled, delete fetches from the remote so Git can detect a branch that was merged remotely (e.g., via a GitHub PR merge). The parent is fast-forwarded from its remote only when it is the branch currently checked out (`git merge --ff-only` acts on HEAD); delete auto-checks-out the parent when you delete the branch you are on, which is the common case. A fetch failure against an unreachable remote is a non-fatal note — deletion is not blocked by the fetch itself, but the topic sync check still runs against existing local tracking data and can still abort (behind/diverged) unless `--force` is given. `--no-fetch` skips only the fetch, not the sync check.
+
 ### Update Command Options
 
 | Option | Description | Values | Default |

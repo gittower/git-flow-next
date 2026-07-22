@@ -36,23 +36,16 @@ func RegisterShorthandCommands() {
 			if err != nil {
 				return err
 			}
-			var force *bool
-			if cmd.Flags().Changed("force") {
-				f, _ := cmd.Flags().GetBool("force")
-				force = &f
-			} else if cmd.Flags().Changed("no-force") {
-				f := false
-				force = &f
-			}
-			var remote *bool
-			if cmd.Flags().Changed("remote") {
-				r, _ := cmd.Flags().GetBool("remote")
-				remote = &r
-			} else if cmd.Flags().Changed("no-remote") {
-				f := false
-				remote = &f
-			}
-			DeleteCommand(branchType, name, force, remote)
+			forceFlag, _ := cmd.Flags().GetBool("force")
+			noForceFlag, _ := cmd.Flags().GetBool("no-force")
+			force := getBoolFlag(forceFlag, noForceFlag)
+			remoteFlag, _ := cmd.Flags().GetBool("remote")
+			noRemoteFlag, _ := cmd.Flags().GetBool("no-remote")
+			remote := getBoolFlag(remoteFlag, noRemoteFlag)
+			fetchFlag, _ := cmd.Flags().GetBool("fetch")
+			noFetchFlag, _ := cmd.Flags().GetBool("no-fetch")
+			fetch := getBoolFlag(fetchFlag, noFetchFlag)
+			DeleteCommand(branchType, name, force, remote, fetch)
 			return nil
 		},
 	}
@@ -60,6 +53,8 @@ func RegisterShorthandCommands() {
 	deleteCmd.Flags().Bool("no-force", false, "Don't force delete (overrides config)")
 	deleteCmd.Flags().BoolP("remote", "r", false, "Delete remote tracking branch")
 	deleteCmd.Flags().Bool("no-remote", false, "Don't delete remote tracking branch")
+	deleteCmd.Flags().Bool("fetch", false, "Fetch from remote before deleting")
+	deleteCmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before deleting")
 	rootCmd.AddCommand(deleteCmd)
 
 	// Update
