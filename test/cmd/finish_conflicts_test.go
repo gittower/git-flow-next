@@ -86,6 +86,11 @@ func TestFinishSingleConflictMergeStrategy(t *testing.T) {
 		t.Error("Feature branch should be deleted after finish")
 	}
 
+	// Verify merge state cleared after a successful continue (#143)
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected merge state to be cleared after finish --continue")
+	}
+
 	// Verify changes in develop
 	testutil.RunGit(t, dir, "checkout", "develop")
 	content := testutil.ReadFile(t, dir, "conflict.txt")

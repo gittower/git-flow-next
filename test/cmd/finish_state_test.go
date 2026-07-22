@@ -722,3 +722,29 @@ func TestAbortClearsStaleMergeState(t *testing.T) {
 		t.Error("Expected merge state to be cleared after --abort on stale state")
 	}
 }
+
+// TestFinishAbortNoOpWhenNothingInProgress verifies feature finish --abort with a
+// truly clean repo (no in-progress op, no state file) is a forgiving no-op.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates feature/x (no conflict, no in-progress op, no state file)
+// 3. Runs 'git flow feature finish --abort x'
+// 4. Verifies exit 0, no error, and no merge-state file created
+func TestFinishAbortNoOpWhenNothingInProgress(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGitFlow(t, dir, "feature", "start", "x"); err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, out)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "feature", "finish", "--abort", "x")
+	if err != nil {
+		t.Fatalf("Expected finish --abort no-op to succeed: %v\nOutput: %s", err, out)
+	}
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected no merge-state file after no-op abort")
+	}
+}

@@ -568,6 +568,11 @@ func TestFinishWithMergeAbort(t *testing.T) {
 	if content != "feature content" {
 		t.Errorf("Expected file content to be 'feature content', got '%s'", content)
 	}
+
+	// Verify merge state cleared after abort (#143)
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected merge state to be cleared after finish --abort")
+	}
 }
 
 // TestFinishAbortAfterManualResolve reproduces gittower/git-flow-next#110,
