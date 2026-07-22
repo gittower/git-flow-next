@@ -38,6 +38,12 @@ The delete operation removes the specified topic branch from the local repositor
 **--no-remote**
 : Don't delete the remote tracking branch (default behavior)
 
+**--fetch**
+: Fetch from remote before deleting. This updates local refs so that Git can correctly detect whether the branch has been merged remotely (e.g., via a GitHub PR merge). The parent branch is fast-forwarded from its remote only when it is the branch currently checked out (`git merge --ff-only` acts on HEAD); delete auto-checks-out the parent when you delete the branch you are on, which is the common case. If the remote is unreachable the fetch failure is a non-fatal note and deletion is not blocked by the fetch itself, but the topic sync check still runs against existing local tracking data and can still abort (behind/diverged) unless **--force** is given.
+
+**--no-fetch**
+: Don't fetch from remote before deleting (overrides config). This skips only the fetch; the topic sync check still runs against existing local tracking data.
+
 ## SAFETY CHECKS
 
 By default, Git prevents deletion of branches with unmerged changes. The delete command:
@@ -65,6 +71,13 @@ git flow delete
 Delete with remote cleanup:
 ```bash
 git flow feature delete my-feature --remote
+```
+
+### Fetch Before Delete
+
+Fetch and fast-forward the parent branch before deleting, so Git can detect branches merged remotely (e.g., via a GitHub PR merge):
+```bash
+git flow feature delete my-feature --fetch
 ```
 
 ### Force Deletion
@@ -142,6 +155,12 @@ git config gitflow.hotfix.delete.force true
 ```bash
 # Enable remote deletion by default for feature branches
 git config gitflow.branch.feature.deleteRemote true
+```
+
+### Fetch Settings
+```bash
+# Always fetch before deleting feature branches
+git config gitflow.feature.delete.fetch true
 ```
 
 ## SAFETY CONSIDERATIONS
