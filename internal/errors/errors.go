@@ -259,6 +259,10 @@ type BranchNotInSyncError struct {
 	Status       string // "ahead", "behind", or "diverged"
 	CommitCount  int
 	BranchType   string
+	// Operation names the command that tripped the sync gate ("finish" or "delete"). It tailors
+	// the action verb and the suggested `git flow <type> <op> --force` command to the caller.
+	// Empty means "finish".
+	Operation string
 }
 
 func (e *BranchNotInSyncError) Error() string {
@@ -268,6 +272,37 @@ func (e *BranchNotInSyncError) Error() string {
 	shortName := e.ShortName
 	if shortName == "" {
 		shortName = e.BranchName
+	}
+
+	// delete reuses this error via the shared preflight, but its consequences differ from
+	// finish's: deleting a local branch never rewrites the remote, so the wording and the
+	// suggested command are tailored here. delete tolerates an ahead branch, so it only ever
+	// reaches the behind/diverged cases.
+	if e.Operation == "delete" {
+		if e.Status == SyncStatusDiverged {
+			return fmt.Sprintf(`local branch '%s' has diverged from '%s' by %d commit(s).
+
+The local and remote branches each have commits the other does not.
+Deleting now would drop the local-only commits.
+
+To resolve:
+  git pull                       # reconcile with the remote first
+
+To delete anyway (dropping local-only commits):
+  git flow %s delete --force %s`,
+				e.BranchName, e.RemoteBranch, e.CommitCount, e.BranchType, shortName)
+		}
+		return fmt.Sprintf(`local branch '%s' is behind '%s' by %d commit(s).
+
+The remote branch has commits not present locally. Deleting now would
+drop the local branch before those commits are integrated.
+
+To resolve:
+  git pull                       # bring in the remote commits first
+
+To delete anyway:
+  git flow %s delete --force %s`,
+			e.BranchName, e.RemoteBranch, e.CommitCount, e.BranchType, shortName)
 	}
 
 	switch e.Status {

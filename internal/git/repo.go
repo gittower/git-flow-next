@@ -487,6 +487,17 @@ func RebaseWithOptions(targetBranch string, preserveMerges bool) error {
 	return nil
 }
 
+// MergeFFOnly attempts a fast-forward-only merge of the given branch into the current branch.
+// Returns an error if the merge cannot be fast-forwarded.
+func MergeFFOnly(branch string) error {
+	cmd := exec.Command("git", "merge", "--ff-only", branch)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("fast-forward merge of %q failed: %w: %s", branch, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
 // MergeWithOptions merges a branch into current branch with optional no-fast-forward
 func MergeWithOptions(branchName string, noFF bool, noVerify bool) error {
 	args := []string{"merge"}
