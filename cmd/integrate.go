@@ -62,15 +62,13 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
 
-	// Foreign-state guard. Refuse to touch an in-progress finish or update.
-	// We load the raw state (without the stale-clearing side effect of
-	// IsMergeInProgress) and check whether git is genuinely mid-operation,
-	// because some operations (e.g. update) persist state without a BranchType,
-	// which IsMergeInProgress would otherwise treat as stale and clear.
-	if rawState, _ := mergestate.LoadMergeState(); rawState != nil && rawState.Action != "integrate" {
-		if git.IsGitMergeInProgress() || git.IsGitRebaseInProgress() || git.IsGitSquashMergeInProgress() {
-			return &errors.MergeInProgressError{BranchName: rawState.FullBranchName}
-		}
+	// Foreign-operation guard (#143): refuse a foreign in-progress finish/update
+	// (or an unknown-Action state) with an owner-named, actionable message before
+	// any dispatch. The shared guard reads raw state and checks git's real
+	// in-progress markers, since an update persists state IsMergeInProgress might
+	// otherwise treat as stale and clear.
+	if err := refuseIfForeignOperation(cfg, "integrate"); err != nil {
+		return err
 	}
 
 	// Merge-in-progress dispatch for integrate's own state.
@@ -79,8 +77,9 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 		if err != nil {
 			return &errors.GitError{Operation: "load merge state", Err: err}
 		}
+		// Belt-and-suspenders: the guard above already refused foreign state.
 		if state.Action != "integrate" {
-			return &errors.MergeInProgressError{BranchName: state.FullBranchName}
+			return &errors.MergeInProgressError{Action: state.Action, BranchName: state.FullBranchName, BranchType: topicTypeOrEmpty(cfg, state.BranchType)}
 		}
 		if abortOp {
 			return handleAbort(state)
@@ -98,7 +97,7 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 			branchConfig := cfg.Branches[state.BranchType]
 			return handleContinue(cfg, state, branchConfig, resolved, mergeOptions)
 		}
-		return &errors.MergeInProgressError{BranchName: state.FullBranchName}
+		return &errors.MergeInProgressError{Action: "integrate", BranchName: state.FullBranchName}
 	}
 
 	// No merge in progress: abort is a forgiving no-op, continue has nothing to
