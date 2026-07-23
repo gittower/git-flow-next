@@ -11,7 +11,7 @@ cmd/root.go (rootCmd)
     ↓
 cmd/topicbranch.go (Dynamic Registration)
     ├─> Registers: feature, release, hotfix, support, etc.
-    └─> Each gets: start, finish, list, update, delete, rename, checkout
+    └─> Each gets: start, finish, list, update, delete, rename, checkout, publish, track
 ```
 
 ## Command Execution Steps
@@ -65,10 +65,8 @@ Layer 2 controls *how commands execute* (operational knobs). Not all options hav
 **Purpose**: Manages git-flow configuration (branch types, prefixes, merge strategies)
 
 **Key files:**
-- `config.go` - Main Config struct, Load/Save, branch types
+- `config.go` - Main Config struct, Load/Save, branch types, preset definitions (Classic, GitHub, GitLab), AVH import
 - `resolver.go` - 3-layer option resolution for finish command
-- `presets.go` - Default configurations (Classic, GitHub, GitLab)
-- `validator.go` - Validate config consistency
 
 **Key responsibilities:**
 - Load/save configuration from Git config (`gitflow.*` keys)
@@ -130,6 +128,18 @@ Layer 2 controls *how commands execute* (operational knobs). Not all options hav
 
 ---
 
+### `internal/hooks/` - Client-Side Hooks
+**Purpose**: Run client-side hooks around git-flow operations (e.g. start/finish)
+
+**Key files:**
+- `hooks.go` - Hook runner and context construction
+- `filters.go` - Match/filter which hooks apply to an operation
+- `types.go` - Hook type definitions
+
+**Used by**: Commands that fire hooks at defined points in their lifecycle
+
+---
+
 ### `internal/util/` - Validation Utilities
 **Purpose**: Input validation and sanitization
 
@@ -161,6 +171,8 @@ Layer 2 controls *how commands execute* (operational knobs). Not all options hav
 | `delete.go` | Remove branch |
 | `rename.go` | Rename branch |
 | `checkout.go` | Switch to branch |
+| `publish.go` | Push branch to remote and set up tracking |
+| `track.go` | Create a local branch tracking a remote topic branch |
 
 ### Static Commands
 | File | Purpose |
@@ -223,8 +235,8 @@ gitflow.branch.<name>.tag                 = "true|false"
 gitflow.branch.<name>.autoUpdate          = "true|false"
 
 gitflow.<type>.start.fetch                = "true|false"
-gitflow.<type>.finish.merge               = "merge|rebase|squash"
 gitflow.<type>.finish.keep                = "true|false"
+gitflow.<type>.finish.mergemessage        = "<message template>"
 ```
 
 ### Branch Types
