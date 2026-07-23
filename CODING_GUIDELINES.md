@@ -411,7 +411,7 @@ git flow release finish v1.0 --tag  # Forces tag creation despite config
 git config gitflow.branch.feature.upstreamStrategy merge
 
 # Layer 2: Command-specific override
-git config gitflow.feature.finish.merge rebase
+git config gitflow.feature.finish.rebase true
 
 # Layer 3: Command-line override (WINS)
 git flow feature finish my-feature --squash  # Forces squash merge

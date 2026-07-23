@@ -170,10 +170,10 @@ git config gitflow.branch.hotfix.downstreamStrategy merge
 ### Command-Level Overrides
 ```bash
 # Always use rebase for feature updates
-git config gitflow.feature.downstreamStrategy rebase
+git config gitflow.branch.feature.downstreamStrategy rebase
 
-# Always use merge for release updates  
-git config gitflow.release.downstreamStrategy merge
+# Always use merge for release updates
+git config gitflow.branch.release.downstreamStrategy merge
 ```
 
 ## STRATEGY RECOMMENDATIONS
