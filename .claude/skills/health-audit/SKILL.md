@@ -30,8 +30,8 @@ issues. It only reports. Findings are meant to feed the normal pipelines
 
 | Slug | Audits | Truth source |
 |------|--------|--------------|
-| `docs` | manpages vs actual flags/config/commands | `cmd/*.go`, config keys, `version/` |
-| `skills` | stale refs, overlap, doc-consistency of `.claude/skills/` | the skill files + root guideline docs |
+| `docs` | manpages vs actual flags/config/commands; root technical-doc drift | `cmd/*.go`, config keys, `version/`, `ARCHITECTURE.md`, `CODE_REFERENCE.md` |
+| `skills` | stale refs, overlap, and AI-guidance consistency (`.claude/skills/`, `.github/copilot-instructions.md`, `CLAUDE.md`) | the skill files + root guideline docs |
 | `duplication` | copy-paste logic, parallel implementations | source + `CODING_GUIDELINES.md` |
 | `dead-code` | unused exports/files, unreachable or orphan code | source |
 | `guidelines` | coding-guideline compliance, layering, config precedence | `CODING_GUIDELINES.md`, CLAUDE.md "Code Conventions" |
@@ -95,6 +95,14 @@ Then the per-area body:
    coverage (CLAUDE.md makes doc updates MANDATORY for command changes).
 5. `version/version.go` vs `cmd/version.go` — do the version constants match?
    Skip stylistic/wording nitpicks.
+6. ROOT TECHNICAL DOCS — `ARCHITECTURE.md` and `CODE_REFERENCE.md` describe the
+   codebase structure and drift silently as code moves. Cross-check them
+   against `cmd/` and `internal/`: commands or packages that exist but aren't
+   mentioned, files/paths referenced that have moved or been removed, and
+   structural claims (layering, package responsibilities) that no longer hold.
+   Use `git log` recency as a hint — a doc far older than the code it describes
+   is a drift candidate — but confirm each mismatch against the actual tree.
+   Skip prose/wording nitpicks; report only factual staleness.
 
 **`skills`** — Check `.claude/skills/` (and any `.claude/commands/`):
 1. STALE REFERENCES: grep each skill for referenced files, paths, skill names,
@@ -109,6 +117,15 @@ Then the per-area body:
 4. Skills referenced in `DEV_WORKFLOW.md`/`CLAUDE.md` that don't exist, and
    skills that exist but are referenced nowhere (orphans / undocumented
    relative to peers).
+5. AI-GUIDANCE CONSISTENCY: `.github/copilot-instructions.md` and `CLAUDE.md`
+   are curated summaries of the same rules the guideline docs encode. Check
+   they haven't drifted from the source of truth: commit format vs
+   `COMMIT_GUIDELINES.md` (incl. the `Co-Authored-By` attribution rule), the
+   three-layer config precedence and `internal/git` wrapper rule vs
+   `CODING_GUIDELINES.md`/`ARCHITECTURE.md`, and mandatory test/doc/version-sync
+   requirements. Flag contradictions and rules that changed in a guideline doc
+   but not in these summaries. A high-level omission (a summary intentionally
+   not listing every detail) is not a finding — only contradictions are.
 
 **`duplication`** — Read `CODING_GUIDELINES.md` first, then audit `cmd/` and
 `internal/` for logic that has diverged or is about to:
