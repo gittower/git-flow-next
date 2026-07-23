@@ -35,10 +35,10 @@ The operation maintains a persistent state file that allows it to resume after c
 ### Operation Control
 
 **--continue**, **-c**
-: Continue the finish operation after resolving merge conflicts
+: Continue the finish operation after resolving merge conflicts. This acts only on an in-progress finish. If an **update** or **integrate** operation is in progress instead, finish refuses non-destructively, names the owning operation, prints its resume/abort commands, and exits 3 without touching it.
 
 **--abort**, **-a**
-: Abort the finish operation and return to the original state. When no finish operation is in progress, **--abort** is a no-op and exits successfully.
+: Abort the finish operation and return to the original state. When no finish operation is in progress, **--abort** is a no-op and exits successfully. Like **--continue**, it acts only on a finish operation: a foreign in-progress update or integrate is refused (exit 3) rather than aborted.
 
 **--force**, **-f**
 : Force finish: ignore fetch failures, skip the remote sync check, and allow finishing non-standard branches. The fetch is still attempted, but any failure is ignored rather than fatal, and the safety check that prevents finishing when the local branch is ahead of, behind, or diverged from its remote tracking branch is bypassed.

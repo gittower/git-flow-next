@@ -130,11 +130,24 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 		return &errors.InvalidBranchTypeError{BranchType: branchType}
 	}
 
+	// Foreign-operation guard (#143): refuse a foreign in-progress update/integrate
+	// (or an unknown-Action state) before any dispatch, so finish never resumes or
+	// aborts an operation it does not own.
+	if err := refuseIfForeignOperation(cfg, "finish"); err != nil {
+		return err
+	}
+
 	// Check if there's a merge in progress
 	if mergestate.IsMergeInProgress() {
 		state, err := mergestate.LoadMergeState()
 		if err != nil {
 			return &errors.GitError{Operation: "load merge state", Err: err}
+		}
+
+		// Belt-and-suspenders: the guard above already refused any foreign state,
+		// so a state reaching here is a finish state.
+		if state.Action != "finish" {
+			return &errors.MergeInProgressError{Action: state.Action, BranchName: state.FullBranchName, BranchType: topicTypeOrEmpty(cfg, state.BranchType)}
 		}
 
 		// Get the branch config for the state's branch type
@@ -153,7 +166,7 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 			return handleContinue(cfg, state, stateBranchConfig, resolvedOptions, mergeOptions)
 		}
 
-		return &errors.MergeInProgressError{BranchName: state.FullBranchName}
+		return &errors.MergeInProgressError{Action: "finish", BranchName: state.FullBranchName, BranchType: state.BranchType}
 	}
 
 	// Abort is forgiving: if there is no merge in progress (e.g. stale state
