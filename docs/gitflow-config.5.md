@@ -92,7 +92,7 @@ Command-line flags always take the highest precedence and override both configur
 : Marks repository as initialized with git-flow.
 : *Default*: false
 
-**gitflow.origin**, **gitflow.remote**
+**gitflow.origin**
 : Name of the remote repository to use for operations.
 : *Default*: "origin"
 
@@ -428,6 +428,23 @@ git config gitflow.hotfix.publish.push-option "%topic=hotfix"
 
 The finish command supports extensive merge strategy configuration through command-specific overrides.
 
+### Branch Retention Options
+
+**gitflow.*type*.finish.keeplocal**
+: Keep the local topic branch after finishing instead of deleting it. Corresponds to `--keeplocal`/`--no-keeplocal`.
+: *Type*: boolean
+: *Default*: false
+
+**gitflow.*type*.finish.keepremote**
+: Keep the remote tracking branch after finishing instead of deleting it. Corresponds to `--keepremote`/`--no-keepremote`.
+: *Type*: boolean
+: *Default*: false
+
+**gitflow.*type*.finish.force-delete**
+: Force-delete the topic branch on finish even if it is not fully merged. Corresponds to `--force-delete`/`--no-force-delete`.
+: *Type*: boolean
+: *Default*: false
+
 ### Merge Strategy Options
 
 **gitflow.*type*.finish.rebase**
@@ -491,7 +508,7 @@ The finish command supports extensive merge strategy configuration through comma
 ### Remote Push Options
 
 **gitflow.*type*.finish.push**
-: Push the results of a completed finish to the configured remote (`gitflow.remote`, default `origin`) as a final stage. When enabled, the target (parent) branch and each auto-updated child base branch are pushed (parent first), and — unless overridden by the `pushtag` key — the created tag is pushed too. The finished topic branch itself is never pushed. If no remote is configured, the push stage is skipped with a note and finish still succeeds. A rejected (non-fast-forward) push causes finish to exit with an error, leaving the already-completed local finish untouched. Corresponds to `--push`/`--no-push`.
+: Push the results of a completed finish to the configured remote (`gitflow.origin`, default `origin`) as a final stage. When enabled, the target (parent) branch and each auto-updated child base branch are pushed (parent first), and — unless overridden by the `pushtag` key — the created tag is pushed too. The finished topic branch itself is never pushed. If no remote is configured, the push stage is skipped with a note and finish still succeeds. A rejected (non-fast-forward) push causes finish to exit with an error, leaving the already-completed local finish untouched. Corresponds to `--push`/`--no-push`.
 : *Type*: boolean
 : *Default*: false
 
