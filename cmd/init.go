@@ -16,6 +16,7 @@ import (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize git-flow in a repository",
+	Args:  cobra.NoArgs,
 	Long: `Initialize git-flow in a repository.
 This will set up the necessary configuration for git-flow to work.
 

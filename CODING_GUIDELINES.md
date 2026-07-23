@@ -459,6 +459,14 @@ if err := git.BranchExists(branchName); err != nil {
 }
 ```
 
+### Cobra Positional Argument Validation
+
+Every leaf command must declare an explicit Cobra `Args` validator. Use
+`cobra.NoArgs` when the command takes no positional arguments, or a bounded
+validator such as `cobra.ExactArgs`, `cobra.MaximumNArgs`, or
+`cobra.RangeArgs` that matches exactly what the command consumes. Parent and
+dispatch commands that only delegate to subcommands are exempt.
+
 ### Options Struct Pattern
 
 For commands with multiple flags, use structured options:

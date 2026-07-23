@@ -231,6 +231,7 @@ Examples:
 var configListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List current git-flow configuration",
+	Args:  cobra.NoArgs,
 	Long: `List the current git-flow configuration showing all base branches and topic branch types.
 
 Shows the branch hierarchy, merge strategies, and other settings.

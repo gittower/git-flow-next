@@ -15,6 +15,7 @@ import (
 var overviewCmd = &cobra.Command{
 	Use:   "overview",
 	Short: "Show an overview of the git-flow configuration and branches",
+	Args:  cobra.NoArgs,
 	Long: `Show an overview of the git-flow configuration and branches.
 This command displays the current git-flow configuration and lists all active topic branches.`,
 	Run: func(cmd *cobra.Command, args []string) {

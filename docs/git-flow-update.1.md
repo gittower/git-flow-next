@@ -8,7 +8,9 @@ git-flow-update - Update topic branches with parent changes
 
 **git-flow** *topic* **update** [*name*] [*options*]
 
-**git-flow update** [*name*] [*options*]
+**git-flow update** [*base-branch*] [*options*]
+
+**git-flow rebase** [*base-branch*] [**--continue**|**--abort**]
 
 ## DESCRIPTION
 
