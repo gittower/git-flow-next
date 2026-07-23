@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `finish` now aborts when the topic branch is ahead of its remote (was a silent note that proceeded and merged)
 - `finish` renders a diverged-specific message when the topic branch has diverged (previously reused the "behind" wording)
 - `start` now skips the fetch silently when no remote is configured, and shares the unified fetch resolution (default → config → flag) with `finish`
+- `start` now fetches by default before creating a branch. Users who relied on `start` never touching the network will now see a fetch unless they set `gitflow.<type>.start.fetch false` or pass `--no-fetch`.
 
 ## [1.1.0] - 2026-04-06
 

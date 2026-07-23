@@ -14,6 +14,8 @@ Create and checkout a new topic branch of the specified type. This command works
 
 The new branch is created from the configured starting point for the topic branch type, or from the specified base commit/branch if provided.
 
+By default, start fetches from the remote before creating the branch so it starts from up-to-date remote state. Opt out with **--no-fetch** or by setting `gitflow.<type>.start.fetch false`. If no remote is configured, the fetch is skipped silently, and a fetch failure is a non-fatal warning — the branch is still created (start has no sync gate).
+
 ## ARGUMENTS
 
 *topic*
@@ -28,10 +30,10 @@ The new branch is created from the configured starting point for the topic branc
 ## OPTIONS
 
 **--fetch**
-: Fetch from remote before creating branch to ensure latest state. If no remote is configured, the fetch is skipped silently. A fetch failure is a non-fatal warning — the branch is still created (start has no sync gate). Overrides git config setting `gitflow.<type>.start.fetch`.
+: Fetch from remote before creating branch to ensure latest state (this is the default). If no remote is configured, the fetch is skipped silently. A fetch failure is a non-fatal warning — the branch is still created (start has no sync gate). Overrides git config setting `gitflow.<type>.start.fetch`.
 
 **--no-fetch**
-: Don't fetch from remote before creating branch (default behavior). Overrides git config setting `gitflow.<type>.start.fetch`.
+: Don't fetch from remote before creating branch. Use this to opt out of the default fetch. Overrides git config setting `gitflow.<type>.start.fetch`.
 
 ## BRANCH NAMING
 
@@ -101,11 +103,11 @@ Start hotfix from specific tag:
 git flow hotfix start 1.1.1 v1.1.0
 ```
 
-### With Remote Synchronization
+### Without Remote Synchronization
 
-Fetch latest changes before starting:
+Start is fetched by default; skip the fetch to work offline or avoid touching the network:
 ```bash
-git flow feature start new-api --fetch
+git flow feature start new-api --no-fetch
 ```
 
 ## CONFIGURATION
@@ -128,11 +130,11 @@ git config gitflow.branch.hotfix.prefix hotfix/
 
 ### Command Overrides
 ```bash
-# Always fetch before starting features
-git config gitflow.feature.start.fetch true
+# Never fetch before starting features (opt out of the default)
+git config gitflow.feature.start.fetch false
 
-# Always fetch before starting releases
-git config gitflow.release.start.fetch true
+# Never fetch before starting releases (opt out of the default)
+git config gitflow.release.start.fetch false
 ```
 
 ## VALIDATION
@@ -155,15 +157,15 @@ The start command performs several validations:
 
 ### Remote Workflow
 ```bash
-# Start and immediately publish
-git flow feature start new-api --fetch
+# Start (fetches latest remote state by default) and immediately publish
+git flow feature start new-api
 git push -u origin feature/new-api
 ```
 
 ### Team Workflow
 ```bash
-# Ensure latest state before starting
-git flow feature start team-feature --fetch
+# Start fetches by default, so you begin from the latest state
+git flow feature start team-feature
 ```
 
 ## EXIT STATUS
@@ -193,7 +195,7 @@ git flow feature start team-feature --fetch
 ## NOTES
 
 - Branch names should not include the prefix (it's added automatically)
-- Use **--fetch** in team environments to ensure you start from latest changes
+- Start fetches by default so you begin from the latest changes; use **--no-fetch** (or `gitflow.<type>.start.fetch false`) to opt out
 - Custom topic branch types work exactly like built-in types
 - The base argument overrides the configured starting point for this specific branch
 - Branch creation fails if a branch with the same full name already exists
