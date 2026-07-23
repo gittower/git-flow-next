@@ -121,16 +121,18 @@ func TestFinishFeatureBranchBehindRemote(t *testing.T) {
 	}
 }
 
-// TestFinishFeatureBranchAheadOfRemote tests that finish aborts when local is ahead of remote.
-// This is Scenario 9: being ahead now aborts (previously a silent note that proceeded and merged).
+// TestFinishFeatureBranchAheadOfRemote tests that finish tolerates being ahead of the remote.
+// Being ahead means the local branch has commits the remote lacks; finish merges those into the
+// parent and then deletes the topic branch, so requiring a push first would preserve nothing. The
+// preflight downgrades "ahead" to a note (behind/diverged remain fatal — the remote would lose work).
 // Steps:
 // 1. Sets up a test repository with remote and initializes git-flow
 // 2. Creates a feature branch and pushes it with tracking
 // 3. Adds a local commit without pushing (ahead by 1)
 // 4. Records develop's SHA before finishing
-// 5. Attempts to finish the feature branch
-// 6. Verifies the operation fails with an "ahead" message including the commit count
-// 7. Verifies the merge did not happen (develop unchanged, branch still exists)
+// 5. Finishes the feature branch
+// 6. Verifies the operation succeeds with an "ahead" note including the commit count
+// 7. Verifies the merge happened (develop advanced, branch deleted, local commit merged)
 func TestFinishFeatureBranchAheadOfRemote(t *testing.T) {
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -176,34 +178,42 @@ func TestFinishFeatureBranchAheadOfRemote(t *testing.T) {
 		t.Fatalf("Failed to get develop SHA: %v", err)
 	}
 
-	// Attempt to finish the feature branch
+	// Finish the feature branch
 	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "test-ahead")
 
-	// Verify failure
-	if err == nil {
-		t.Errorf("Expected finish to fail when ahead of remote. Output: %s", output)
+	// Verify success: being ahead is tolerated, not fatal
+	if err != nil {
+		t.Fatalf("Expected finish to succeed when ahead of remote. Error: %v\nOutput: %s", err, output)
 	}
 
-	// Verify error message mentions being ahead with the commit count
+	// Verify a note mentions being ahead with the commit count
 	if !strings.Contains(output, "ahead") {
-		t.Errorf("Expected error message to mention 'ahead'. Output: %s", output)
+		t.Errorf("Expected a note to mention 'ahead'. Output: %s", output)
 	}
 	if !strings.Contains(output, "1 commit") {
-		t.Errorf("Expected error message to include the commit count. Output: %s", output)
+		t.Errorf("Expected the note to include the commit count. Output: %s", output)
 	}
 
-	// Verify the merge did not happen: develop is unchanged
+	// Verify the merge happened: develop advanced
 	developAfter, err := testutil.RunGit(t, dir, "rev-parse", "develop")
 	if err != nil {
 		t.Fatalf("Failed to get develop SHA after: %v", err)
 	}
-	if developBefore != developAfter {
-		t.Errorf("Expected develop to be unchanged after aborted finish. Before: %s After: %s", developBefore, developAfter)
+	if developBefore == developAfter {
+		t.Errorf("Expected develop to advance after finish. SHA unchanged: %s", developAfter)
 	}
 
-	// Verify branch still exists (finish was aborted)
-	if !testutil.BranchExists(t, dir, "feature/test-ahead") {
-		t.Error("Expected feature branch to still exist after aborted finish")
+	// Verify branch is deleted
+	if testutil.BranchExists(t, dir, "feature/test-ahead") {
+		t.Error("Expected feature branch to be deleted after finish")
+	}
+
+	// Verify the unpushed local commit was merged into develop
+	if _, err = testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	if !testutil.FileExists(t, dir, "local.txt") {
+		t.Error("Expected local.txt (the unpushed commit) to be merged into develop")
 	}
 }
 
