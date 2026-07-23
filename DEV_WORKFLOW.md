@@ -572,6 +572,7 @@ Skills come in two tiers:
 | `/triage` | Classify + analyze an external issue/discussion, propose verdict | Reply & labels |
 | `/create-spec` | Draft, Codex-gate, and publish a spec issue | Acceptance, posting |
 | `/resolve-issue` | Resolve a spec issue end-to-end (plan → gate → implement → review) | Publish (push + PR) |
+| `/ship-issue` | Fully solve a small issue: resolve → publish → 2 Copilot rounds → merge | Autonomous; escalates only on uncertainty |
 | `/quick-fix` | Small fix/maintenance locally, no PR (task note → fix → review gates) | Merge into main |
 | `/handle-pr` | Strictly review an incoming PR and post a GitHub review | Posting |
 | `/address-review` | Evaluate review feedback on our PR, implement valid items | Push, PR reply & thread resolve |
@@ -616,6 +617,9 @@ The shared Codex gate procedure used by several skills is defined once in
 
 # Build it
 /resolve-issue 43         # analyze → plan → gate → implement → review → PR
+
+# Small issue you trust an AI to finish — resolve through merge, hands-off
+/ship-issue 43            # resolve → publish → 2 Copilot rounds → merge (asks if unsure)
 
 # Small fix or maintenance — handled locally, no PR
 /quick-fix "fix typo in finish manpage"   # task note → fix → review gates → merge
