@@ -242,7 +242,7 @@ func TestFeatureFinishWithRebase(t *testing.T) {
     }
     
     // Modify merge strategy for this test
-    _, err = testutil.RunGit(t, dir, "config", "gitflow.feature.finish.merge", "rebase")
+    _, err = testutil.RunGit(t, dir, "config", "gitflow.feature.finish.rebase", "true")
     if err != nil {
         t.Fatalf("Failed to configure rebase strategy: %v", err)
     }
