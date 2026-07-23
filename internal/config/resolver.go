@@ -454,7 +454,7 @@ func resolveFinishNoFF(cfg *Config, branchType string, command string, mergeOpts
 
 // resolveShouldFetch resolves whether to fetch from the remote before a command runs, using the
 // standard precedence: Layer-1 default (per command) -> gitflow.<type>.<cmd>.fetch config ->
-// CLI flag. Shared by finish (default true) and start (default false).
+// CLI flag. Shared by finish (default true) and start (default true).
 func resolveShouldFetch(cfg *Config, branchType, cmd string, defaultFetch bool, fetch *bool) bool {
 	// Layer 1: Command default
 	shouldFetch := defaultFetch
@@ -480,9 +480,9 @@ func resolveFinishShouldFetch(cfg *Config, branchType string, fetch *bool) bool 
 }
 
 // ResolveStartShouldFetch resolves whether to fetch from remote before starting a branch.
-// The default is false (start does not fetch unless explicitly enabled).
+// The default is true (start fetches unless opted out via config false or --no-fetch).
 func ResolveStartShouldFetch(cfg *Config, branchType string, fetch *bool) bool {
-	return resolveShouldFetch(cfg, branchType, "start", false, fetch)
+	return resolveShouldFetch(cfg, branchType, "start", true, fetch)
 }
 
 // resolveFinishNoVerify resolves whether to skip pre-commit and commit-msg hooks
