@@ -108,6 +108,30 @@ func TestAmbiguousBranchDetection(t *testing.T) {
 	assert.Contains(t, output, "operation cancelled")
 }
 
+func TestShorthandUpdateStopsOnAmbiguousBranch(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	testutil.RunGitFlow(t, dir, "init", "--defaults", "--feature", "feat/", "--hotfix", "feat/")
+
+	testutil.RunGit(t, dir, "checkout", "-b", "feat/ambiguous")
+	output, err := testutil.RunGitFlowWithInput(t, dir, "n\n", "update")
+	assert.Error(t, err)
+	assert.Contains(t, output, "Ambiguous branch")
+	assert.Contains(t, output, "operation cancelled")
+}
+
+func TestShorthandRebaseStopsOnAmbiguousBranch(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	testutil.RunGitFlow(t, dir, "init", "--defaults", "--feature", "feat/", "--hotfix", "feat/")
+
+	testutil.RunGit(t, dir, "checkout", "-b", "feat/ambiguous")
+	output, err := testutil.RunGitFlowWithInput(t, dir, "n\n", "rebase")
+	assert.Error(t, err)
+	assert.Contains(t, output, "Ambiguous branch")
+	assert.Contains(t, output, "operation cancelled")
+}
+
 // Command-Specific Tests
 func TestDeleteAlias(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
