@@ -42,7 +42,8 @@ type preflightOptions struct {
 
 // runFetchSyncPreflight guards a topic operation against an out-of-date topic branch. It fetches
 // the topic (and, best-effort, the parent) and then verifies the topic is in sync with its remote.
-// Callers tune the behavior with opts; the zero value is finish's strict pre-merge guard.
+// Callers tune the behavior with opts; the zero value is the strictest guard (finish and delete
+// both relax it, at least by tolerating ahead).
 //
 // Behavior:
 //   - shouldFetch=false or no remote configured: fetch is skipped (no "Fetching" line). The topic
@@ -52,7 +53,8 @@ type preflightOptions struct {
 //   - Topic fetch fails with a transport/auth error: fatal (FetchFailedError) unless force, or a
 //     non-fatal note when opts.fetchFailureNonFatal is set.
 //   - Topic behind/diverged from its remote: fatal (BranchNotInSyncError) unless force. Ahead is
-//     also fatal unless force, unless opts.tolerateAhead downgrades it to a note.
+//     fatal unless force too, unless opts.tolerateAhead downgrades it to a note (finish and delete
+//     both set it).
 //
 // The parent is fetched best-effort. It is not sync-checked (see #99), but when opts.ffParent is
 // set and the parent is the current branch, it is fast-forwarded from its remote (#88).
@@ -125,8 +127,8 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 		}
 
 		// Decide whether this status aborts. Behind/diverged always abort (remote work would be
-		// lost). Ahead aborts too, unless the caller tolerates it (delete), in which case it is a
-		// note.
+		// lost). Ahead aborts only when the caller does not tolerate it; finish and delete both
+		// tolerate it and downgrade it to a note.
 		abort := false
 		switch status {
 		case git.SyncStatusBehind, git.SyncStatusDiverged:

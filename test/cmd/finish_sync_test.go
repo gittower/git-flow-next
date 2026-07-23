@@ -186,12 +186,11 @@ func TestFinishFeatureBranchAheadOfRemote(t *testing.T) {
 		t.Fatalf("Expected finish to succeed when ahead of remote. Error: %v\nOutput: %s", err, output)
 	}
 
-	// Verify a note mentions being ahead with the commit count
-	if !strings.Contains(output, "ahead") {
-		t.Errorf("Expected a note to mention 'ahead'. Output: %s", output)
-	}
-	if !strings.Contains(output, "1 commit") {
-		t.Errorf("Expected the note to include the commit count. Output: %s", output)
+	// Verify the specific "ahead" note (assert the diagnostic, not just the substring "ahead",
+	// which the branch name itself contains)
+	expectedNote := "Note: Local branch 'feature/test-ahead' is 1 commit(s) ahead of remote"
+	if !strings.Contains(output, expectedNote) {
+		t.Errorf("Expected the ahead note %q. Output: %s", expectedNote, output)
 	}
 
 	// Verify the merge happened: develop advanced
@@ -203,9 +202,20 @@ func TestFinishFeatureBranchAheadOfRemote(t *testing.T) {
 		t.Errorf("Expected develop to advance after finish. SHA unchanged: %s", developAfter)
 	}
 
-	// Verify branch is deleted
+	// Verify the local branch is deleted
 	if testutil.BranchExists(t, dir, "feature/test-ahead") {
 		t.Error("Expected feature branch to be deleted after finish")
+	}
+
+	// Verify the remote branch is deleted too. Query the bare remote directly with ls-remote —
+	// this is the crux of tolerating ahead: the push we did not require would have been undone by
+	// this deletion anyway. (RemoteBranchExists only checks the local tracking ref, not the remote.)
+	lsRemote, err := testutil.RunGit(t, dir, "ls-remote", "--heads", "origin", "feature/test-ahead")
+	if err != nil {
+		t.Fatalf("Failed to query remote: %v", err)
+	}
+	if strings.TrimSpace(lsRemote) != "" {
+		t.Errorf("Expected remote branch feature/test-ahead to be deleted. ls-remote: %q", lsRemote)
 	}
 
 	// Verify the unpushed local commit was merged into develop

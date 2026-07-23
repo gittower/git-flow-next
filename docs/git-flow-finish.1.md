@@ -167,13 +167,13 @@ CLI push flags are not persisted across `--continue`. Options are re-resolved on
 
 ## REMOTE SYNC CHECK
 
-Before performing the merge operation, the finish command checks if the local topic branch is in sync with its remote tracking branch. This safety check prevents accidental data loss when the remote has commits that are not present locally (behind or diverged). Being ahead of the remote is tolerated with a note, since finish merges the local commits into the parent and deletes the topic branch. Only the topic branch is sync-checked; the parent branch is fetched best-effort but not compared.
+Before performing the merge operation, the finish command checks if the local topic branch is in sync with its remote tracking branch. This safety check prevents accidental data loss when the remote has commits that are not present locally (behind or diverged). Being ahead of the remote is tolerated with a note, since finish merges the local commits into the parent and (by default) deletes the topic branch. Only the topic branch is sync-checked; the parent branch is fetched best-effort but not compared.
 
 ### Sync Status Behavior
 
 **Equal**: Local and remote are at the same commit. Finish proceeds normally.
 
-**Ahead**: Local has commits not pushed to remote. Finish **proceeds** and prints a note. The unpushed commits are merged into the parent branch and the topic branch is then deleted, so requiring a push first would preserve nothing.
+**Ahead**: Local has commits not pushed to remote. Finish **proceeds** and prints a note. The unpushed commits are merged into the parent branch and the topic branch is then deleted (by default), so requiring a push first would preserve nothing.
 
 **Behind**: Remote has commits not present locally. Finish **aborts with an error** to prevent discarding those changes.
 
