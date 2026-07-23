@@ -227,7 +227,7 @@ git config gitflow.prefix.release "rel/"
 ### Key Differences from git-flow-next
 1. **Configuration Format**: AVH uses `gitflow.prefix.*` vs git-flow-next's `gitflow.branch.*.prefix`
 2. **Branch Names**: AVH defaults to `master` vs git-flow-next's `main`
-3. **Merge Strategies**: AVH has `rebase`, `squash` flags vs git-flow-next's strategy configuration
+3. **Merge Strategies**: git-flow-next reads the same `finish.rebase`/`finish.squash` flags AVH uses, and adds branch-level `upstreamStrategy`/`downstreamStrategy` configuration on top
 4. **Tag Management**: AVH has `notag` flags vs git-flow-next's `tag` boolean configuration
 
 ### Migration Path
@@ -240,9 +240,9 @@ When migrating from git-flow-avh to git-flow-next, the following mappings apply:
 | `gitflow.prefix.release` | `gitflow.branch.release.prefix` |
 | `gitflow.prefix.hotfix` | `gitflow.branch.hotfix.prefix` |
 | `gitflow.prefix.versiontag` | `gitflow.branch.*.tagprefix` |
-| `gitflow.feature.finish.rebase` | `gitflow.feature.finish.merge=rebase` |
-| `gitflow.release.finish.squash` | `gitflow.release.finish.merge=squash` |
-| `gitflow.release.finish.notag` | `gitflow.branch.release.tag=false` |
+| `gitflow.feature.finish.rebase` | `gitflow.feature.finish.rebase` (unchanged — read directly) |
+| `gitflow.release.finish.squash` | `gitflow.release.finish.squash` (unchanged — read directly) |
+| `gitflow.release.finish.notag` | `gitflow.release.finish.notag` (unchanged — read directly; or `gitflow.branch.release.tag=false`) |
 
 ---
 
