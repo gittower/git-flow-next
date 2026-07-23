@@ -300,8 +300,10 @@ const (
 )
 
 // BranchNotInSyncError indicates the local topic branch is not in sync with its remote tracking
-// branch. Finishing while ahead, behind, or diverged risks losing work, so it aborts unless
-// --force is given. The message is tailored to the specific Status.
+// branch. Behind and diverged risk losing remote work, so they abort unless --force is given; the
+// current callers (finish, delete) tolerate ahead, so in practice only behind/diverged reach this
+// error, but the ahead message is retained for any caller that does not set tolerateAhead. The
+// message is tailored to the specific Status and Operation.
 type BranchNotInSyncError struct {
 	BranchName   string
 	ShortName    string // topic name without the branch-type prefix, used to build the suggested command

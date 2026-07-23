@@ -474,7 +474,7 @@ The finish command supports extensive merge strategy configuration through comma
 
 **gitflow.*type*.finish.fetch**
 : Fetch from remote before finishing a topic branch. When enabled, fetches the base branch (best-effort) and the topic branch from the remote to ensure the latest remote state is known before merging. A failure fetching the topic branch against a reachable-but-failing remote is fatal; a remote with no ref for the topic (never pushed, or deleted after a remote merge) is benign and its sync check is skipped.
-: After fetching, if the local topic branch is ahead of, behind, or diverged from its remote tracking branch, the finish operation aborts with an error to prevent accidental data loss or merging unpublished work. Use `--force` to bypass this safety check. `--no-fetch` skips only the fetch; the sync check still runs against existing tracking data.
+: After fetching, if the local topic branch is behind or diverged from its remote tracking branch, the finish operation aborts with an error to prevent accidental data loss. Being ahead of the remote is tolerated with a note, since finish merges the local commits into the parent and (by default) deletes the topic branch. Use `--force` to bypass this safety check. `--no-fetch` skips only the fetch; the sync check still runs against existing tracking data.
 : *Type*: boolean
 : *Default*: true
 

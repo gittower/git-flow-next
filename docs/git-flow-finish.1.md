@@ -41,7 +41,7 @@ The operation maintains a persistent state file that allows it to resume after c
 : Abort the finish operation and return to the original state. When no finish operation is in progress, **--abort** is a no-op and exits successfully. Like **--continue**, it acts only on a finish operation: a foreign in-progress update or integrate is refused (exit 3) rather than aborted.
 
 **--force**, **-f**
-: Force finish: ignore fetch failures, skip the remote sync check, and allow finishing non-standard branches. The fetch is still attempted, but any failure is ignored rather than fatal, and the safety check that prevents finishing when the local branch is ahead of, behind, or diverged from its remote tracking branch is bypassed.
+: Force finish: ignore fetch failures, skip the remote sync check, and allow finishing non-standard branches. The fetch is still attempted, but any failure is ignored rather than fatal, and the safety check that prevents finishing when the local branch is behind or diverged from its remote tracking branch is bypassed.
 
 ### Tag Creation
 
@@ -167,13 +167,13 @@ CLI push flags are not persisted across `--continue`. Options are re-resolved on
 
 ## REMOTE SYNC CHECK
 
-Before performing the merge operation, the finish command checks if the local topic branch is in sync with its remote tracking branch. This safety check prevents accidental data loss when the remote has commits that are not present locally, and prevents merging work that has not been published. Only the topic branch is sync-checked; the parent branch is fetched best-effort but not compared.
+Before performing the merge operation, the finish command checks if the local topic branch is in sync with its remote tracking branch. This safety check prevents accidental data loss when the remote has commits that are not present locally (behind or diverged). Being ahead of the remote is tolerated with a note, since finish merges the local commits into the parent and (by default) deletes the topic branch. Only the topic branch is sync-checked; the parent branch is fetched best-effort but not compared.
 
 ### Sync Status Behavior
 
 **Equal**: Local and remote are at the same commit. Finish proceeds normally.
 
-**Ahead**: Local has commits not pushed to remote. Finish **aborts with an error** so the unpublished commits are not merged without being pushed first.
+**Ahead**: Local has commits not pushed to remote. Finish **proceeds** and prints a note. The unpushed commits are merged into the parent branch and the topic branch is then deleted (by default), so requiring a push first would preserve nothing.
 
 **Behind**: Remote has commits not present locally. Finish **aborts with an error** to prevent discarding those changes.
 

@@ -9,9 +9,10 @@ import (
 	"github.com/gittower/git-flow-next/internal/git"
 )
 
-// preflightOptions tunes runFetchSyncPreflight for callers whose needs differ from finish's strict
-// pre-merge guard. The zero value reproduces finish's original behavior, so finish passes an empty
-// struct and only relaxed/extra behavior has to be opted into (currently by delete, see #88).
+// preflightOptions tunes runFetchSyncPreflight for a caller's pre-merge guard. The zero value is the
+// strictest guard (fatal on any out-of-sync topic and any fetch failure); each field opts into
+// relaxed or extra behavior. finish tolerates ahead; delete tolerates ahead and relaxes fetch
+// failures and fast-forwards the parent (see #88).
 type preflightOptions struct {
 	// ffParent fast-forwards the local parent to its freshly fetched remote-tracking branch. This
 	// is the #88 hook: it lets a branch that was merged remotely (e.g. via a PR) be recognized as
@@ -21,9 +22,10 @@ type preflightOptions struct {
 	ffParent bool
 
 	// tolerateAhead downgrades a topic that is *ahead* of its remote (local-only commits) from a
-	// fatal out-of-sync error to a note. delete only cares that the topic is not *behind*/diverged
-	// (losing remote work); a non-force `git branch -d` still guards genuinely unmerged commits.
-	// finish treats ahead as out-of-sync.
+	// fatal out-of-sync error to a note. Both finish and delete set it: neither loses the local
+	// commits by proceeding — finish merges them into the parent before deleting the topic, and a
+	// non-force `git branch -d` still guards genuinely unmerged commits. Only *behind*/diverged
+	// (losing remote work) stays fatal.
 	tolerateAhead bool
 
 	// fetchFailureNonFatal downgrades a transport/auth fetch failure from fatal to a note. delete's
@@ -40,7 +42,8 @@ type preflightOptions struct {
 
 // runFetchSyncPreflight guards a topic operation against an out-of-date topic branch. It fetches
 // the topic (and, best-effort, the parent) and then verifies the topic is in sync with its remote.
-// Callers tune the behavior with opts; the zero value is finish's strict pre-merge guard.
+// Callers tune the behavior with opts; the zero value is the strictest guard (finish and delete
+// both relax it, at least by tolerating ahead).
 //
 // Behavior:
 //   - shouldFetch=false or no remote configured: fetch is skipped (no "Fetching" line). The topic
@@ -50,7 +53,8 @@ type preflightOptions struct {
 //   - Topic fetch fails with a transport/auth error: fatal (FetchFailedError) unless force, or a
 //     non-fatal note when opts.fetchFailureNonFatal is set.
 //   - Topic behind/diverged from its remote: fatal (BranchNotInSyncError) unless force. Ahead is
-//     also fatal unless force, unless opts.tolerateAhead downgrades it to a note.
+//     fatal unless force too, unless opts.tolerateAhead downgrades it to a note (finish and delete
+//     both set it).
 //
 // The parent is fetched best-effort. It is not sync-checked (see #99), but when opts.ffParent is
 // set and the parent is the current branch, it is fast-forwarded from its remote (#88).
@@ -123,8 +127,8 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 		}
 
 		// Decide whether this status aborts. Behind/diverged always abort (remote work would be
-		// lost). Ahead aborts too, unless the caller tolerates it (delete), in which case it is a
-		// note.
+		// lost). Ahead aborts only when the caller does not tolerate it; finish and delete both
+		// tolerate it and downgrade it to a note.
 		abort := false
 		switch status {
 		case git.SyncStatusBehind, git.SyncStatusDiverged:
