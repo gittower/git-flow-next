@@ -59,8 +59,9 @@ func RegisterShorthandCommands() {
 
 	// Update
 	updateCmd := &cobra.Command{
-		Use:   "update",
+		Use:   "update [base-branch]",
 		Short: "Update the current branch from its parent",
+		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			continueOp, _ := cmd.Flags().GetBool("continue")
 			abortOp, _ := cmd.Flags().GetBool("abort")
@@ -73,8 +74,9 @@ func RegisterShorthandCommands() {
 
 	// Rebase (shorthand for update --rebase)
 	rebaseCmd := &cobra.Command{
-		Use:   "rebase",
+		Use:   "rebase [base-branch]",
 		Short: "Rebase the current branch onto its parent",
+		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			// Always use rebase strategy for this shorthand
 			continueOp, _ := cmd.Flags().GetBool("continue")
@@ -106,6 +108,7 @@ func RegisterShorthandCommands() {
 	publishCmd := &cobra.Command{
 		Use:   "publish",
 		Short: "Publish the current topic branch to remote",
+		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			branchType, name, err := detectBranchTypeAndName()
 			if err != nil {
@@ -125,6 +128,7 @@ func RegisterShorthandCommands() {
 	finishCmd := &cobra.Command{
 		Use:   "finish",
 		Short: "Finish the current topic branch",
+		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			branchType, name, err := detectBranchTypeAndName()
 			if err != nil {
