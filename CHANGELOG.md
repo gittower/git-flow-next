@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `finish` now aborts when the parent (merge-target) branch is behind or diverged from its remote, preventing a merge onto a stale base; the parent tolerates being ahead (unlike the topic check), and `--force` skips it
 - `finish` now treats a fetch failure against a reachable-but-failing remote as fatal (was a silent note); the error names the cause and suggests `--no-fetch` / `--force`
 - `finish` now aborts when the topic branch is ahead of its remote (was a silent note that proceeded and merged)
 - `finish` renders a diverged-specific message when the topic branch has diverged (previously reused the "behind" wording)
