@@ -67,7 +67,7 @@ type preflightOptions struct {
 // sync-checked with a laxer rule than the topic — behind/diverged abort, ahead and equal proceed
 // (#99). When opts.ffParent is set instead (delete) and the parent is the current branch, it is
 // fast-forwarded from its remote (#88). The two are mutually exclusive.
-func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, shortName, parentBranch string, shouldFetch, force bool, opts preflightOptions) error {
+func runFetchSyncPreflight(repo *git.Repo, cfg *config.Config, branchType, remote, topicBranch, shortName, parentBranch string, shouldFetch, force bool, opts preflightOptions) error {
 	// topicRefFound tracks whether the topic still has a remote ref to compare against. It stays
 	// true when the fetch is skipped (we then rely on existing tracking data).
 	topicRefFound := true
@@ -77,7 +77,7 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 	// compare against. It stays true when the fetch is skipped.
 	parentRefFound := true
 
-	if shouldFetch && git.RemoteExists(remote) {
+	if shouldFetch && repo.RemoteExists(remote) {
 		fmt.Printf("Fetching from remote '%s'...\n", remote)
 
 		// Fetch the parent best-effort. When the parent sync check is enabled (finish), a benign
@@ -87,13 +87,13 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 		// below. Skip entirely when the branch type has no configured parent, so we never issue
 		// `git fetch <remote> ""` or emit a spurious note.
 		if parentBranch != "" {
-			if err := git.FetchBranch(remote, parentBranch); err != nil {
+			if err := repo.FetchBranch(remote, parentBranch); err != nil {
 				if opts.parentSyncCheck && goerrors.Is(err, git.ErrRemoteRefNotFound) {
 					// The parent sync check is enabled and the remote parent branch is gone; prune the
 					// stale tracking ref best-effort and skip the parent sync check against it.
 					fmt.Printf("Note: Remote branch for base '%s' not found; skipping parent sync check\n", parentBranch)
 					parentRefFound = false
-					if derr := git.DeleteRemoteTrackingRef(remote, parentBranch); derr != nil {
+					if derr := repo.DeleteRemoteTrackingRef(remote, parentBranch); derr != nil {
 						fmt.Printf("Note: Could not prune stale tracking ref for '%s': %v\n", parentBranch, derr)
 					}
 				} else {
@@ -103,9 +103,9 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 				// #88: fast-forward the local parent to its just-fetched remote so that a branch merged
 				// remotely is seen as merged by `git branch -d`. `git merge --ff-only` acts on HEAD, so
 				// only fast-forward when the parent is checked out; otherwise leave HEAD untouched.
-				if current, cerr := git.GetCurrentBranch(); cerr == nil && current == parentBranch {
+				if current, cerr := repo.GetCurrentBranch(); cerr == nil && current == parentBranch {
 					remoteParent := fmt.Sprintf("%s/%s", remote, parentBranch)
-					if ferr := git.MergeFFOnly(remoteParent); ferr != nil {
+					if ferr := repo.MergeFFOnly(remoteParent); ferr != nil {
 						fmt.Printf("Note: Could not fast-forward '%s': %v\n", parentBranch, ferr)
 					}
 				}
@@ -113,7 +113,7 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 		}
 
 		// Fetch the topic, distinguishing a benign missing ref from a fatal transport failure.
-		if err := git.FetchBranch(remote, topicBranch); err != nil {
+		if err := repo.FetchBranch(remote, topicBranch); err != nil {
 			if goerrors.Is(err, git.ErrRemoteRefNotFound) {
 				// The remote branch is gone (or was never pushed). Prune the stale tracking ref
 				// so later steps do not treat it as an existing remote branch, and skip the
@@ -122,7 +122,7 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 				topicRefFound = false
 				// Best-effort cleanup: the ref may already be absent, so a failure here is a
 				// note, not a reason to abort.
-				if derr := git.DeleteRemoteTrackingRef(remote, topicBranch); derr != nil {
+				if derr := repo.DeleteRemoteTrackingRef(remote, topicBranch); derr != nil {
 					fmt.Printf("Note: Could not prune stale tracking ref for '%s': %v\n", topicBranch, derr)
 				}
 			} else if opts.fetchFailureNonFatal {
@@ -140,8 +140,8 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 	}
 
 	// Sync-check the topic only when it still has a remote ref and a tracking branch.
-	if !force && topicRefFound && git.HasTrackingBranch(topicBranch) {
-		status, commitCount, err := git.CompareBranchWithRemote(topicBranch)
+	if !force && topicRefFound && repo.HasTrackingBranch(topicBranch) {
+		status, commitCount, err := repo.CompareBranchWithRemote(topicBranch)
 		if err != nil {
 			// HasTrackingBranch already confirmed a tracking branch, and when fetching, the topic
 			// fetch succeeded — so a compare failure here is unexpected (e.g. a corrupt/dangling
@@ -168,7 +168,7 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 			}
 		}
 		if abort {
-			trackingBranch, terr := git.GetTrackingBranch(topicBranch)
+			trackingBranch, terr := repo.GetTrackingBranch(topicBranch)
 			if terr != nil {
 				trackingBranch = "remote tracking branch"
 			}
@@ -190,8 +190,8 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 	// way as the topic check: only when not forced, the parent still has a remote ref, and it has a
 	// tracking branch. The parent invariant is laxer than the topic's — behind/diverged abort
 	// (merging onto a stale base), but ahead proceeds (normal right after an unpushed finish).
-	if !force && opts.parentSyncCheck && parentBranch != "" && parentRefFound && git.HasTrackingBranch(parentBranch) {
-		status, commitCount, err := git.CompareBranchWithRemote(parentBranch)
+	if !force && opts.parentSyncCheck && parentBranch != "" && parentRefFound && repo.HasTrackingBranch(parentBranch) {
+		status, commitCount, err := repo.CompareBranchWithRemote(parentBranch)
 		if err != nil {
 			// As with the topic block, fail closed rather than merge onto an undetermined base.
 			return &errors.GitError{
@@ -201,7 +201,7 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 		}
 
 		if status == git.SyncStatusBehind || status == git.SyncStatusDiverged {
-			trackingBranch, terr := git.GetTrackingBranch(parentBranch)
+			trackingBranch, terr := repo.GetTrackingBranch(parentBranch)
 			if terr != nil {
 				trackingBranch = "remote tracking branch"
 			}

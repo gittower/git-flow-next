@@ -34,7 +34,12 @@ import (
 // IntegrateCommand is the public entry point for the integrate command. It maps
 // git-flow errors to their exit codes and exits non-zero on failure.
 func IntegrateCommand(name string, continueOp bool, abortOp bool, tagOptions *config.TagOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool) {
-	if err := executeIntegrate(name, continueOp, abortOp, tagOptions, mergeOptions, fetch); err != nil {
+	repo, err := openRepo()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
+		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
+	}
+	if err := executeIntegrate(repo, name, continueOp, abortOp, tagOptions, mergeOptions, fetch); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -47,9 +52,9 @@ func IntegrateCommand(name string, continueOp bool, abortOp bool, tagOptions *co
 }
 
 // executeIntegrate performs the integrate logic and returns any error.
-func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *config.TagOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool) error {
+func executeIntegrate(repo *git.Repo, name string, continueOp bool, abortOp bool, tagOptions *config.TagOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool) error {
 	// Validate that git-flow is initialized.
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -57,7 +62,7 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 		return &errors.NotInitializedError{}
 	}
 
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -67,13 +72,13 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 	// any dispatch. The shared guard reads raw state and checks git's real
 	// in-progress markers, since an update persists state IsMergeInProgress might
 	// otherwise treat as stale and clear.
-	if err := refuseIfForeignOperation(cfg, "integrate"); err != nil {
+	if err := refuseIfForeignOperation(repo, cfg, "integrate"); err != nil {
 		return err
 	}
 
 	// Merge-in-progress dispatch for integrate's own state.
-	if mergestate.IsMergeInProgress() {
-		state, err := mergestate.LoadMergeState()
+	if mergestate.IsMergeInProgress(repo) {
+		state, err := mergestate.LoadMergeState(repo)
 		if err != nil {
 			return &errors.GitError{Operation: "load merge state", Err: err}
 		}
@@ -82,7 +87,7 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 			return &errors.MergeInProgressError{Action: state.Action, BranchName: state.FullBranchName, BranchType: topicTypeOrEmpty(cfg, state.BranchType)}
 		}
 		if abortOp {
-			return handleAbort(state)
+			return handleAbort(repo, state)
 		}
 		if continueOp {
 			resolved := config.ResolveIntegrateOptions(cfg, state.BranchName, tagOptions, mergeOptions, fetch)
@@ -95,7 +100,7 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 			resolved.ShouldSign = state.ShouldSign
 			resolved.SigningKey = state.SigningKey
 			branchConfig := cfg.Branches[state.BranchType]
-			return handleContinue(cfg, state, branchConfig, resolved, mergeOptions)
+			return handleContinue(repo, cfg, state, branchConfig, resolved, mergeOptions)
 		}
 		return &errors.MergeInProgressError{Action: "integrate", BranchName: state.FullBranchName}
 	}
@@ -111,7 +116,7 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 
 	// Resolve the source base branch: explicit argument or the current branch.
 	if name == "" {
-		currentBranch, err := git.GetCurrentBranch()
+		currentBranch, err := repo.GetCurrentBranch()
 		if err != nil {
 			return &errors.GitError{Operation: "get current branch", Err: err}
 		}
@@ -122,7 +127,7 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 	if !found {
 		// A real branch that is not a configured base branch is a topic/other
 		// branch; a name that matches no branch at all is simply not found.
-		if git.BranchExists(name) == nil {
+		if repo.BranchExists(name) == nil {
 			return &errors.NotBaseBranchError{BranchName: name}
 		}
 		return &errors.BranchNotFoundError{BranchName: name}
@@ -147,12 +152,12 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 	// The configured base branch must actually exist as a git branch. A
 	// branch that is configured but has been deleted must error here, before
 	// any fetch/state/checkout mutation, mirroring finish's BranchExists gate.
-	if err := git.BranchExists(name); err != nil {
+	if err := repo.BranchExists(name); err != nil {
 		return &errors.BranchNotFoundError{BranchName: name}
 	}
 
 	parent := branchConfig.Parent
-	if err := git.BranchExists(parent); err != nil {
+	if err := repo.BranchExists(parent); err != nil {
 		return &errors.BranchNotFoundError{BranchName: parent}
 	}
 
@@ -171,15 +176,15 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 	// currently checked out. Fetch failures stay non-fatal (matching finish), but
 	// we must not claim "Fetch completed" when the parent fast-forward failed —
 	// that would silently integrate stale history.
-	if resolved.ShouldFetch && git.RemoteExists(cfg.Remote) {
+	if resolved.ShouldFetch && repo.RemoteExists(cfg.Remote) {
 		fmt.Printf("Fetching from remote '%s'...\n", cfg.Remote)
 		parentFetched := true
-		if err := git.FetchBranch(cfg.Remote, fmt.Sprintf("%s:%s", parent, parent)); err != nil {
+		if err := repo.FetchBranch(cfg.Remote, fmt.Sprintf("%s:%s", parent, parent)); err != nil {
 			parentFetched = false
 			fmt.Printf("Warning: could not fetch parent branch '%s': %v\n", parent, err)
 			fmt.Printf("Warning: integrating against the local '%s', which may be behind the remote\n", parent)
 		}
-		if err := git.FetchBranch(cfg.Remote, name); err != nil {
+		if err := repo.FetchBranch(cfg.Remote, name); err != nil {
 			fmt.Printf("Note: could not fetch branch '%s': %v\n", name, err)
 		}
 		if parentFetched {
@@ -225,13 +230,13 @@ func executeIntegrate(name string, continueOp bool, abortOp bool, tagOptions *co
 		ShouldSign:     resolved.ShouldSign,
 		SigningKey:     resolved.SigningKey,
 	}
-	if err := mergestate.SaveMergeState(state); err != nil {
+	if err := mergestate.SaveMergeState(repo, state); err != nil {
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
 	// Drive the shared state machine: merge -> create_tag -> update_children ->
 	// terminate. No delete step.
-	return executeSteps(cfg, state, branchConfig, resolved)
+	return executeSteps(repo, cfg, state, branchConfig, resolved)
 }
 
 // addIntegrateFlags registers the integrate command's flags. It mirrors

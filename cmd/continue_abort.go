@@ -22,10 +22,10 @@ import (
 // write from a crash mid-save): if git is genuinely mid-operation the file must
 // not be destroyed, so it is refused rather than left to IsMergeInProgress, which
 // would delete it while the git marker is still present.
-func refuseIfForeignOperation(cfg *config.Config, currentCommand string) error {
-	rawState, loadErr := mergestate.LoadMergeState()
+func refuseIfForeignOperation(repo *git.Repo, cfg *config.Config, currentCommand string) error {
+	rawState, loadErr := mergestate.LoadMergeState(repo)
 
-	gitInProgress := git.IsGitMergeInProgress() || git.IsGitRebaseInProgress() || git.IsGitSquashMergeInProgress()
+	gitInProgress := repo.IsGitMergeInProgress() || repo.IsGitRebaseInProgress() || repo.IsGitSquashMergeInProgress()
 
 	if loadErr != nil {
 		// The state file exists but could not be parsed. If a real git operation

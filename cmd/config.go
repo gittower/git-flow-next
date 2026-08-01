@@ -245,7 +245,12 @@ Example:
 
 // ConfigAddBaseCommand adds a base branch configuration
 func ConfigAddBaseCommand(name, parent, upstreamStrategy, downstreamStrategy string, autoUpdate bool) {
-	if err := executeConfigAddBase(name, parent, upstreamStrategy, downstreamStrategy, autoUpdate); err != nil {
+	repo, err := openRepo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
+			os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
+		}
+		if err := executeConfigAddBase(repo, name, parent, upstreamStrategy, downstreamStrategy, autoUpdate); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -259,7 +264,12 @@ func ConfigAddBaseCommand(name, parent, upstreamStrategy, downstreamStrategy str
 
 // ConfigAddTopicCommand adds a topic branch type configuration
 func ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) {
-	if err := executeConfigAddTopic(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag); err != nil {
+	repo, err := openRepo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
+			os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
+		}
+		if err := executeConfigAddTopic(repo, name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -273,7 +283,12 @@ func ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy
 
 // ConfigEditBaseCommand edits a base branch configuration
 func ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy string, autoUpdate bool) {
-	if err := executeConfigEditBase(name, upstreamStrategy, downstreamStrategy, autoUpdate); err != nil {
+	repo, err := openRepo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
+			os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
+		}
+		if err := executeConfigEditBase(repo, name, upstreamStrategy, downstreamStrategy, autoUpdate); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -287,7 +302,12 @@ func ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy string, au
 
 // ConfigEditTopicCommand edits a topic branch type configuration
 func ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) {
-	if err := executeConfigEditTopic(name, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag); err != nil {
+	repo, err := openRepo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
+			os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
+		}
+		if err := executeConfigEditTopic(repo, name, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -301,7 +321,12 @@ func ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downs
 
 // ConfigRenameBaseCommand renames a base branch
 func ConfigRenameBaseCommand(oldName, newName string) {
-	if err := executeConfigRenameBase(oldName, newName); err != nil {
+	repo, err := openRepo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
+			os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
+		}
+		if err := executeConfigRenameBase(repo, oldName, newName); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -315,7 +340,12 @@ func ConfigRenameBaseCommand(oldName, newName string) {
 
 // ConfigRenameTopicCommand renames a topic branch type
 func ConfigRenameTopicCommand(oldName, newName string) {
-	if err := executeConfigRenameTopic(oldName, newName); err != nil {
+	repo, err := openRepo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
+			os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
+		}
+		if err := executeConfigRenameTopic(repo, oldName, newName); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -329,7 +359,12 @@ func ConfigRenameTopicCommand(oldName, newName string) {
 
 // ConfigDeleteBaseCommand deletes a base branch configuration
 func ConfigDeleteBaseCommand(name string) {
-	if err := executeConfigDeleteBase(name); err != nil {
+	repo, err := openRepo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
+			os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
+		}
+		if err := executeConfigDeleteBase(repo, name); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -343,7 +378,12 @@ func ConfigDeleteBaseCommand(name string) {
 
 // ConfigDeleteTopicCommand deletes a topic branch type configuration
 func ConfigDeleteTopicCommand(name string) {
-	if err := executeConfigDeleteTopic(name); err != nil {
+	repo, err := openRepo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
+			os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
+		}
+		if err := executeConfigDeleteTopic(repo, name); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -357,7 +397,12 @@ func ConfigDeleteTopicCommand(name string) {
 
 // ConfigListCommand lists the current configuration
 func ConfigListCommand() {
-	if err := executeConfigList(); err != nil {
+	repo, err := openRepo()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
+			os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
+		}
+		if err := executeConfigList(repo); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -369,9 +414,9 @@ func ConfigListCommand() {
 	}
 }
 
-func executeConfigAddBase(name, parent, upstreamStrategy, downstreamStrategy string, autoUpdate bool) error {
+func executeConfigAddBase(repo *git.Repo, name, parent, upstreamStrategy, downstreamStrategy string, autoUpdate bool) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -385,7 +430,7 @@ func executeConfigAddBase(name, parent, upstreamStrategy, downstreamStrategy str
 	}
 
 	// Load current configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -445,9 +490,9 @@ func executeConfigAddBase(name, parent, upstreamStrategy, downstreamStrategy str
 	}
 
 	// Create Git branch if it doesn't exist
-	if err := git.BranchExists(name); err != nil {
+	if err := repo.BranchExists(name); err != nil {
 		// Branch doesn't exist, create it
-		if err := git.CreateBranch(name, parent); err != nil {
+		if err := repo.CreateBranch(name, parent); err != nil {
 			return &errors.GitError{Operation: fmt.Sprintf("create branch '%s'", name), Err: err}
 		}
 		fmt.Printf("✓ Created branch '%s'\n", name)
@@ -457,9 +502,9 @@ func executeConfigAddBase(name, parent, upstreamStrategy, downstreamStrategy str
 	return nil
 }
 
-func executeConfigAddTopic(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) error {
+func executeConfigAddTopic(repo *git.Repo, name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -473,7 +518,7 @@ func executeConfigAddTopic(name, parent, prefix, startingPoint, upstreamStrategy
 	}
 
 	// Load current configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -542,9 +587,9 @@ func executeConfigAddTopic(name, parent, prefix, startingPoint, upstreamStrategy
 	return nil
 }
 
-func executeConfigEditBase(name, upstreamStrategy, downstreamStrategy string, autoUpdate bool) error {
+func executeConfigEditBase(repo *git.Repo, name, upstreamStrategy, downstreamStrategy string, autoUpdate bool) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -553,7 +598,7 @@ func executeConfigEditBase(name, upstreamStrategy, downstreamStrategy string, au
 	}
 
 	// Load current configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -601,9 +646,9 @@ func executeConfigEditBase(name, upstreamStrategy, downstreamStrategy string, au
 	return nil
 }
 
-func executeConfigEditTopic(name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) error {
+func executeConfigEditTopic(repo *git.Repo, name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -612,7 +657,7 @@ func executeConfigEditTopic(name, prefix, startingPoint, upstreamStrategy, downs
 	}
 
 	// Load current configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -671,9 +716,9 @@ func executeConfigEditTopic(name, prefix, startingPoint, upstreamStrategy, downs
 	return nil
 }
 
-func executeConfigRenameBase(oldName, newName string) error {
+func executeConfigRenameBase(repo *git.Repo, oldName, newName string) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -687,7 +732,7 @@ func executeConfigRenameBase(oldName, newName string) error {
 	}
 
 	// Load current configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -717,11 +762,11 @@ func executeConfigRenameBase(oldName, newName string) error {
 	// case-insensitive filesystems, where the destination folds to the same
 	// existing ref; it is safe here because we already confirmed newName does
 	// not collide with a *different* branch.
-	if err := git.BranchExists(oldName); err == nil {
+	if err := repo.BranchExists(oldName); err == nil {
 		caseOnlyRename := oldName != newName && strings.EqualFold(oldName, newName)
-		renameErr := git.RenameBranch(oldName, newName)
+		renameErr := repo.RenameBranch(oldName, newName)
 		if renameErr != nil && caseOnlyRename {
-			renameErr = git.RenameBranchForce(oldName, newName)
+			renameErr = repo.RenameBranchForce(oldName, newName)
 		}
 		if renameErr != nil {
 			return &errors.GitError{Operation: fmt.Sprintf("rename branch '%s' to '%s'", oldName, newName), Err: renameErr}
@@ -730,7 +775,7 @@ func executeConfigRenameBase(oldName, newName string) error {
 	}
 
 	// Remove old branch config from git config
-	if err := git.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", oldName)); err != nil {
+	if err := repo.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", oldName)); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("remove old branch config for '%s'", oldName), Err: err}
 	}
 
@@ -759,9 +804,9 @@ func executeConfigRenameBase(oldName, newName string) error {
 	return nil
 }
 
-func executeConfigRenameTopic(oldName, newName string) error {
+func executeConfigRenameTopic(repo *git.Repo, oldName, newName string) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -775,7 +820,7 @@ func executeConfigRenameTopic(oldName, newName string) error {
 	}
 
 	// Load current configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -803,7 +848,7 @@ func executeConfigRenameTopic(oldName, newName string) error {
 	// Remove the old branch config section from git config (topic renames
 	// only touch config, not refs), so the old canonical subsection does not
 	// linger after the save writes the new one.
-	if err := git.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", oldName)); err != nil {
+	if err := repo.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", oldName)); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("remove old branch config for '%s'", oldName), Err: err}
 	}
 
@@ -820,9 +865,9 @@ func executeConfigRenameTopic(oldName, newName string) error {
 	return nil
 }
 
-func executeConfigDeleteBase(name string) error {
+func executeConfigDeleteBase(repo *git.Repo, name string) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -831,7 +876,7 @@ func executeConfigDeleteBase(name string) error {
 	}
 
 	// Load current configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -860,7 +905,7 @@ func executeConfigDeleteBase(name string) error {
 	}
 
 	// Remove branch config from git config
-	if err := git.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", name)); err != nil {
+	if err := repo.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", name)); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("remove branch config for '%s'", name), Err: err}
 	}
 
@@ -877,9 +922,9 @@ func executeConfigDeleteBase(name string) error {
 	return nil
 }
 
-func executeConfigDeleteTopic(name string) error {
+func executeConfigDeleteTopic(repo *git.Repo, name string) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -888,7 +933,7 @@ func executeConfigDeleteTopic(name string) error {
 	}
 
 	// Load current configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -907,7 +952,7 @@ func executeConfigDeleteTopic(name string) error {
 	}
 
 	// Remove branch config from git config
-	if err := git.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", name)); err != nil {
+	if err := repo.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", name)); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("remove branch config for '%s'", name), Err: err}
 	}
 
@@ -923,9 +968,9 @@ func executeConfigDeleteTopic(name string) error {
 	return nil
 }
 
-func executeConfigList() error {
+func executeConfigList(repo *git.Repo) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -936,7 +981,7 @@ func executeConfigList() error {
 	}
 
 	// Load current configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}

@@ -99,7 +99,12 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 		scope = git.ConfigScopeSystem
 	case fileScope != "":
 		scope = git.ConfigScopeFile
-		scopeFile = fileScope
+		// Normalize a relative --file path against the invocation directory
+		// BEFORE the parent-directory existence check, so a nested relative path
+		// (e.g. cfgdir/myconfig) resolves against the directory git-flow was run
+		// from, matching where the config is later written (git config --file runs
+		// in the invocation directory), not the work-tree root.
+		scopeFile = normalizeInvocationPath(fileScope)
 		// Validate parent directory exists
 		dir := filepath.Dir(scopeFile)
 		if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -111,8 +116,10 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 		scope = git.ConfigScopeDefault // no flag = merged read, local write
 	}
 
-	// Check if we're in a git repo
-	if !git.IsGitRepo() {
+	// Open a handle for the invocation directory. A failure here means we are not
+	// inside a git work tree — the same condition the old git.IsGitRepo() guarded.
+	repo, err := openRepo()
+	if err != nil {
 		return &errors.GitError{Operation: "check if git repository", Err: fmt.Errorf("not a git repository. Please run 'git init' first")}
 	}
 
@@ -177,10 +184,10 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 	hasConfigFlags := mainBranch != "" || developBranch != "" || featurePrefix != "" || bugfixPrefix != "" || releasePrefix != "" || hotfixPrefix != "" || supportPrefix != "" || tagPrefix != ""
 
 	// Check if git-flow-avh config exists and no explicit options are provided
-	if config.CheckGitFlowAVHConfig() && preset == "" && !custom && !useDefaults && !hasConfigFlags {
+	if config.CheckGitFlowAVHConfig(repo) && preset == "" && !custom && !useDefaults && !hasConfigFlags {
 		fmt.Println("Found existing git-flow-avh configuration, importing...")
 		var err error
-		cfg, err = config.ImportGitFlowAVHConfig()
+		cfg, err = config.ImportGitFlowAVHConfig(repo)
 		if err != nil {
 			return &errors.GitError{Operation: "import git-flow-avh configuration", Err: err}
 		}
@@ -233,12 +240,12 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 	// configured — otherwise `git commit --allow-empty` fails with exit 128
 	// after config/marker have already been written (see issue #131).
 	if createBranches {
-		hasCommits, err := git.HasCommits()
+		hasCommits, err := repo.HasCommits()
 		if err != nil {
 			return &errors.GitError{Operation: "check repository commits", Err: err}
 		}
 		if !hasCommits {
-			ok, err := git.HasUserIdentity()
+			ok, err := repo.HasUserIdentity()
 			if err != nil {
 				return &errors.GitError{Operation: "check git user identity", Err: err}
 			}
@@ -258,7 +265,7 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 
 	// Create branches if requested
 	if createBranches {
-		if err := createGitFlowBranches(cfg); err != nil {
+		if err := createGitFlowBranches(repo, cfg); err != nil {
 			return &errors.GitError{Operation: "create branches", Err: err}
 		}
 	}
@@ -268,9 +275,9 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 }
 
 // createGitFlowBranches creates the base branches if they don't exist
-func createGitFlowBranches(cfg *config.Config) error {
+func createGitFlowBranches(repo *git.Repo, cfg *config.Config) error {
 	// Check if we have any commits
-	hasCommits, err := git.HasCommits()
+	hasCommits, err := repo.HasCommits()
 	if err != nil {
 		return fmt.Errorf("failed to check if repository has commits: %w", err)
 	}
@@ -278,7 +285,7 @@ func createGitFlowBranches(cfg *config.Config) error {
 	// Get current branch if we have commits
 	var currentBranch string
 	if hasCommits {
-		currentBranch, err = git.GetCurrentBranch()
+		currentBranch, err = repo.GetCurrentBranch()
 		if err != nil {
 			return fmt.Errorf("failed to get current branch: %w", err)
 		}
@@ -291,7 +298,7 @@ func createGitFlowBranches(cfg *config.Config) error {
 	}
 	var toCreate []branchToCreate
 	for name, branch := range cfg.Branches {
-		if branch.Type == string(config.BranchTypeBase) && git.BranchExists(name) != nil {
+		if branch.Type == string(config.BranchTypeBase) && repo.BranchExists(name) != nil {
 			toCreate = append(toCreate, branchToCreate{name: name, parent: branch.Parent})
 		}
 	}
@@ -306,7 +313,7 @@ func createGitFlowBranches(cfg *config.Config) error {
 				continue
 			}
 			// Add if: no parent, parent already exists in git, or parent already in sorted list
-			parentReady := b.parent == "" || git.BranchExists(b.parent) == nil || added[b.parent]
+			parentReady := b.parent == "" || repo.BranchExists(b.parent) == nil || added[b.parent]
 			if parentReady {
 				sorted = append(sorted, b)
 				added[b.name] = true
@@ -320,7 +327,7 @@ func createGitFlowBranches(cfg *config.Config) error {
 
 	// Create branches in dependency order
 	for _, b := range sorted {
-		err := git.CreateBranch(b.name, b.parent)
+		err := repo.CreateBranch(b.name, b.parent)
 		if err != nil {
 			return &errors.GitError{Operation: fmt.Sprintf("create base branch '%s'", b.name), Err: err}
 		}
@@ -337,7 +344,7 @@ func createGitFlowBranches(cfg *config.Config) error {
 			}
 		}
 		if !branchStillExists {
-			err = git.Checkout(currentBranch)
+			err = repo.Checkout(currentBranch)
 			if err != nil {
 				return fmt.Errorf("failed to checkout original branch '%s': %w", currentBranch, err)
 			}

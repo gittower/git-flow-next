@@ -7,15 +7,23 @@ import (
 
 	"github.com/gittower/git-flow-next/internal/config"
 	"github.com/gittower/git-flow-next/internal/errors"
-	"github.com/gittower/git-flow-next/internal/git"
 	"github.com/spf13/cobra"
 )
 
 // RegisterTopicBranchCommands dynamically creates commands for topic branches
 // based on configuration.
 func RegisterTopicBranchCommands() {
+	// Open a handle for the invocation directory. Registration runs at package
+	// init; outside a git repository (or before init) fall back to the standard
+	// branch types instead of failing.
+	repo, err := openRepo()
+	if err != nil {
+		registerDefaultBranchCommands()
+		return
+	}
+
 	// Load configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		// If we can't load the config, fall back to standard branch types
 		fmt.Println("Warning: Could not load git-flow configuration, using default branch types")
@@ -126,7 +134,13 @@ func registerBranchCommand(branchType string) {
 			// uninitialized, so without this gate the detection below (and the
 			// downstream finish logic) would emit a misleading "branch does not
 			// exist"/"not a branch" error instead of "not initialized".
-			initialized, err := config.IsInitialized()
+			repo, err := openRepo()
+			if err != nil {
+				notInit := &errors.NotInitializedError{}
+				fmt.Fprintf(os.Stderr, "Error: %v\n", notInit)
+				os.Exit(int(notInit.ExitCode()))
+			}
+			initialized, err := config.IsInitialized(repo)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.GitError{Operation: "check if git-flow is initialized", Err: err})
 				os.Exit(int(errors.ExitCodeGitError))
@@ -192,13 +206,13 @@ func registerBranchCommand(branchType string) {
 				name = args[0]
 			} else {
 				// No name provided, try to detect from current branch
-				currentBranch, err := git.GetCurrentBranch()
+				currentBranch, err := repo.GetCurrentBranch()
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 					os.Exit(int(errors.ExitCodeGitError))
 				}
 				// Load config to get prefix
-				cfg, err := config.LoadConfig()
+				cfg, err := config.Load(repo)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 					os.Exit(int(errors.ExitCodeGitError))

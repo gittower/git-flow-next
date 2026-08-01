@@ -85,7 +85,12 @@ const (
 
 // FinishCommand is the implementation of the finish command for topic branches
 func FinishCommand(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) {
-	if err := executeFinish(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag); err != nil {
+	repo, err := openRepo()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
+		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
+	}
+	if err := executeFinish(repo, branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -102,7 +107,7 @@ func FinishCommand(branchType string, name string, continueOp bool, abortOp bool
 // =============================================================================
 
 // executeFinish performs the actual branch finishing logic and returns any errors
-func executeFinish(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) error {
+func executeFinish(repo *git.Repo, branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) error {
 	// Validate that git-flow is initialized before loading config or resolving
 	// branches. This is the shared gate for every finish entry point: both the
 	// topic-branch handler (cmd/topicbranch.go) and the shorthand command
@@ -110,7 +115,7 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	// DefaultConfig when uninitialized, so this must run first. The topic-branch
 	// handler additionally gates before its own current-branch name detection,
 	// which runs ahead of this function.
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -119,7 +124,7 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	}
 
 	// Get configuration early
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -133,13 +138,13 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	// Foreign-operation guard (#143): refuse a foreign in-progress update/integrate
 	// (or an unknown-Action state) before any dispatch, so finish never resumes or
 	// aborts an operation it does not own.
-	if err := refuseIfForeignOperation(cfg, "finish"); err != nil {
+	if err := refuseIfForeignOperation(repo, cfg, "finish"); err != nil {
 		return err
 	}
 
 	// Check if there's a merge in progress
-	if mergestate.IsMergeInProgress() {
-		state, err := mergestate.LoadMergeState()
+	if mergestate.IsMergeInProgress(repo) {
+		state, err := mergestate.LoadMergeState(repo)
 		if err != nil {
 			return &errors.GitError{Operation: "load merge state", Err: err}
 		}
@@ -157,13 +162,13 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 		}
 
 		if abortOp {
-			return handleAbort(state)
+			return handleAbort(repo, state)
 		}
 
 		if continueOp {
 			// Resolve options for continue operation
 			resolvedOptions := config.ResolveFinishOptions(cfg, state.BranchType, state.BranchName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
-			return handleContinue(cfg, state, stateBranchConfig, resolvedOptions, mergeOptions)
+			return handleContinue(repo, cfg, state, stateBranchConfig, resolvedOptions, mergeOptions)
 		}
 
 		return &errors.MergeInProgressError{Action: "finish", BranchName: state.FullBranchName, BranchType: state.BranchType}
@@ -182,7 +187,7 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	}
 
 	// Resolve branch name (try with and without prefix)
-	resolvedName, err := resolveBranchName(name, branchConfig)
+	resolvedName, err := resolveBranchName(repo, name, branchConfig)
 	if err != nil {
 		return err
 	}
@@ -238,15 +243,15 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	// fetch failure or a behind/diverged topic aborts here, before any merge. Being *ahead* is
 	// tolerated (downgraded to a note): finish merges the unpushed commits into the parent and then
 	// deletes the topic branch, so requiring a push first would preserve nothing.
-	if err := runFetchSyncPreflight(cfg, branchType, cfg.Remote, name, shortName, branchConfig.Parent, resolvedOptions.ShouldFetch, force, preflightOptions{tolerateAhead: true, parentSyncCheck: true}); err != nil {
+	if err := runFetchSyncPreflight(repo, cfg, branchType, cfg.Remote, name, shortName, branchConfig.Parent, resolvedOptions.ShouldFetch, force, preflightOptions{tolerateAhead: true, parentSyncCheck: true}); err != nil {
 		return err
 	}
 
 	// Regular finish command flow
-	return finishBranch(cfg, branchType, name, branchConfig, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
+	return finishBranch(repo, cfg, branchType, name, branchConfig, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
 }
 
-func finishBranch(cfg *config.Config, branchType string, name string, branchConfig config.BranchConfig, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) error {
+func finishBranch(repo *git.Repo, cfg *config.Config, branchType string, name string, branchConfig config.BranchConfig, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) error {
 	// Note: the git-flow initialization gate runs earlier in executeFinish (the
 	// only path to finishBranch) and in the topic-branch command handler.
 
@@ -266,7 +271,7 @@ func finishBranch(cfg *config.Config, branchType string, name string, branchConf
 	}
 
 	// Check if branch exists
-	if err := git.BranchExists(name); err != nil {
+	if err := repo.BranchExists(name); err != nil {
 		return &errors.BranchNotFoundError{BranchName: name}
 	}
 
@@ -274,7 +279,7 @@ func finishBranch(cfg *config.Config, branchType string, name string, branchConf
 	targetBranch := branchConfig.Parent
 
 	// Check if target branch exists
-	if err := git.BranchExists(targetBranch); err != nil {
+	if err := repo.BranchExists(targetBranch); err != nil {
 		return &errors.BranchNotFoundError{BranchName: targetBranch}
 	}
 
@@ -294,10 +299,7 @@ func finishBranch(cfg *config.Config, branchType string, name string, branchConf
 	resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
 
 	// Run pre-hook before starting finish operation
-	gitDir, err := git.GetGitDir()
-	if err != nil {
-		return &errors.GitError{Operation: "get git directory", Err: err}
-	}
+	gitDir := repo.GitDir()
 
 	hookCtx := hooks.HookContext{
 		BranchType: branchType,
@@ -332,11 +334,11 @@ func finishBranch(cfg *config.Config, branchType string, name string, branchConf
 		UpdateMessage:   resolvedOptions.UpdateMessage,
 		NoVerify:        resolvedOptions.NoVerify,
 	}
-	if err := mergestate.SaveMergeState(state); err != nil {
+	if err := mergestate.SaveMergeState(repo, state); err != nil {
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
-	return executeSteps(cfg, state, branchConfig, resolvedOptions)
+	return executeSteps(repo, cfg, state, branchConfig, resolvedOptions)
 }
 
 // =============================================================================
@@ -344,20 +346,20 @@ func finishBranch(cfg *config.Config, branchType string, name string, branchConf
 // =============================================================================
 
 // executeSteps runs the state machine for the finish operation
-func executeSteps(cfg *config.Config, state *mergestate.MergeState, branchConfig config.BranchConfig, resolvedOptions *config.ResolvedFinishOptions) error {
+func executeSteps(repo *git.Repo, cfg *config.Config, state *mergestate.MergeState, branchConfig config.BranchConfig, resolvedOptions *config.ResolvedFinishOptions) error {
 	for {
 		var err error
 		switch state.CurrentStep {
 		case stepMerge:
-			err = handleMergeStep(cfg, state, branchConfig, resolvedOptions)
+			err = handleMergeStep(repo, cfg, state, branchConfig, resolvedOptions)
 		case stepCreateTag:
-			err = handleCreateTagStep(cfg, state, resolvedOptions)
+			err = handleCreateTagStep(repo, cfg, state, resolvedOptions)
 		case stepUpdateChildren:
-			err = handleUpdateChildrenStep(cfg, state, branchConfig, resolvedOptions)
+			err = handleUpdateChildrenStep(repo, cfg, state, branchConfig, resolvedOptions)
 		case stepDeleteBranch:
-			return handleDeleteBranchStep(cfg, state, resolvedOptions) // Final step
+			return handleDeleteBranchStep(repo, cfg, state, resolvedOptions) // Final step
 		case stepIntegrateDone:
-			return handleIntegrateDoneStep(state) // Final step (integrate)
+			return handleIntegrateDoneStep(repo, state) // Final step (integrate)
 		default:
 			return &errors.GitError{Operation: fmt.Sprintf("unknown step '%s'", state.CurrentStep), Err: nil}
 		}
@@ -368,12 +370,12 @@ func executeSteps(cfg *config.Config, state *mergestate.MergeState, branchConfig
 	}
 }
 
-func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConfig config.BranchConfig, resolvedOptions *config.ResolvedFinishOptions, mergeOptions *config.MergeStrategyOptions) error {
+func handleContinue(repo *git.Repo, cfg *config.Config, state *mergestate.MergeState, branchConfig config.BranchConfig, resolvedOptions *config.ResolvedFinishOptions, mergeOptions *config.MergeStrategyOptions) error {
 	// Handle continuation based on current step
 	switch state.CurrentStep {
 	case stepMerge:
 		// For merge step continuation, check if conflicts are resolved
-		if git.HasConflicts() {
+		if repo.HasConflicts() {
 			return &errors.UnresolvedConflictsError{}
 		}
 
@@ -382,7 +384,7 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 		switch state.MergeStrategy {
 		case strategyRebase:
 			// Continue the rebase operation
-			err = git.RebaseContinue()
+			err = repo.RebaseContinue()
 			if err != nil {
 				// Check if rebase is complete or if there are more commits to rebase
 				if strings.Contains(err.Error(), "No rebase in progress") {
@@ -396,7 +398,7 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 			}
 
 			// After successful rebase, checkout target and merge
-			err = git.Checkout(state.ParentBranch)
+			err = repo.Checkout(state.ParentBranch)
 			if err != nil {
 				return &errors.GitError{Operation: "checkout target branch after rebase", Err: err}
 			}
@@ -407,9 +409,9 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 			}
 			if mergeMsg != "" {
 				expandedMsg := util.ExpandMessagePlaceholders(mergeMsg, state.FullBranchName, state.ParentBranch)
-				err = git.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, state.NoVerify)
+				err = repo.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, state.NoVerify)
 			} else {
-				err = git.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, state.NoVerify)
+				err = repo.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, state.NoVerify)
 			}
 			if err != nil {
 				return &errors.GitError{Operation: "merge rebased branch", Err: err}
@@ -422,7 +424,7 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 			if mergeOptions != nil && mergeOptions.SquashMessage != nil && *mergeOptions.SquashMessage != "" {
 				squashMsg = *mergeOptions.SquashMessage
 			}
-			err = git.Commit(squashMsg, state.NoVerify)
+			err = repo.Commit(squashMsg, state.NoVerify)
 			if err != nil {
 				return &errors.GitError{Operation: "commit squashed changes", Err: err}
 			}
@@ -439,7 +441,7 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 			} else {
 				mergeMsg = util.ExpandMessagePlaceholders(mergeMsg, state.FullBranchName, state.ParentBranch)
 			}
-			err = git.Commit(mergeMsg, state.NoVerify)
+			err = repo.Commit(mergeMsg, state.NoVerify)
 			if err != nil {
 				return &errors.GitError{Operation: "commit merge", Err: err}
 			}
@@ -450,13 +452,13 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 
 		// Move to next step since merge conflicts are resolved and committed
 		state.CurrentStep = stepCreateTag
-		if err := mergestate.SaveMergeState(state); err != nil {
+		if err := mergestate.SaveMergeState(repo, state); err != nil {
 			return &errors.GitError{Operation: "save merge state", Err: err}
 		}
 
 	case stepUpdateChildren:
 		// For child branch update continuation, check if conflicts are resolved
-		if git.HasConflicts() {
+		if repo.HasConflicts() {
 			return &errors.UnresolvedConflictsError{}
 		}
 
@@ -464,7 +466,7 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 		currentChild := state.CurrentChildBranch
 		if currentChild == "" {
 			// Try to determine from current branch
-			currentBranch, err := git.GetCurrentBranch()
+			currentBranch, err := repo.GetCurrentBranch()
 			if err != nil {
 				return &errors.GitError{Operation: "get current branch", Err: err}
 			}
@@ -491,7 +493,7 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 		switch strategy {
 		case "rebase":
 			// Continue the rebase operation
-			err = git.RebaseContinue()
+			err = repo.RebaseContinue()
 			if err != nil {
 				if strings.Contains(err.Error(), "No rebase in progress") {
 					// Rebase might be complete, try to proceed
@@ -518,7 +520,7 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 				// For child updates, the "branch" is the child and "parent" is the source
 				updateMsg = util.ExpandMessagePlaceholders(updateMsg, currentChild, state.ParentBranch)
 			}
-			err = git.Commit(updateMsg, state.NoVerify)
+			err = repo.Commit(updateMsg, state.NoVerify)
 			if err != nil {
 				return &errors.GitError{Operation: "commit squashed child update", Err: err}
 			}
@@ -537,7 +539,7 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 				// For child updates, the "branch" is the child and "parent" is the source
 				updateMsg = util.ExpandMessagePlaceholders(updateMsg, currentChild, state.ParentBranch)
 			}
-			err = git.Commit(updateMsg, state.NoVerify)
+			err = repo.Commit(updateMsg, state.NoVerify)
 			if err != nil {
 				return &errors.GitError{Operation: "commit child branch update", Err: err}
 			}
@@ -550,15 +552,15 @@ func handleContinue(cfg *config.Config, state *mergestate.MergeState, branchConf
 		state.CurrentChildBranch = "" // Clear current child
 
 		// Save state and continue
-		if err := mergestate.SaveMergeState(state); err != nil {
+		if err := mergestate.SaveMergeState(repo, state); err != nil {
 			return &errors.GitError{Operation: "save merge state", Err: err}
 		}
 	}
 
-	return executeSteps(cfg, state, branchConfig, resolvedOptions)
+	return executeSteps(repo, cfg, state, branchConfig, resolvedOptions)
 }
 
-func handleAbort(state *mergestate.MergeState) error {
+func handleAbort(repo *git.Repo, state *mergestate.MergeState) error {
 	// Choose which git operation to abort. During the child-update step the
 	// in-progress operation uses the current child's downstream strategy, which
 	// can differ from the parent merge strategy in state.MergeStrategy. Aborting
@@ -568,7 +570,7 @@ func handleAbort(state *mergestate.MergeState) error {
 	if state.CurrentStep == stepUpdateChildren {
 		currentChild := state.CurrentChildBranch
 		if currentChild == "" {
-			if cur, curErr := git.GetCurrentBranch(); curErr == nil {
+			if cur, curErr := repo.GetCurrentBranch(); curErr == nil {
 				currentChild = cur
 			}
 		}
@@ -583,11 +585,11 @@ func handleAbort(state *mergestate.MergeState) error {
 	var err error
 	switch strategy {
 	case strategyMerge:
-		err = git.MergeAbort()
+		err = repo.MergeAbort()
 	case strategyRebase:
-		err = git.RebaseAbort()
+		err = repo.RebaseAbort()
 	default:
-		err = git.MergeAbort() // Default to merge abort
+		err = repo.MergeAbort() // Default to merge abort
 	}
 
 	if err != nil {
@@ -595,12 +597,12 @@ func handleAbort(state *mergestate.MergeState) error {
 	}
 
 	// Checkout the original branch
-	if err := git.Checkout(state.FullBranchName); err != nil {
+	if err := repo.Checkout(state.FullBranchName); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("checkout original branch '%s'", state.FullBranchName), Err: err}
 	}
 
 	// Clear the merge state
-	if err := mergestate.ClearMergeState(); err != nil {
+	if err := mergestate.ClearMergeState(repo); err != nil {
 		return &errors.GitError{Operation: "clear merge state", Err: err}
 	}
 
@@ -612,9 +614,9 @@ func handleAbort(state *mergestate.MergeState) error {
 // =============================================================================
 
 // handleMergeStep handles the merge step of the finish operation
-func handleMergeStep(cfg *config.Config, state *mergestate.MergeState, branchConfig config.BranchConfig, resolvedOptions *config.ResolvedFinishOptions) error {
+func handleMergeStep(repo *git.Repo, cfg *config.Config, state *mergestate.MergeState, branchConfig config.BranchConfig, resolvedOptions *config.ResolvedFinishOptions) error {
 	// Checkout target branch
-	err := git.Checkout(state.ParentBranch)
+	err := repo.Checkout(state.ParentBranch)
 	if err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("checkout target branch '%s'", state.ParentBranch), Err: err}
 	}
@@ -631,34 +633,34 @@ func handleMergeStep(cfg *config.Config, state *mergestate.MergeState, branchCon
 		fmt.Printf("Rebase strategy selected\n")
 		// For rebase, we need to:
 		// 1. Stay on feature branch
-		err = git.Checkout(state.FullBranchName)
+		err = repo.Checkout(state.FullBranchName)
 		if err != nil {
 			return &errors.GitError{Operation: "checkout feature branch for rebase", Err: err}
 		}
 		// 2. Rebase onto target branch with options
-		mergeErr = git.RebaseWithOptions(state.ParentBranch, resolvedOptions.PreserveMerges)
+		mergeErr = repo.RebaseWithOptions(state.ParentBranch, resolvedOptions.PreserveMerges)
 		if mergeErr == nil {
 			// 3. If rebase succeeds, checkout target and merge
-			err = git.Checkout(state.ParentBranch)
+			err = repo.Checkout(state.ParentBranch)
 			if err != nil {
 				return &errors.GitError{Operation: "checkout target branch after rebase", Err: err}
 			}
 			// Use custom merge message if provided, otherwise use default
 			if resolvedOptions.MergeMessage != "" {
 				expandedMsg := util.ExpandMessagePlaceholders(resolvedOptions.MergeMessage, state.FullBranchName, state.ParentBranch)
-				mergeErr = git.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, resolvedOptions.NoVerify)
+				mergeErr = repo.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, resolvedOptions.NoVerify)
 			} else {
-				mergeErr = git.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, resolvedOptions.NoVerify)
+				mergeErr = repo.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, resolvedOptions.NoVerify)
 			}
 		}
 	case strategySquash:
-		mergeErr = git.MergeSquashWithMessage(state.FullBranchName, resolvedOptions.SquashMessage, resolvedOptions.NoVerify)
+		mergeErr = repo.MergeSquashWithMessage(state.FullBranchName, resolvedOptions.SquashMessage, resolvedOptions.NoVerify)
 	case strategyMerge:
 		if resolvedOptions.MergeMessage != "" {
 			expandedMsg := util.ExpandMessagePlaceholders(resolvedOptions.MergeMessage, state.FullBranchName, state.ParentBranch)
-			mergeErr = git.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, resolvedOptions.NoVerify)
+			mergeErr = repo.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, resolvedOptions.NoVerify)
 		} else {
-			mergeErr = git.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, resolvedOptions.NoVerify)
+			mergeErr = repo.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, resolvedOptions.NoVerify)
 		}
 	default:
 		return &errors.GitError{Operation: fmt.Sprintf("unknown merge strategy: %s", resolvedOptions.MergeStrategy), Err: nil}
@@ -668,7 +670,7 @@ func handleMergeStep(cfg *config.Config, state *mergestate.MergeState, branchCon
 		if strings.Contains(mergeErr.Error(), "conflict") {
 			// Save state before returning conflict error
 			state.CurrentStep = stepMerge
-			if err := mergestate.SaveMergeState(state); err != nil {
+			if err := mergestate.SaveMergeState(repo, state); err != nil {
 				return &errors.GitError{Operation: "save merge state", Err: err}
 			}
 
@@ -682,7 +684,7 @@ func handleMergeStep(cfg *config.Config, state *mergestate.MergeState, branchCon
 
 	// Move to next step (tag creation)
 	state.CurrentStep = stepCreateTag
-	if err := mergestate.SaveMergeState(state); err != nil {
+	if err := mergestate.SaveMergeState(repo, state); err != nil {
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
@@ -690,14 +692,11 @@ func handleMergeStep(cfg *config.Config, state *mergestate.MergeState, branchCon
 }
 
 // handleCreateTagStep handles the tag creation step
-func handleCreateTagStep(cfg *config.Config, state *mergestate.MergeState, resolvedOptions *config.ResolvedFinishOptions) error {
+func handleCreateTagStep(repo *git.Repo, cfg *config.Config, state *mergestate.MergeState, resolvedOptions *config.ResolvedFinishOptions) error {
 	if resolvedOptions.ShouldTag {
 		// Apply tag message filter for any branch type configured with tagging
 		// The filter script (filter-flow-{branchType}-finish-tag-message) decides what to do
-		gitDir, err := git.GetGitDir()
-		if err != nil {
-			return &errors.GitError{Operation: "get git directory", Err: err}
-		}
+		gitDir := repo.GitDir()
 
 		remote := cfg.Remote
 
@@ -720,21 +719,21 @@ func handleCreateTagStep(cfg *config.Config, state *mergestate.MergeState, resol
 			resolvedOptions.TagMessage = filteredMessage
 		}
 
-		if err := createTagForBranchResolved(state, resolvedOptions); err != nil {
+		if err := createTagForBranchResolved(repo, state, resolvedOptions); err != nil {
 			return err
 		}
 	}
 
 	// Move to next step
 	state.CurrentStep = stepUpdateChildren
-	if err := mergestate.SaveMergeState(state); err != nil {
+	if err := mergestate.SaveMergeState(repo, state); err != nil {
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 	return nil
 }
 
 // handleUpdateChildrenStep handles updating child base branches
-func handleUpdateChildrenStep(cfg *config.Config, state *mergestate.MergeState, branchConfig config.BranchConfig, resolvedOptions *config.ResolvedFinishOptions) error {
+func handleUpdateChildrenStep(repo *git.Repo, cfg *config.Config, state *mergestate.MergeState, branchConfig config.BranchConfig, resolvedOptions *config.ResolvedFinishOptions) error {
 	// Find next child branch to update
 	nextBranch := findNextBranchToUpdate(state)
 
@@ -747,21 +746,21 @@ func handleUpdateChildrenStep(cfg *config.Config, state *mergestate.MergeState, 
 		} else {
 			state.CurrentStep = stepDeleteBranch
 		}
-		if err := mergestate.SaveMergeState(state); err != nil {
+		if err := mergestate.SaveMergeState(repo, state); err != nil {
 			return &errors.GitError{Operation: "save merge state", Err: err}
 		}
 		return nil
 	}
 
 	// Update the next child branch
-	if err := updateChildBranch(cfg, nextBranch, state); err != nil {
+	if err := updateChildBranch(repo, cfg, nextBranch, state); err != nil {
 		return err
 	}
 
 	// Mark this branch as updated and clear current child
 	state.UpdatedBranches = append(state.UpdatedBranches, nextBranch)
 	state.CurrentChildBranch = "" // Clear after successful update
-	if err := mergestate.SaveMergeState(state); err != nil {
+	if err := mergestate.SaveMergeState(repo, state); err != nil {
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
@@ -770,9 +769,9 @@ func handleUpdateChildrenStep(cfg *config.Config, state *mergestate.MergeState, 
 }
 
 // handleDeleteBranchStep handles branch deletion
-func handleDeleteBranchStep(cfg *config.Config, state *mergestate.MergeState, resolvedOptions *config.ResolvedFinishOptions) error {
+func handleDeleteBranchStep(repo *git.Repo, cfg *config.Config, state *mergestate.MergeState, resolvedOptions *config.ResolvedFinishOptions) error {
 	// Ensure we're on the parent branch before deletion
-	if err := git.Checkout(state.ParentBranch); err != nil {
+	if err := repo.Checkout(state.ParentBranch); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("checkout parent branch '%s'", state.ParentBranch), Err: err}
 	}
 
@@ -780,7 +779,7 @@ func handleDeleteBranchStep(cfg *config.Config, state *mergestate.MergeState, re
 	// tags, and child updates are complete — the state is only needed for conflict
 	// recovery which is no longer possible. Clearing early ensures a failed branch
 	// deletion (e.g. remote permission error) doesn't leave stale merge state.
-	if err := mergestate.ClearMergeState(); err != nil {
+	if err := mergestate.ClearMergeState(repo); err != nil {
 		return &errors.GitError{Operation: "clear merge state", Err: err}
 	}
 
@@ -795,14 +794,14 @@ func handleDeleteBranchStep(cfg *config.Config, state *mergestate.MergeState, re
 	// Delete branches based on settings
 	// Use force delete since we've already merged the branch
 	forceDelete := true
-	if err := deleteBranchesIfNeeded(state, cfg.Remote, keepRemote, keepLocal, forceDelete); err != nil {
+	if err := deleteBranchesIfNeeded(repo, state, cfg.Remote, keepRemote, keepLocal, forceDelete); err != nil {
 		return err
 	}
 
 	// Clean up base branch configuration if branch was deleted
 	if !keepLocal {
 		configKey := fmt.Sprintf("gitflow.branch.%s.base", state.FullBranchName)
-		if err := git.UnsetConfigIfPresent(configKey); err != nil {
+		if err := repo.UnsetConfigIfPresent(configKey); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Failed to clean up base config: %v\n", err)
 		}
 	}
@@ -810,32 +809,30 @@ func handleDeleteBranchStep(cfg *config.Config, state *mergestate.MergeState, re
 	// Push stage: runs after all local work is complete and the merge state is
 	// cleared. A missing remote is a skip (exit 0); a rejected push is a real
 	// error, leaving the completed local finish as-is.
-	if err := pushFinishedBranches(cfg, state, resolvedOptions); err != nil {
+	if err := pushFinishedBranches(repo, cfg, state, resolvedOptions); err != nil {
 		return err
 	}
 
 	fmt.Printf("Successfully finished branch '%s' and updated %d child base branches\n", state.FullBranchName, len(state.UpdatedBranches))
 
 	// Run post-hook after successful completion
-	gitDir, err := git.GetGitDir()
-	if err == nil {
-		hookCtx := hooks.HookContext{
-			BranchType: state.BranchType,
-			BranchName: state.BranchName,
-			FullBranch: state.FullBranchName,
-			BaseBranch: state.ParentBranch,
-			Origin:     cfg.Remote,
-			ExitCode:   0, // Success
-		}
-		// Set version for branches configured with tagging
-		if resolvedOptions.ShouldTag {
-			hookCtx.Version = state.BranchName
-		}
+	gitDir := repo.GitDir()
+	hookCtx := hooks.HookContext{
+		BranchType: state.BranchType,
+		BranchName: state.BranchName,
+		FullBranch: state.FullBranchName,
+		BaseBranch: state.ParentBranch,
+		Origin:     cfg.Remote,
+		ExitCode:   0, // Success
+	}
+	// Set version for branches configured with tagging
+	if resolvedOptions.ShouldTag {
+		hookCtx.Version = state.BranchName
+	}
 
-		result := hooks.RunPostHook(gitDir, state.BranchType, hooks.HookActionFinish, hookCtx)
-		if result.Executed && result.Output != "" {
-			fmt.Print(result.Output)
-		}
+	result := hooks.RunPostHook(gitDir, state.BranchType, hooks.HookActionFinish, hookCtx)
+	if result.Executed && result.Output != "" {
+		fmt.Print(result.Output)
 	}
 
 	return nil
@@ -852,7 +849,7 @@ func handleDeleteBranchStep(cfg *config.Config, state *mergestate.MergeState, re
 //   - A push failure (e.g. non-fast-forward rejection): returns the error
 //     verbatim, which propagates to a non-zero exit. The completed local finish
 //     is left as-is (nothing is rolled back).
-func pushFinishedBranches(cfg *config.Config, state *mergestate.MergeState, resolvedOptions *config.ResolvedFinishOptions) error {
+func pushFinishedBranches(repo *git.Repo, cfg *config.Config, state *mergestate.MergeState, resolvedOptions *config.ResolvedFinishOptions) error {
 	// Only push the tag if one was actually created.
 	tagToPush := resolvedOptions.PushTag && resolvedOptions.ShouldTag
 
@@ -864,7 +861,7 @@ func pushFinishedBranches(cfg *config.Config, state *mergestate.MergeState, reso
 	remote := cfg.Remote
 
 	// A missing remote is a skip-with-note, not an error.
-	if !git.RemoteExists(remote) {
+	if !repo.RemoteExists(remote) {
 		fmt.Printf("Note: Remote '%s' not configured, skipping push\n", remote)
 		return nil
 	}
@@ -882,7 +879,7 @@ func pushFinishedBranches(cfg *config.Config, state *mergestate.MergeState, reso
 		}
 
 		for _, branch := range branches {
-			if err := git.PushRef(remote, branch); err != nil {
+			if err := repo.PushRef(remote, branch); err != nil {
 				return &errors.GitError{Operation: fmt.Sprintf("push branch '%s'", branch), Err: err}
 			}
 			fmt.Printf("  %s -> %s/%s\n", branch, remote, branch)
@@ -890,7 +887,7 @@ func pushFinishedBranches(cfg *config.Config, state *mergestate.MergeState, reso
 	}
 
 	if tagToPush {
-		if err := git.PushTag(remote, resolvedOptions.TagName); err != nil {
+		if err := repo.PushTag(remote, resolvedOptions.TagName); err != nil {
 			return &errors.GitError{Operation: fmt.Sprintf("push tag '%s'", resolvedOptions.TagName), Err: err}
 		}
 		fmt.Printf("  %s (tag) -> %s\n", resolvedOptions.TagName, remote)
@@ -902,14 +899,14 @@ func pushFinishedBranches(cfg *config.Config, state *mergestate.MergeState, reso
 // handleIntegrateDoneStep terminates an integrate operation. Unlike finish, it
 // never deletes the integrated branch (base branches are permanent): it checks
 // out the parent branch and clears the merge state.
-func handleIntegrateDoneStep(state *mergestate.MergeState) error {
+func handleIntegrateDoneStep(repo *git.Repo, state *mergestate.MergeState) error {
 	// Ensure we end up on the parent branch.
-	if err := git.Checkout(state.ParentBranch); err != nil {
+	if err := repo.Checkout(state.ParentBranch); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("checkout parent branch '%s'", state.ParentBranch), Err: err}
 	}
 
 	// Clear the merge state: all merges, tags, and child updates are complete.
-	if err := mergestate.ClearMergeState(); err != nil {
+	if err := mergestate.ClearMergeState(repo); err != nil {
 		return &errors.GitError{Operation: "clear merge state", Err: err}
 	}
 
@@ -922,16 +919,16 @@ func handleIntegrateDoneStep(state *mergestate.MergeState) error {
 // =============================================================================
 
 // resolveBranchName tries to find the branch name with and without prefix
-func resolveBranchName(name string, branchConfig config.BranchConfig) (string, error) {
+func resolveBranchName(repo *git.Repo, name string, branchConfig config.BranchConfig) (string, error) {
 	// Try name as-is first
-	if err := git.BranchExists(name); err == nil {
+	if err := repo.BranchExists(name); err == nil {
 		return name, nil
 	}
 
 	// If not found as-is, try with prefix
 	if !strings.HasPrefix(name, branchConfig.Prefix) {
 		fullName := branchConfig.Prefix + name
-		if err := git.BranchExists(fullName); err == nil {
+		if err := repo.BranchExists(fullName); err == nil {
 			return fullName, nil
 		}
 	}
@@ -940,14 +937,21 @@ func resolveBranchName(name string, branchConfig config.BranchConfig) (string, e
 }
 
 // createTagForBranchResolved creates a tag using resolved options
-func createTagForBranchResolved(state *mergestate.MergeState, options *config.ResolvedFinishOptions) error {
+func createTagForBranchResolved(repo *git.Repo, state *mergestate.MergeState, options *config.ResolvedFinishOptions) error {
 	// Determine if we should use message file
 	useMessageFile := options.MessageFile != ""
+
+	// Normalize a relative message-file path against the invocation directory.
+	// The tag is created via `git tag -F` running in the work tree, so without
+	// this a relative path (from --messagefile or gitflow.<type>.finish.messagefile)
+	// would resolve against the work-tree root instead of the directory git-flow
+	// was invoked from — the invocation-directory-relative meaning the user expects.
+	messageFile := normalizeInvocationPath(options.MessageFile)
 
 	// Create the tag using the git module
 	gitTagOptions := &git.TagOptions{
 		Message:     options.TagMessage,
-		MessageFile: options.MessageFile,
+		MessageFile: messageFile,
 		Sign:        options.ShouldSign,
 		SigningKey:  options.SigningKey,
 	}
@@ -959,7 +963,7 @@ func createTagForBranchResolved(state *mergestate.MergeState, options *config.Re
 		gitTagOptions.MessageFile = "" // Clear file since we're using message
 	}
 
-	if err := git.CreateTag(options.TagName, gitTagOptions); err != nil {
+	if err := repo.CreateTag(options.TagName, gitTagOptions); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("create tag '%s'", options.TagName), Err: err}
 	}
 	fmt.Printf("Created tag '%s'\n", options.TagName)
@@ -984,12 +988,12 @@ func findNextBranchToUpdate(state *mergestate.MergeState) string {
 }
 
 // updateChildBranch updates a single child branch
-func updateChildBranch(cfg *config.Config, branchName string, state *mergestate.MergeState) error {
+func updateChildBranch(repo *git.Repo, cfg *config.Config, branchName string, state *mergestate.MergeState) error {
 	fmt.Printf("Updating child base branch '%s' from '%s'...\n", branchName, state.ParentBranch)
 
 	// Track which child branch we're updating
 	state.CurrentChildBranch = branchName
-	if err := mergestate.SaveMergeState(state); err != nil {
+	if err := mergestate.SaveMergeState(repo, state); err != nil {
 		return &errors.GitError{Operation: "save merge state", Err: err}
 	}
 
@@ -1016,7 +1020,7 @@ func updateChildBranch(cfg *config.Config, branchName string, state *mergestate.
 	}
 
 	// Use the shared update logic with the determined strategy and custom message if provided
-	err := update.UpdateBranchFromParentWithMessage(branchName, state.ParentBranch, strategy, updateMsg, true, state)
+	err := update.UpdateBranchFromParentWithMessage(repo, branchName, state.ParentBranch, strategy, updateMsg, true, state)
 	if err != nil {
 		if _, ok := err.(*errors.UnresolvedConflictsError); ok {
 			// Get resolved options for the message (might be nil, but generateConflictMessage handles that)
@@ -1038,13 +1042,13 @@ func updateChildBranch(cfg *config.Config, branchName string, state *mergestate.
 }
 
 // deleteBranchesIfNeeded deletes branches based on retention settings
-func deleteBranchesIfNeeded(state *mergestate.MergeState, remote string, keepRemote, keepLocal, forceDelete bool) error {
+func deleteBranchesIfNeeded(repo *git.Repo, state *mergestate.MergeState, remote string, keepRemote, keepLocal, forceDelete bool) error {
 	// Delete remote branch if not keeping it and if remote branch exists
 	if !keepRemote {
 		// Only attempt to delete if the remote branch actually exists
-		if git.RemoteBranchExists(remote, state.FullBranchName) {
+		if repo.RemoteBranchExists(remote, state.FullBranchName) {
 			remoteBranch := fmt.Sprintf("%s/%s", remote, state.FullBranchName)
-			if err := git.DeleteRemoteBranch(remote, state.FullBranchName); err != nil {
+			if err := repo.DeleteRemoteBranch(remote, state.FullBranchName); err != nil {
 				return &errors.GitError{Operation: fmt.Sprintf("delete remote branch '%s'", remoteBranch), Err: err}
 			}
 		}
@@ -1052,7 +1056,7 @@ func deleteBranchesIfNeeded(state *mergestate.MergeState, remote string, keepRem
 
 	// Delete local branch if not keeping it
 	if !keepLocal {
-		if err := git.DeleteBranch(state.FullBranchName, forceDelete); err != nil {
+		if err := repo.DeleteBranch(state.FullBranchName, forceDelete); err != nil {
 			return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", state.FullBranchName), Err: err}
 		}
 	}

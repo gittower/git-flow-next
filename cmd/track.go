@@ -13,7 +13,12 @@ import (
 
 // TrackCommand is the implementation of the track command for topic branches
 func TrackCommand(branchType string, name string) {
-	if err := track(branchType, name); err != nil {
+	repo, err := openRepo()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
+		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
+	}
+	if err := track(repo, branchType, name); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -26,9 +31,9 @@ func TrackCommand(branchType string, name string) {
 }
 
 // track performs the actual tracking branch creation logic
-func track(branchType string, name string) error {
+func track(repo *git.Repo, branchType string, name string) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -42,7 +47,7 @@ func track(branchType string, name string) error {
 	}
 
 	// Get configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -63,7 +68,7 @@ func track(branchType string, name string) error {
 	}
 
 	// Check if branch already exists locally
-	if err := git.BranchExists(fullBranchName); err == nil {
+	if err := repo.BranchExists(fullBranchName); err == nil {
 		return &errors.BranchExistsError{BranchName: fullBranchName}
 	}
 
@@ -71,15 +76,12 @@ func track(branchType string, name string) error {
 	remote := cfg.Remote
 
 	// Validate remote exists
-	if !git.RemoteExists(remote) {
+	if !repo.RemoteExists(remote) {
 		return &errors.RemoteNotConfiguredError{Remote: remote, Operation: "track branch"}
 	}
 
 	// Get git directory for hooks
-	gitDir, err := git.GetGitDir()
-	if err != nil {
-		return &errors.GitError{Operation: "get git directory", Err: err}
-	}
+	gitDir := repo.GitDir()
 
 	// Build hook context
 	hookCtx := hooks.HookContext{
@@ -95,15 +97,15 @@ func track(branchType string, name string) error {
 
 	// Run track operation wrapped with hooks
 	return hooks.WithHooks(gitDir, branchType, hooks.HookActionTrack, hookCtx, func() error {
-		return executeTrack(fullBranchName, remote)
+		return executeTrack(repo, fullBranchName, remote)
 	})
 }
 
 // executeTrack performs the actual track operation (called within hooks wrapper)
-func executeTrack(fullBranchName, remote string) error {
+func executeTrack(repo *git.Repo, fullBranchName, remote string) error {
 	// Fetch from remote to ensure we have latest refs
 	fmt.Printf("Fetching from '%s'...\n", remote)
-	if err := git.Fetch(remote); err != nil {
+	if err := repo.Fetch(remote); err != nil {
 		return &errors.GitError{
 			Operation: fmt.Sprintf("fetch from remote '%s'", remote),
 			Err:       err,
@@ -111,7 +113,7 @@ func executeTrack(fullBranchName, remote string) error {
 	}
 
 	// Check if branch exists on remote
-	if !git.RemoteBranchExists(remote, fullBranchName) {
+	if !repo.RemoteBranchExists(remote, fullBranchName) {
 		return &errors.RemoteBranchNotFoundError{
 			Remote:     remote,
 			BranchName: fullBranchName,
@@ -120,7 +122,7 @@ func executeTrack(fullBranchName, remote string) error {
 
 	// Create local tracking branch
 	fmt.Printf("Setting up tracking branch for '%s'...\n", fullBranchName)
-	if err := git.CreateTrackingBranch(fullBranchName, remote, fullBranchName); err != nil {
+	if err := repo.CreateTrackingBranch(fullBranchName, remote, fullBranchName); err != nil {
 		return &errors.GitError{
 			Operation: fmt.Sprintf("create tracking branch '%s'", fullBranchName),
 			Err:       err,
