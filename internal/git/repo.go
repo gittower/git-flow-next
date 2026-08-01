@@ -32,29 +32,95 @@ const (
 	SyncStatusNoTracking BranchSyncStatus = "no_tracking"
 )
 
-// IsGitRepo checks if the current directory is a Git repository
-func IsGitRepo() bool {
-	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
-	err := cmd.Run()
-	return err == nil
+// gitCommand is the single command factory for the git package. It is the only
+// place git is invoked, so every repo-bound operation runs with a deterministic
+// working directory instead of the process CWD. Pass dir="" for the rare
+// repository-less invocations (explicit --global/--system/--file config scopes)
+// that must not bind to a work tree.
+func gitCommand(dir string, args ...string) *exec.Cmd {
+	cmd := exec.Command("git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	return cmd
 }
 
-// GetGitDir returns the path to the git directory for the current repository.
-// For regular repositories, this returns ".git".
-// For worktrees, this returns the actual git directory path (e.g., "/repo/.git/worktrees/work1").
-func GetGitDir() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--git-dir")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to get git directory: %w", err)
+// Repo is a handle to a specific git repository resolved to absolute paths. All
+// repo-bound operations are methods on *Repo and run with the work tree as their
+// working directory, so they never depend on the process CWD.
+type Repo struct {
+	workTree     string // absolute path to the work-tree root
+	gitDir       string // absolute path to this working tree's git dir
+	commonGitDir string // absolute path to the shared (common) git dir
+}
+
+// WorkTree returns the absolute path to the repository's work-tree root.
+func (r *Repo) WorkTree() string { return r.workTree }
+
+// GitDir returns the absolute path to this working tree's git directory. For a
+// linked worktree this is the per-worktree dir (<common>/worktrees/<name>).
+func (r *Repo) GitDir() string { return r.gitDir }
+
+// CommonGitDir returns the absolute path to the repository's common git
+// directory (the main .git), shared across linked worktrees.
+func (r *Repo) CommonGitDir() string { return r.commonGitDir }
+
+// gitCmd builds a git command bound to this repository's work tree.
+func (r *Repo) gitCmd(args ...string) *exec.Cmd {
+	return gitCommand(r.workTree, args...)
+}
+
+// Open resolves dir to a git repository and returns a handle carrying absolute
+// work-tree, git-dir, and common-git-dir paths. It errors on an empty dir or a
+// directory that is not inside a git work tree; it never falls back to the
+// process working directory.
+func Open(dir string) (*Repo, error) {
+	if strings.TrimSpace(dir) == "" {
+		return nil, fmt.Errorf("git.Open: directory must not be empty")
 	}
-	return strings.TrimSpace(string(output)), nil
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, fmt.Errorf("git.Open: resolve %q: %w", dir, err)
+	}
+	if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+		return nil, fmt.Errorf("git.Open: %q is not an accessible directory", dir)
+	}
+
+	run := func(args ...string) (string, error) {
+		out, err := gitCommand(abs, args...).Output()
+		return strings.TrimSpace(string(out)), err
+	}
+
+	workTree, err := run("rev-parse", "--show-toplevel")
+	if err != nil {
+		return nil, fmt.Errorf("git.Open: %q is not inside a git work tree: %w", dir, err)
+	}
+	gitDir, err := run("rev-parse", "--absolute-git-dir")
+	if err != nil {
+		return nil, fmt.Errorf("git.Open: resolve git dir for %q: %w", dir, err)
+	}
+	commonRaw, err := run("rev-parse", "--git-common-dir")
+	if err != nil {
+		return nil, fmt.Errorf("git.Open: resolve common git dir for %q: %w", dir, err)
+	}
+
+	commonGitDir := commonRaw
+	if !filepath.IsAbs(commonGitDir) {
+		// --git-common-dir may be relative to the directory git ran in (abs).
+		commonGitDir = filepath.Join(abs, commonGitDir)
+	}
+
+	return &Repo{
+		workTree:     filepath.Clean(workTree),
+		gitDir:       filepath.Clean(gitDir),
+		commonGitDir: filepath.Clean(commonGitDir),
+	}, nil
 }
 
 // GetCurrentBranch returns the current Git branch
-func GetCurrentBranch() (string, error) {
+func (r *Repo) GetCurrentBranch() (string, error) {
 	// Check if we have any commits
-	hasCommits, err := HasCommits()
+	hasCommits, err := r.HasCommits()
 	if err != nil {
 		return "", fmt.Errorf("failed to check if repository has commits: %w", err)
 	}
@@ -64,8 +130,7 @@ func GetCurrentBranch() (string, error) {
 		return "", nil
 	}
 
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	output, err := cmd.Output()
+	output, err := r.gitCmd("rev-parse", "--abbrev-ref", "HEAD").Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get current branch: %w", err)
 	}
@@ -73,35 +138,32 @@ func GetCurrentBranch() (string, error) {
 }
 
 // BranchExists checks if a branch exists
-func BranchExists(branch string) error {
-	cmd := exec.Command("git", "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
-	if err := cmd.Run(); err != nil {
+func (r *Repo) BranchExists(branch string) error {
+	if err := r.gitCmd("rev-parse", "--verify", "--quiet", "refs/heads/"+branch).Run(); err != nil {
 		return fmt.Errorf("branch '%s' does not exist", branch)
 	}
 	return nil
 }
 
 // BranchOrCommitExists checks if a branch, tag, or commit exists
-func BranchOrCommitExists(ref string) error {
-	cmd := exec.Command("git", "rev-parse", "--verify", "--quiet", ref)
-	if err := cmd.Run(); err != nil {
+func (r *Repo) BranchOrCommitExists(ref string) error {
+	if err := r.gitCmd("rev-parse", "--verify", "--quiet", ref).Run(); err != nil {
 		return fmt.Errorf("reference '%s' does not exist", ref)
 	}
 	return nil
 }
 
 // CreateBranch creates a new branch
-func CreateBranch(name string, startPoint string) error {
+func (r *Repo) CreateBranch(name string, startPoint string) error {
 	// Check if we have any commits
-	hasCommits, err := HasCommits()
+	hasCommits, err := r.HasCommits()
 	if err != nil {
 		return fmt.Errorf("failed to check if repository has commits: %w", err)
 	}
 
 	if !hasCommits {
 		// If no commits, create an initial commit first
-		err = CreateInitialCommit(name)
-		if err != nil {
+		if err := r.CreateInitialCommit(name); err != nil {
 			return fmt.Errorf("failed to create initial commit: %w", err)
 		}
 		return nil
@@ -109,40 +171,35 @@ func CreateBranch(name string, startPoint string) error {
 
 	// If startPoint is empty, use the current branch
 	if startPoint == "" {
-		currentBranch, err := GetCurrentBranch()
+		currentBranch, err := r.GetCurrentBranch()
 		if err != nil {
 			return fmt.Errorf("failed to get current branch: %w", err)
 		}
 		startPoint = currentBranch
 	}
 
-	cmd := exec.Command("git", "checkout", "-b", name, startPoint)
-	_, err = cmd.Output()
-	if err != nil {
+	if _, err := r.gitCmd("checkout", "-b", name, startPoint).Output(); err != nil {
 		return fmt.Errorf("failed to create branch: %w", err)
 	}
 	return nil
 }
 
 // Checkout checks out a branch
-func Checkout(branch string) error {
-	cmd := exec.Command("git", "checkout", branch)
-	_, err := cmd.Output()
-	if err != nil {
+func (r *Repo) Checkout(branch string) error {
+	if _, err := r.gitCmd("checkout", branch).Output(); err != nil {
 		return fmt.Errorf("failed to checkout branch: %w", err)
 	}
 	return nil
 }
 
 // DeleteBranch deletes a branch
-func DeleteBranch(branch string, force bool) error {
+func (r *Repo) DeleteBranch(branch string, force bool) error {
 	flag := "-d"
 	if force {
 		flag = "-D"
 	}
 
-	cmd := exec.Command("git", "branch", flag, branch)
-	output, err := cmd.CombinedOutput()
+	output, err := r.gitCmd("branch", flag, branch).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to delete branch: %s", string(output))
 	}
@@ -150,10 +207,8 @@ func DeleteBranch(branch string, force bool) error {
 }
 
 // HasCommits checks if the repository has any commits
-func HasCommits() (bool, error) {
-	cmd := exec.Command("git", "rev-parse", "--verify", "HEAD")
-	err := cmd.Run()
-	if err != nil {
+func (r *Repo) HasCommits() (bool, error) {
+	if err := r.gitCmd("rev-parse", "--verify", "HEAD").Run(); err != nil {
 		// If error, there are no commits
 		return false, nil
 	}
@@ -161,18 +216,14 @@ func HasCommits() (bool, error) {
 }
 
 // CreateInitialCommit creates an initial commit and branch
-func CreateInitialCommit(branch string) error {
+func (r *Repo) CreateInitialCommit(branch string) error {
 	// Create an empty initial commit
-	cmd := exec.Command("git", "commit", "--allow-empty", "-m", "Initial commit")
-	_, err := cmd.Output()
-	if err != nil {
+	if _, err := r.gitCmd("commit", "--allow-empty", "-m", "Initial commit").Output(); err != nil {
 		return fmt.Errorf("failed to create initial commit: %w", err)
 	}
 
 	// Rename the default branch to the target name
-	cmd = exec.Command("git", "branch", "-m", branch)
-	_, err = cmd.Output()
-	if err != nil {
+	if _, err := r.gitCmd("branch", "-m", branch).Output(); err != nil {
 		return fmt.Errorf("failed to rename branch to %s: %w", branch, err)
 	}
 
@@ -180,22 +231,20 @@ func CreateInitialCommit(branch string) error {
 }
 
 // Merge merges a branch into the current branch
-func Merge(branch string, noVerify bool) error {
+func (r *Repo) Merge(branch string, noVerify bool) error {
 	args := []string{"merge", "--no-ff"}
 	if noVerify {
 		args = append(args, "--no-verify")
 	}
 	args = append(args, branch)
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := r.gitCmd(args...).CombinedOutput()
 	outputStr := string(output)
 
 	// Check for merge conflicts - Git returns exit code 1 and specific output patterns
 	if err != nil {
 		// Check if there are unmerged paths (conflicts)
-		conflictCmd := exec.Command("git", "ls-files", "--unmerged")
-		conflictOutput, _ := conflictCmd.Output()
+		conflictOutput, _ := r.gitCmd("ls-files", "--unmerged").Output()
 
 		if len(conflictOutput) > 0 ||
 			strings.Contains(outputStr, "Automatic merge failed") ||
@@ -211,9 +260,8 @@ func Merge(branch string, noVerify bool) error {
 }
 
 // Rebase rebases the current branch onto another branch
-func Rebase(branch string) error {
-	cmd := exec.Command("git", "rebase", branch)
-	output, err := cmd.CombinedOutput()
+func (r *Repo) Rebase(branch string) error {
+	output, err := r.gitCmd("rebase", branch).CombinedOutput()
 	if err != nil {
 		if strings.Contains(string(output), "conflict") {
 			return fmt.Errorf("rebase conflict: %s", string(output))
@@ -224,15 +272,14 @@ func Rebase(branch string) error {
 }
 
 // SquashMerge performs a squash merge of a branch into the current branch
-func SquashMerge(branch string, noVerify bool) error {
+func (r *Repo) SquashMerge(branch string, noVerify bool) error {
 	args := []string{"merge", "--squash"}
 	if noVerify {
 		args = append(args, "--no-verify")
 	}
 	args = append(args, branch)
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := r.gitCmd(args...).CombinedOutput()
 	if err != nil {
 		if strings.Contains(string(output), "conflict") {
 			return fmt.Errorf("squash merge conflict: %s", string(output))
@@ -245,8 +292,7 @@ func SquashMerge(branch string, noVerify bool) error {
 	if noVerify {
 		commitArgs = append(commitArgs, "--no-verify")
 	}
-	cmd = exec.Command("git", commitArgs...)
-	output, err = cmd.CombinedOutput()
+	output, err = r.gitCmd(commitArgs...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to commit squashed changes: %s", string(output))
 	}
@@ -255,14 +301,12 @@ func SquashMerge(branch string, noVerify bool) error {
 }
 
 // ListBranches returns a list of all branches in the repository
-func ListBranches() ([]string, error) {
-	cmd := exec.Command("git", "branch", "--format=%(refname:short)")
-	output, err := cmd.Output()
+func (r *Repo) ListBranches() ([]string, error) {
+	output, err := r.gitCmd("branch", "--format=%(refname:short)").Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list branches: %w", err)
 	}
 
-	// Split the output by newlines and remove empty lines
 	branches := []string{}
 	for _, branch := range strings.Split(string(output), "\n") {
 		if branch != "" {
@@ -274,10 +318,8 @@ func ListBranches() ([]string, error) {
 }
 
 // HasConflicts checks if there are unresolved conflicts
-func HasConflicts() bool {
-	// Check for unmerged paths
-	cmd := exec.Command("git", "diff", "--name-only", "--diff-filter=U")
-	output, err := cmd.Output()
+func (r *Repo) HasConflicts() bool {
+	output, err := r.gitCmd("diff", "--name-only", "--diff-filter=U").Output()
 	if err != nil {
 		return false
 	}
@@ -285,26 +327,18 @@ func HasConflicts() bool {
 }
 
 // IsGitMergeInProgress checks if git is in a merge state by looking for MERGE_HEAD
-func IsGitMergeInProgress() bool {
-	gitDir, err := GetGitDir()
-	if err != nil {
-		return false
-	}
-	_, err = os.Stat(filepath.Join(gitDir, "MERGE_HEAD"))
+func (r *Repo) IsGitMergeInProgress() bool {
+	_, err := os.Stat(filepath.Join(r.gitDir, "MERGE_HEAD"))
 	return err == nil
 }
 
 // IsGitRebaseInProgress checks if git is in a rebase state by looking for
 // rebase-merge/ (merge backend, including interactive) or rebase-apply/ (legacy apply backend)
-func IsGitRebaseInProgress() bool {
-	gitDir, err := GetGitDir()
-	if err != nil {
-		return false
-	}
-	if _, err := os.Stat(filepath.Join(gitDir, "rebase-merge")); err == nil {
+func (r *Repo) IsGitRebaseInProgress() bool {
+	if _, err := os.Stat(filepath.Join(r.gitDir, "rebase-merge")); err == nil {
 		return true
 	}
-	if _, err := os.Stat(filepath.Join(gitDir, "rebase-apply")); err == nil {
+	if _, err := os.Stat(filepath.Join(r.gitDir, "rebase-apply")); err == nil {
 		return true
 	}
 	return false
@@ -313,34 +347,28 @@ func IsGitRebaseInProgress() bool {
 // IsGitSquashMergeInProgress checks if git is in a squash merge state.
 // Squash merges create SQUASH_MSG but not MERGE_HEAD. However, SQUASH_MSG also
 // appears during interactive rebase squash steps, so we exclude that case.
-func IsGitSquashMergeInProgress() bool {
-	gitDir, err := GetGitDir()
-	if err != nil {
-		return false
-	}
-	if _, err := os.Stat(filepath.Join(gitDir, "SQUASH_MSG")); err != nil {
+func (r *Repo) IsGitSquashMergeInProgress() bool {
+	if _, err := os.Stat(filepath.Join(r.gitDir, "SQUASH_MSG")); err != nil {
 		return false
 	}
 	// Exclude interactive rebase squash steps
-	if _, err := os.Stat(filepath.Join(gitDir, "rebase-merge")); err == nil {
+	if _, err := os.Stat(filepath.Join(r.gitDir, "rebase-merge")); err == nil {
 		return false
 	}
 	return true
 }
 
 // MergeAbort aborts the current merge
-func MergeAbort() error {
-	cmd := exec.Command("git", "merge", "--abort")
-	if err := cmd.Run(); err != nil {
+func (r *Repo) MergeAbort() error {
+	if err := r.gitCmd("merge", "--abort").Run(); err != nil {
 		return fmt.Errorf("failed to abort merge: %w", err)
 	}
 	return nil
 }
 
 // RebaseAbort aborts the current rebase
-func RebaseAbort() error {
-	cmd := exec.Command("git", "rebase", "--abort")
-	output, err := cmd.CombinedOutput()
+func (r *Repo) RebaseAbort() error {
+	output, err := r.gitCmd("rebase", "--abort").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to abort rebase: %s", string(output))
 	}
@@ -349,8 +377,8 @@ func RebaseAbort() error {
 
 // RenameBranch renames a branch. If oldBranch is provided, it renames that branch to newBranch.
 // If oldBranch is not provided, it renames the current branch to newBranch.
-func RenameBranch(oldBranch, newBranch string) error {
-	return renameBranch(oldBranch, newBranch, false)
+func (r *Repo) RenameBranch(oldBranch, newBranch string) error {
+	return r.renameBranch(oldBranch, newBranch, false)
 }
 
 // RenameBranchForce renames a Git branch using the force flag (-M). This is
@@ -358,19 +386,17 @@ func RenameBranch(oldBranch, newBranch string) error {
 // destination name folds to the same existing ref and the non-forcing -m
 // refuses with "a branch named '…' already exists". Callers must confirm the
 // rename does not clobber a genuinely different branch before forcing.
-func RenameBranchForce(oldBranch, newBranch string) error {
-	return renameBranch(oldBranch, newBranch, true)
+func (r *Repo) RenameBranchForce(oldBranch, newBranch string) error {
+	return r.renameBranch(oldBranch, newBranch, true)
 }
 
-func renameBranch(oldBranch, newBranch string, force bool) error {
+func (r *Repo) renameBranch(oldBranch, newBranch string, force bool) error {
 	flag := "-m"
 	if force {
 		flag = "-M"
 	}
-	args := []string{"branch", flag, oldBranch, newBranch}
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := r.gitCmd("branch", flag, oldBranch, newBranch).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to rename branch: %s", strings.TrimSpace(string(output)))
 	}
@@ -378,9 +404,8 @@ func renameBranch(oldBranch, newBranch string, force bool) error {
 }
 
 // Fetch performs a git fetch from the specified remote
-func Fetch(remote string) error {
-	cmd := exec.Command("git", "fetch", remote)
-	output, err := cmd.CombinedOutput()
+func (r *Repo) Fetch(remote string) error {
+	output, err := r.gitCmd("fetch", remote).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to fetch from remote '%s': %s", remote, string(output))
 	}
@@ -388,9 +413,8 @@ func Fetch(remote string) error {
 }
 
 // DeleteRemoteBranch deletes a branch from a remote repository
-func DeleteRemoteBranch(remote, branch string) error {
-	cmd := exec.Command("git", "push", remote, ":"+branch)
-	output, err := cmd.CombinedOutput()
+func (r *Repo) DeleteRemoteBranch(remote, branch string) error {
+	output, err := r.gitCmd("push", remote, ":"+branch).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to delete remote branch: %s", string(output))
 	}
@@ -399,17 +423,14 @@ func DeleteRemoteBranch(remote, branch string) error {
 
 // RemoteExists checks if a remote is configured in the local git config.
 // This is a local-only check (no network call).
-func RemoteExists(remote string) bool {
-	cmd := exec.Command("git", "remote", "get-url", remote)
-	return cmd.Run() == nil
+func (r *Repo) RemoteExists(remote string) bool {
+	return r.gitCmd("remote", "get-url", remote).Run() == nil
 }
 
 // RemoteBranchExists checks if a remote branch exists
-func RemoteBranchExists(remote, branch string) bool {
-	// Check if the remote tracking branch exists
+func (r *Repo) RemoteBranchExists(remote, branch string) bool {
 	ref := fmt.Sprintf("refs/remotes/%s/%s", remote, branch)
-	cmd := exec.Command("git", "rev-parse", "--verify", "--quiet", ref)
-	return cmd.Run() == nil
+	return r.gitCmd("rev-parse", "--verify", "--quiet", ref).Run() == nil
 }
 
 // TagOptions contains options for tag creation
@@ -421,10 +442,9 @@ type TagOptions struct {
 }
 
 // CreateTag creates a Git tag with the specified options
-func CreateTag(tagName string, options *TagOptions) error {
+func (r *Repo) CreateTag(tagName string, options *TagOptions) error {
 	// Check if tag already exists
-	cmd := exec.Command("git", "show-ref", "--tags", tagName)
-	if err := cmd.Run(); err == nil {
+	if err := r.gitCmd("show-ref", "--tags", tagName).Run(); err == nil {
 		// Tag already exists, skip creation
 		return nil
 	}
@@ -458,9 +478,7 @@ func CreateTag(tagName string, options *TagOptions) error {
 		return fmt.Errorf("tag message is required for annotated tags")
 	}
 
-	// Execute tag command
-	cmd = exec.Command("git", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := r.gitCmd(args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to create tag '%s': %w (output: %s)", tagName, err, string(output))
 	}
@@ -469,15 +487,14 @@ func CreateTag(tagName string, options *TagOptions) error {
 }
 
 // RebaseWithOptions rebases the current branch onto another branch with optional preserve-merges
-func RebaseWithOptions(targetBranch string, preserveMerges bool) error {
+func (r *Repo) RebaseWithOptions(targetBranch string, preserveMerges bool) error {
 	args := []string{"rebase"}
 	if preserveMerges {
 		args = append(args, "--preserve-merges")
 	}
 	args = append(args, targetBranch)
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := r.gitCmd(args...).CombinedOutput()
 	if err != nil {
 		if strings.Contains(string(output), "conflict") {
 			return fmt.Errorf("rebase conflict: %s", string(output))
@@ -489,9 +506,8 @@ func RebaseWithOptions(targetBranch string, preserveMerges bool) error {
 
 // MergeFFOnly attempts a fast-forward-only merge of the given branch into the current branch.
 // Returns an error if the merge cannot be fast-forwarded.
-func MergeFFOnly(branch string) error {
-	cmd := exec.Command("git", "merge", "--ff-only", branch)
-	output, err := cmd.CombinedOutput()
+func (r *Repo) MergeFFOnly(branch string) error {
+	output, err := r.gitCmd("merge", "--ff-only", branch).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("fast-forward merge of %q failed: %w: %s", branch, err, strings.TrimSpace(string(output)))
 	}
@@ -499,7 +515,7 @@ func MergeFFOnly(branch string) error {
 }
 
 // MergeWithOptions merges a branch into current branch with optional no-fast-forward
-func MergeWithOptions(branchName string, noFF bool, noVerify bool) error {
+func (r *Repo) MergeWithOptions(branchName string, noFF bool, noVerify bool) error {
 	args := []string{"merge"}
 	if noFF {
 		args = append(args, "--no-ff")
@@ -509,15 +525,11 @@ func MergeWithOptions(branchName string, noFF bool, noVerify bool) error {
 	}
 	args = append(args, branchName)
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := r.gitCmd(args...).CombinedOutput()
 	outputStr := string(output)
 
-	// Check for merge conflicts - Git returns exit code 1 and specific output patterns
 	if err != nil {
-		// Check if there are unmerged paths (conflicts)
-		conflictCmd := exec.Command("git", "ls-files", "--unmerged")
-		conflictOutput, _ := conflictCmd.Output()
+		conflictOutput, _ := r.gitCmd("ls-files", "--unmerged").Output()
 
 		if len(conflictOutput) > 0 ||
 			strings.Contains(outputStr, "Automatic merge failed") ||
@@ -533,7 +545,7 @@ func MergeWithOptions(branchName string, noFF bool, noVerify bool) error {
 }
 
 // MergeWithMessage merges a branch into current branch with a custom commit message
-func MergeWithMessage(branchName string, message string, noFF bool, noVerify bool) error {
+func (r *Repo) MergeWithMessage(branchName string, message string, noFF bool, noVerify bool) error {
 	args := []string{"merge"}
 	if noFF {
 		args = append(args, "--no-ff")
@@ -543,15 +555,11 @@ func MergeWithMessage(branchName string, message string, noFF bool, noVerify boo
 	}
 	args = append(args, "-m", message, branchName)
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := r.gitCmd(args...).CombinedOutput()
 	outputStr := string(output)
 
-	// Check for merge conflicts - Git returns exit code 1 and specific output patterns
 	if err != nil {
-		// Check if there are unmerged paths (conflicts)
-		conflictCmd := exec.Command("git", "ls-files", "--unmerged")
-		conflictOutput, _ := conflictCmd.Output()
+		conflictOutput, _ := r.gitCmd("ls-files", "--unmerged").Output()
 
 		if len(conflictOutput) > 0 ||
 			strings.Contains(outputStr, "Automatic merge failed") ||
@@ -567,13 +575,12 @@ func MergeWithMessage(branchName string, message string, noFF bool, noVerify boo
 }
 
 // Commit creates a commit with the given message
-func Commit(message string, noVerify bool) error {
+func (r *Repo) Commit(message string, noVerify bool) error {
 	args := []string{"commit", "-m", message}
 	if noVerify {
 		args = append(args, "--no-verify")
 	}
-	cmd := exec.Command("git", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := r.gitCmd(args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to commit: %s", string(output))
 	}
@@ -581,9 +588,8 @@ func Commit(message string, noVerify bool) error {
 }
 
 // RebaseContinue continues an ongoing rebase operation after conflicts are resolved
-func RebaseContinue() error {
-	cmd := exec.Command("git", "rebase", "--continue")
-	output, err := cmd.CombinedOutput()
+func (r *Repo) RebaseContinue() error {
+	output, err := r.gitCmd("rebase", "--continue").CombinedOutput()
 	outputStr := string(output)
 	if err != nil {
 		if strings.Contains(outputStr, "No rebase in progress") {
@@ -599,15 +605,14 @@ func RebaseContinue() error {
 }
 
 // MergeSquashWithMessage performs a squash merge with a custom commit message
-func MergeSquashWithMessage(branchName string, message string, noVerify bool) error {
+func (r *Repo) MergeSquashWithMessage(branchName string, message string, noVerify bool) error {
 	args := []string{"merge", "--squash"}
 	if noVerify {
 		args = append(args, "--no-verify")
 	}
 	args = append(args, branchName)
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := r.gitCmd(args...).CombinedOutput()
 	if err != nil {
 		if strings.Contains(string(output), "conflict") {
 			return fmt.Errorf("squash merge conflict: %s", string(output))
@@ -620,8 +625,7 @@ func MergeSquashWithMessage(branchName string, message string, noVerify bool) er
 	if noVerify {
 		commitArgs = append(commitArgs, "--no-verify")
 	}
-	cmd = exec.Command("git", commitArgs...)
-	output, err = cmd.CombinedOutput()
+	output, err = r.gitCmd(commitArgs...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to commit squashed changes: %s", string(output))
 	}
@@ -630,7 +634,7 @@ func MergeSquashWithMessage(branchName string, message string, noVerify bool) er
 }
 
 // PushBranch pushes a local branch to a remote and sets up tracking
-func PushBranch(remote, branch string, pushOptions []string) error {
+func (r *Repo) PushBranch(remote, branch string, pushOptions []string) error {
 	args := []string{"push", "-u", remote}
 
 	for _, opt := range pushOptions {
@@ -639,8 +643,7 @@ func PushBranch(remote, branch string, pushOptions []string) error {
 
 	args = append(args, branch)
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := r.gitCmd(args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to push branch '%s' to '%s': %s", branch, remote, strings.TrimSpace(string(output)))
 	}
@@ -652,9 +655,8 @@ func PushBranch(remote, branch string, pushOptions []string) error {
 // avoids rewriting tracking config. On failure it returns a wrapped error that
 // embeds the underlying error and the trimmed combined output, so a rejected
 // (non-fast-forward) push surfaces to the caller.
-func PushRef(remote, branch string) error {
-	cmd := exec.Command("git", "push", remote, branch)
-	output, err := cmd.CombinedOutput()
+func (r *Repo) PushRef(remote, branch string) error {
+	output, err := r.gitCmd("push", remote, branch).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to push branch '%s' to '%s': %w (output: %s)", branch, remote, err, strings.TrimSpace(string(output)))
 	}
@@ -664,9 +666,8 @@ func PushRef(remote, branch string) error {
 // PushTag pushes a single tag to a remote with `git push <remote> tag <tag>`.
 // On failure it returns a wrapped error that embeds the underlying error and the
 // trimmed combined output.
-func PushTag(remote, tag string) error {
-	cmd := exec.Command("git", "push", remote, "tag", tag)
-	output, err := cmd.CombinedOutput()
+func (r *Repo) PushTag(remote, tag string) error {
+	output, err := r.gitCmd("push", remote, "tag", tag).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to push tag '%s' to '%s': %w (output: %s)", tag, remote, err, strings.TrimSpace(string(output)))
 	}
@@ -674,11 +675,9 @@ func PushTag(remote, tag string) error {
 }
 
 // CreateTrackingBranch creates a local branch that tracks a remote branch
-func CreateTrackingBranch(localBranch, remote, remoteBranch string) error {
-	// git checkout -b <local> --track <remote>/<branch>
-	cmd := exec.Command("git", "checkout", "-b", localBranch, "--track",
-		fmt.Sprintf("%s/%s", remote, remoteBranch))
-	output, err := cmd.CombinedOutput()
+func (r *Repo) CreateTrackingBranch(localBranch, remote, remoteBranch string) error {
+	output, err := r.gitCmd("checkout", "-b", localBranch, "--track",
+		fmt.Sprintf("%s/%s", remote, remoteBranch)).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to create tracking branch: %s", string(output))
 	}
@@ -688,11 +687,9 @@ func CreateTrackingBranch(localBranch, remote, remoteBranch string) error {
 // GetTrackingBranch returns the remote tracking branch for a local branch.
 // Returns the full tracking reference (e.g., "origin/feature/foo") or an error
 // if no tracking branch is configured.
-func GetTrackingBranch(branch string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", branch+"@{upstream}")
-	output, err := cmd.CombinedOutput()
+func (r *Repo) GetTrackingBranch(branch string) (string, error) {
+	output, err := r.gitCmd("rev-parse", "--abbrev-ref", branch+"@{upstream}").CombinedOutput()
 	if err != nil {
-		// Check if the error is because there's no tracking branch
 		outputStr := string(output)
 		if strings.Contains(outputStr, "no upstream") || strings.Contains(outputStr, "does not track") {
 			return "", fmt.Errorf("branch '%s' has no upstream tracking branch", branch)
@@ -707,22 +704,17 @@ func GetTrackingBranch(branch string) (string, error) {
 // For SyncStatusAhead, the count is commits ahead.
 // For SyncStatusBehind, the count is commits behind.
 // For SyncStatusDiverged, the count is total commits different (ahead + behind).
-func CompareBranchWithRemote(branch string) (BranchSyncStatus, int, error) {
-	// First get the tracking branch
-	trackingBranch, err := GetTrackingBranch(branch)
+func (r *Repo) CompareBranchWithRemote(branch string) (BranchSyncStatus, int, error) {
+	trackingBranch, err := r.GetTrackingBranch(branch)
 	if err != nil {
 		return SyncStatusNoTracking, 0, err
 	}
 
-	// Use git rev-list to count commits ahead and behind
-	// Format: <ahead>\t<behind>
-	cmd := exec.Command("git", "rev-list", "--left-right", "--count", branch+"..."+trackingBranch)
-	output, err := cmd.CombinedOutput()
+	output, err := r.gitCmd("rev-list", "--left-right", "--count", branch+"..."+trackingBranch).CombinedOutput()
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to compare branches: %s", string(output))
 	}
 
-	// Parse the output (format: "ahead\tbehind")
 	parts := strings.Fields(strings.TrimSpace(string(output)))
 	if len(parts) != 2 {
 		return "", 0, fmt.Errorf("unexpected output format from rev-list: %s", string(output))
@@ -738,7 +730,6 @@ func CompareBranchWithRemote(branch string) (BranchSyncStatus, int, error) {
 		return "", 0, fmt.Errorf("failed to parse behind count: %w", err)
 	}
 
-	// Determine status based on ahead/behind counts
 	switch {
 	case ahead == 0 && behind == 0:
 		return SyncStatusEqual, 0, nil
@@ -759,8 +750,8 @@ func CompareBranchWithRemote(branch string) (BranchSyncStatus, int, error) {
 //     sentinel ErrRemoteRefNotFound (check with errors.Is).
 //   - Any other non-zero exit (transport/auth failure) returns a fatal error carrying the
 //     trimmed stderr.
-func FetchBranch(remote, branch string) error {
-	cmd := exec.Command("git", "fetch", remote, branch)
+func (r *Repo) FetchBranch(remote, branch string) error {
+	cmd := r.gitCmd("fetch", remote, branch)
 	// Pin the locale so isRemoteRefNotFound classifies stderr against git's English phrasing,
 	// regardless of the user's LANG/LC_* settings. A localized "missing ref" message would
 	// otherwise be misclassified as a fatal transport failure.
@@ -769,8 +760,6 @@ func FetchBranch(remote, branch string) error {
 	if err != nil {
 		stderr := strings.TrimSpace(string(output))
 		if isRemoteRefNotFound(stderr) {
-			// Join the benign sentinel with the underlying exec error so callers can classify via
-			// errors.Is(ErrRemoteRefNotFound) while the original error stays available for diagnostics.
 			return fmt.Errorf("fetch branch '%s' from '%s': %s: %w", branch, remote, stderr, errors.Join(ErrRemoteRefNotFound, err))
 		}
 		return fmt.Errorf("failed to fetch branch '%s' from '%s': %s: %w", branch, remote, stderr, err)
@@ -790,8 +779,8 @@ func isRemoteRefNotFound(stderr string) bool {
 
 // HasTrackingBranch reports whether the given local branch has a remote tracking branch
 // configured. It is a thin wrapper over GetTrackingBranch that returns false on any error.
-func HasTrackingBranch(branch string) bool {
-	_, err := GetTrackingBranch(branch)
+func (r *Repo) HasTrackingBranch(branch string) bool {
+	_, err := r.GetTrackingBranch(branch)
 	return err == nil
 }
 
@@ -799,12 +788,9 @@ func HasTrackingBranch(branch string) bool {
 // from the local repository. It is used to prune a tracking ref once the corresponding remote
 // branch is found to be gone. Errors are returned so callers may log them, but they are safe to
 // ignore (the ref may already be absent).
-func DeleteRemoteTrackingRef(remote, branch string) error {
+func (r *Repo) DeleteRemoteTrackingRef(remote, branch string) error {
 	ref := fmt.Sprintf("refs/remotes/%s/%s", remote, branch)
-	cmd := exec.Command("git", "update-ref", "-d", ref)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		// Wrap the underlying exec error with %w so the exit status stays available for diagnostics,
-		// mirroring FetchBranch's error wrapping, while still surfacing the trimmed git output.
+	if output, err := r.gitCmd("update-ref", "-d", ref).CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to delete remote tracking ref '%s': %s: %w", ref, strings.TrimSpace(string(output)), err)
 	}
 	return nil

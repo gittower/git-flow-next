@@ -22,10 +22,9 @@ const (
 	ConfigScopeFile ConfigScope = "file"
 )
 
-// GetConfig gets a Git config value
-func GetConfig(key string) (string, error) {
-	cmd := exec.Command("git", "config", "--get", key)
-	output, err := cmd.Output()
+// GetConfig gets a Git config value from the repository's merged config.
+func (r *Repo) GetConfig(key string) (string, error) {
+	output, err := r.gitCmd("config", "--get", key).Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get git config %s: %w", key, err)
 	}
@@ -37,9 +36,9 @@ func GetConfig(key string) (string, error) {
 // matching what `git commit` would see. It returns false without error when a
 // key is simply unset (git config --get exits with status 1), and propagates
 // any other failure (e.g. not in a repository) to the caller.
-func HasUserIdentity() (bool, error) {
+func (r *Repo) HasUserIdentity() (bool, error) {
 	for _, key := range []string{"user.name", "user.email"} {
-		value, found, err := readConfigValue(key)
+		value, found, err := r.readConfigValue(key)
 		if err != nil {
 			return false, err
 		}
@@ -54,9 +53,8 @@ func HasUserIdentity() (bool, error) {
 // scope. It distinguishes an unset key (git config --get exits with status 1)
 // from an unexpected failure: an unset key returns ("", false, nil), while any
 // other error is returned to the caller.
-func readConfigValue(key string) (value string, found bool, err error) {
-	cmd := exec.Command("git", "config", "--get", key)
-	output, runErr := cmd.Output()
+func (r *Repo) readConfigValue(key string) (value string, found bool, err error) {
+	output, runErr := r.gitCmd("config", "--get", key).Output()
 	if runErr != nil {
 		if exitErr, ok := runErr.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			return "", false, nil
@@ -67,17 +65,8 @@ func readConfigValue(key string) (value string, found bool, err error) {
 }
 
 // GetConfigAllValues gets all values for a multi-value Git config key
-func GetConfigAllValues(key string) ([]string, error) {
-	return GetConfigAllValuesInDir("", key)
-}
-
-// GetConfigAllValuesInDir gets all values for a multi-value Git config key in the specified directory
-func GetConfigAllValuesInDir(dir, key string) ([]string, error) {
-	cmd := exec.Command("git", "config", "--get-all", key)
-	if dir != "" {
-		cmd.Dir = dir
-	}
-	output, err := cmd.Output()
+func (r *Repo) GetConfigAllValues(key string) ([]string, error) {
+	output, err := r.gitCmd("config", "--get-all", key).Output()
 	if err != nil {
 		// If no config values match, return empty slice (not an error)
 		if strings.Contains(err.Error(), "exit status 1") {
@@ -96,31 +85,17 @@ func GetConfigAllValuesInDir(dir, key string) ([]string, error) {
 	return values, nil
 }
 
-// GetConfigInDir gets a Git config value in the specified directory
-func GetConfigInDir(dir, key string) (string, error) {
-	cmd := exec.Command("git", "config", "--get", key)
-	cmd.Dir = dir
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to get git config %s in dir %s: %w", key, dir, err)
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
-// SetConfig sets a Git config value
-func SetConfig(key string, value string) error {
-	cmd := exec.Command("git", "config", key, value)
-	_, err := cmd.Output()
-	if err != nil {
+// SetConfig sets a Git config value (local scope by git's default write behavior).
+func (r *Repo) SetConfig(key string, value string) error {
+	if _, err := r.gitCmd("config", key, value).Output(); err != nil {
 		return fmt.Errorf("failed to set git config %s: %w", key, err)
 	}
 	return nil
 }
 
 // UnsetConfigSection removes all Git config values matching a pattern
-func UnsetConfigSection(pattern string) error {
-	cmd := exec.Command("git", "config", "--remove-section", pattern)
-	_, err := cmd.Output()
+func (r *Repo) UnsetConfigSection(pattern string) error {
+	_, err := r.gitCmd("config", "--remove-section", pattern).Output()
 	if err != nil {
 		// Don't treat "section not found" as an error
 		if strings.Contains(err.Error(), "exit status 128") {
@@ -131,10 +106,9 @@ func UnsetConfigSection(pattern string) error {
 	return nil
 }
 
-// GetAllConfig gets all Git config values matching a pattern
-func GetAllConfig(pattern string) (map[string]string, error) {
-	cmd := exec.Command("git", "config", "--get-regexp", pattern)
-	output, err := cmd.Output()
+// GetAllConfig gets all Git config values matching a pattern, as a key->value map.
+func (r *Repo) GetAllConfig(pattern string) (map[string]string, error) {
+	output, err := r.gitCmd("config", "--get-regexp", pattern).Output()
 	if err != nil {
 		// If no config values match, don't treat it as an error
 		if strings.Contains(err.Error(), "exit status 1") {
@@ -158,11 +132,24 @@ func GetAllConfig(pattern string) (map[string]string, error) {
 	return config, nil
 }
 
-// UnsetConfig unsets a Git config value
-func UnsetConfig(key string) error {
-	cmd := exec.Command("git", "config", "--unset", key)
-	_, err := cmd.Output()
+// GetConfigRegexpLines returns the raw output lines of `git config --get-regexp
+// <pattern>` for the repository, or an empty slice when nothing matches. It is
+// used by the config package, which needs the raw lines (preserving empty values
+// and dotted subsection names) rather than a pre-parsed map.
+func (r *Repo) GetConfigRegexpLines(pattern string) ([]string, error) {
+	output, err := r.gitCmd("config", "--get-regexp", pattern).Output()
 	if err != nil {
+		if strings.Contains(err.Error(), "exit status 1") {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("failed to get git config matching %s: %w", pattern, err)
+	}
+	return strings.Split(string(output), "\n"), nil
+}
+
+// UnsetConfig unsets a Git config value
+func (r *Repo) UnsetConfig(key string) error {
+	if _, err := r.gitCmd("config", "--unset", key).Output(); err != nil {
 		return fmt.Errorf("failed to unset git config %s: %w", key, err)
 	}
 	return nil
@@ -173,25 +160,30 @@ func UnsetConfig(key string) error {
 // config --local --get exits 1) returns nil silently. Any other failure —
 // including a multi-value key that --unset refuses (exit 5) or a genuine
 // read/write error — is surfaced as an error.
-func UnsetConfigIfPresent(key string) error {
+func (r *Repo) UnsetConfigIfPresent(key string) error {
 	// Detect absence precisely and in the scope that gets cleaned: `git config
 	// --local --get` exits 1 when the key is absent from local config. The unset
 	// below is local-scoped too, so probing merged config (local+global+system)
 	// would wrongly treat a global/system-only value as present and fall through
 	// to a local --unset that finds nothing and errors. Do NOT match on --unset
 	// exit 5, which also means "multi-value".
-	err := exec.Command("git", "config", "--local", "--get", key).Run()
+	err := r.gitCmd("config", "--local", "--get", key).Run()
 	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 		return nil // key not present in local config: nothing to clean up
 	}
 	// Present, multi-value, or read error: attempt the unset in the same local
 	// scope we probed so real failures (multi-value, read-only) still surface.
-	return UnsetConfigWithScope(key, ConfigScopeLocal, "")
+	if _, err := r.gitCmd("config", "--local", "--unset", key).Output(); err != nil {
+		return fmt.Errorf("failed to unset git config %s: %w", key, err)
+	}
+	return nil
 }
 
-// GetConfigWithScope gets a Git config value at a specific scope.
+// GetConfigWithScope gets a Git config value at a specific scope. It is
+// repository-less by design: global/system/file scopes are not bound to a work
+// tree, and a relative --file path resolves against the process working
+// directory (the invocation directory).
 // For ConfigScopeDefault, reads merged config (git's standard behavior).
-// For specific scopes, reads only from that scope.
 func GetConfigWithScope(key string, scope ConfigScope, filePath string) (string, error) {
 	args := []string{"config"}
 	switch scope {
@@ -206,8 +198,7 @@ func GetConfigWithScope(key string, scope ConfigScope, filePath string) (string,
 		// ConfigScopeDefault: no flag = merged config
 	}
 	args = append(args, "--get", key)
-	cmd := exec.Command("git", args...)
-	output, err := cmd.Output()
+	output, err := gitCommand("", args...).Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get git config %s: %w", key, err)
 	}
@@ -230,9 +221,7 @@ func SetConfigWithScope(key, value string, scope ConfigScope, filePath string) e
 		// ConfigScopeDefault: no flag = local (git's default for writes)
 	}
 	args = append(args, key, value)
-	cmd := exec.Command("git", args...)
-	_, err := cmd.Output()
-	if err != nil {
+	if _, err := gitCommand("", args...).Output(); err != nil {
 		return fmt.Errorf("failed to set git config %s: %w", key, err)
 	}
 	return nil
@@ -253,22 +242,20 @@ func UnsetConfigWithScope(key string, scope ConfigScope, filePath string) error 
 		// ConfigScopeDefault: no flag = local (git's default for writes)
 	}
 	args = append(args, "--unset", key)
-	cmd := exec.Command("git", args...)
-	_, err := cmd.Output()
-	if err != nil {
+	if _, err := gitCommand("", args...).Output(); err != nil {
 		return fmt.Errorf("failed to unset git config %s: %w", key, err)
 	}
 	return nil
 }
 
 // GetBaseBranch returns the stored base branch for a topic branch
-func GetBaseBranch(branchName string) (string, error) {
+func (r *Repo) GetBaseBranch(branchName string) (string, error) {
 	configKey := fmt.Sprintf("gitflow.branch.%s.base", branchName)
-	return GetConfig(configKey)
+	return r.GetConfig(configKey)
 }
 
 // SetBaseBranch stores the base branch for a topic branch
-func SetBaseBranch(branchName, baseBranch string) error {
+func (r *Repo) SetBaseBranch(branchName, baseBranch string) error {
 	configKey := fmt.Sprintf("gitflow.branch.%s.base", branchName)
-	return SetConfig(configKey, baseBranch)
+	return r.SetConfig(configKey, baseBranch)
 }
