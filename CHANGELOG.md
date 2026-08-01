@@ -7,14 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-01
+
+### Added
+
+- `git flow integrate` command to merge changes from a parent branch into a topic branch, with options resolved from an `integrate` config namespace
+- `finish` now pushes the finished branches and release tag to the remote after merging, honoring push options
+- `update --continue` and `update --abort` to resume or cancel an update interrupted by conflicts
+- `finish` now detects and auto-clears stale merge state left by a previous interrupted operation
+- `delete` now fetches and runs a remote sync-check before deleting a branch (`--fetch`, `gitflow.<type>.delete.fetch`)
+- `start` can derive the branch name from a configured version filter
+- Windows arm64 build target
+
 ### Changed
 
-- `finish` now aborts when the parent (merge-target) branch is behind or diverged from its remote, preventing a merge onto a stale base; being ahead is tolerated, and `--force` skips it
+- `finish` now runs a stricter pre-merge sync check: it aborts when the parent (merge-target) branch or the topic branch is behind or has diverged from its remote (with a diverged-specific message), while tolerating either being ahead; `--force` skips the check
 - `finish` now treats a fetch failure against a reachable-but-failing remote as fatal (was a silent note); the error names the cause and suggests `--no-fetch` / `--force`
-- `finish` now aborts when the topic branch is ahead of its remote (was a silent note that proceeded and merged)
-- `finish` renders a diverged-specific message when the topic branch has diverged (previously reused the "behind" wording)
-- `start` now skips the fetch silently when no remote is configured, and shares the unified fetch resolution (default → config → flag) with `finish`
-- `start` now fetches by default before creating a branch. Users who relied on `start` never touching the network will now see a fetch unless they set `gitflow.<type>.start.fetch false` or pass `--no-fetch`.
+- `start` now fetches by default before creating a branch (skipped silently when no remote is configured); disable with `--no-fetch` or `gitflow.<type>.start.fetch false`. Shares the unified fetch resolution (default → config → flag) with `finish`
+- Commands now refuse to act on merge state owned by a foreign operation and on structurally-incomplete state, returning exit code 3 instead of proceeding destructively
+
+### Fixed
+
+- `init` now fails fast when the git user identity is missing
+- Branch names are validated with `git check-ref-format`, and dots are now allowed in base branch names
+- Branch names are resolved case-insensitively while preserving their original case
+- Leaf commands now reject unexpected positional arguments
+- `delete`, `rename`, and `finish` are gated when git-flow is uninitialized
+- Base-branch config cleanup is scoped to local config and treats a missing key as a no-op
+- `finish --abort` is a no-op when no merge is in progress
+- Hooks and filters now run on Windows (executed via `sh`)
 
 ## [1.1.0] - 2026-04-06
 
@@ -105,7 +126,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic updates to child branches (e.g., develop syncs from main)
 - Compatibility with existing git-flow-avh repositories
 
-[Unreleased]: https://github.com/gittower/git-flow-next/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/gittower/git-flow-next/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/gittower/git-flow-next/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/gittower/git-flow-next/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gittower/git-flow-next/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/gittower/git-flow-next/compare/v0.2.0...v0.3.0
