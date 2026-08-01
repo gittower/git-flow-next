@@ -375,8 +375,9 @@ func (r *Repo) RebaseAbort() error {
 	return nil
 }
 
-// RenameBranch renames a branch. If oldBranch is provided, it renames that branch to newBranch.
-// If oldBranch is not provided, it renames the current branch to newBranch.
+// RenameBranch renames oldBranch to newBranch. Both names are required; there is
+// no rename-current-branch shorthand — pass the resolved current branch name if
+// that is the intent.
 func (r *Repo) RenameBranch(oldBranch, newBranch string) error {
 	return r.renameBranch(oldBranch, newBranch, false)
 }
