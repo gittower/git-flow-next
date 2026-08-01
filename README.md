@@ -49,6 +49,12 @@ brew install gittower/tap/git-flow-next
 winget install GitTower.GitFlowNext
 ```
 
+### Scoop (Windows)
+
+```bash
+scoop install git-flow-next
+```
+
 ### Manual Installation (macOS and Linux)
 
 1. Download the latest release from the [releases page](https://github.com/gittower/git-flow-next/releases)

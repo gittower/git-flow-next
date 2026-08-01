@@ -11,7 +11,7 @@ Two skills automate this process:
   and creates the version bump commit (steps 1–4 below).
 - **`/full-release`** — runs the entire process end-to-end: `/release`
   prep, push + tag (after confirmation), CI verification, Homebrew tap
-  update, and website sync (all steps below).
+  update, WinGet manifest submission, and website sync (all steps below).
 
 The manual steps are documented here as the source of truth; the skills
 follow this document.
@@ -168,7 +168,50 @@ manual `git add`/`git commit` needed, only the push.
 
 Repository: https://github.com/gittower/homebrew-tap
 
-### 9. Update Website
+### 9. Submit WinGet Manifest
+
+**Skip for preview releases** — the WinGet community repo is for stable
+versions only.
+
+This is an **interim manual step** until manifest submission is automated in
+the release workflow. It publishes the new version to WinGet by opening a PR
+against `microsoft/winget-pkgs` with
+[komac](https://github.com/russellbanks/Komac), which derives the SHA-256
+hashes and release notes automatically.
+
+Prerequisites (one-time):
+
+```bash
+brew install komac                                # cross-platform manifest tool
+gh repo fork microsoft/winget-pkgs --clone=false  # komac PRs from your fork
+```
+
+Submit (run only after the GitHub release from step 6 is live — komac
+downloads the release zips to hash them):
+
+```bash
+export GITHUB_TOKEN=$(gh auth token)   # needs public_repo scope; gh's repo scope covers it
+komac update GitTower.GitFlowNext \
+  --version X.Y.Z \
+  --urls \
+    "https://github.com/gittower/git-flow-next/releases/download/vX.Y.Z/git-flow-next-vX.Y.Z-windows-amd64.zip" \
+    "https://github.com/gittower/git-flow-next/releases/download/vX.Y.Z/git-flow-next-vX.Y.Z-windows-386.zip" \
+  --submit
+```
+
+komac forks/updates `winget-pkgs`, pushes a branch, and opens the PR. Note
+the PR URL it prints — Microsoft's validation bots run automatically and
+normally auto-merge within a few hours, so no manual merge is needed. To
+preview the manifests first, swap `--submit` for `--dry-run --output <dir>`.
+
+The manifest covers x64 and x86; arm64 is shipped in the release but not yet
+in the WinGet manifest. **Scoop needs no action** — its Main-bucket manifest
+has `checkver`/`autoupdate`, so Scoop's excavator bot updates it
+automatically after each release.
+
+Repository: https://github.com/microsoft/winget-pkgs
+
+### 10. Update Website
 
 **Skip for preview releases.**
 
@@ -198,7 +241,7 @@ For preview releases, use suffixes:
 - Release candidate: `v1.0.0-rc.1`
 
 These are automatically marked as prereleases on GitHub. Do **not** update
-the Homebrew tap or the website for preview releases.
+the Homebrew tap, the WinGet manifest, or the website for preview releases.
 
 ## Checklist
 
@@ -215,4 +258,5 @@ the Homebrew tap or the website for preview releases.
 - [ ] Verified GitHub release: artifacts, checksums, non-empty release notes
 - [ ] Stamped milestone: renamed `Next` → `vX.Y.Z`, closed it, opened new `Next` — skip for previews
 - [ ] Updated Homebrew tap (`ruby update_formula.rb` + `git push`) — skip for previews
+- [ ] Submitted WinGet manifest (`komac update ... --submit`) — skip for previews
 - [ ] Updated website: version + changelog (every release), command/config docs (if changed) — skip for previews
