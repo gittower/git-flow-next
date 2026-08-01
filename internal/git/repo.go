@@ -32,11 +32,13 @@ const (
 	SyncStatusNoTracking BranchSyncStatus = "no_tracking"
 )
 
-// gitCommand is the single command factory for the git package. It is the only
-// place git is invoked, so every repo-bound operation runs with a deterministic
-// working directory instead of the process CWD. Pass dir="" for the rare
-// repository-less invocations (explicit --global/--system/--file config scopes)
-// that must not bind to a work tree.
+// gitCommand is the single command factory for the git package: every
+// repo-bound git operation runs through it, so it pins cmd.Dir to a
+// deterministic working directory instead of inheriting the process CWD.
+// (The repository-less refname check in internal/util calls git directly, as
+// it needs no work tree.) Pass dir="" for the rare repository-less invocations
+// (explicit --global/--system/--file config scopes) that must not bind to a
+// work tree.
 func gitCommand(dir string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
 	if dir != "" {
@@ -82,8 +84,12 @@ func Open(dir string) (*Repo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("git.Open: resolve %q: %w", dir, err)
 	}
-	if info, err := os.Stat(abs); err != nil || !info.IsDir() {
-		return nil, fmt.Errorf("git.Open: %q is not an accessible directory", dir)
+	info, err := os.Stat(abs)
+	if err != nil {
+		return nil, fmt.Errorf("git.Open: stat %q: %w", abs, err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("git.Open: %q is not a directory", abs)
 	}
 
 	run := func(args ...string) (string, error) {
