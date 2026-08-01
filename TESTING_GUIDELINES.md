@@ -431,16 +431,15 @@ paths, so accessors like `repo.GitDir()` are always absolute (never the bare
 (`hooks.RunPreHook(repo.GitDir(), …)`). Because nothing depends on the process
 working directory, these tests are safe to run with `t.Parallel()`.
 
-### Known Areas Using `os.Chdir()`
+### Migration Note: `os.Chdir()` Eliminated
 
-The following test files currently use `os.Chdir()` because they call internal functions without directory parameters:
-
-- `test/cmd/config_test.go` - Calls `config.LoadConfig()`, etc.
-- `test/cmd/init_test.go` - Some edge case tests
-
-**Note**: Functions in `internal/git/repo.go` and `internal/git/config.go` don't accept directory parameters. If you need to call these in tests, you must use `os.Chdir()`. Consider whether a testutil helper or `*InDir` variant would be better.
-
-**Refactored**: `test/cmd/update_test.go` was refactored to use only testutil functions, eliminating the need for `os.Chdir()` and internal package imports.
+The suite no longer contains any `os.Chdir()` calls. Every function in
+`internal/git`, `internal/config`, `internal/mergestate`, and `internal/hooks`
+now targets an explicit `git.Repo` handle (or a directory derived from one)
+rather than the process working directory, so tests open a handle for the test
+repository and call methods on it — see the CORRECT pattern above. The former
+`config.LoadConfig()` is gone; use `config.Load(repo)`. There is no need for a
+`*InDir` variant, and `os.Chdir()` must not be reintroduced.
 
 ## Test Implementation Anti-Patterns
 
