@@ -427,6 +427,41 @@ func (e *FetchFailedError) ExitCode() ExitCode {
 	return ExitCodeGitError
 }
 
+// BaseBranchNotInSyncError indicates the parent (merge-target) branch is behind or diverged from
+// its remote, so finishing would merge onto a stale base. Unlike BranchNotInSyncError (which is
+// about the local *topic* branch and tells the user to push/pull the topic), the remedy here is to
+// update the parent branch itself. Ahead is acceptable for a parent and never reaches this error.
+// Only behind and diverged are represented.
+type BaseBranchNotInSyncError struct {
+	BranchName   string
+	RemoteBranch string
+	Status       string // "behind" or "diverged"
+	CommitCount  int
+}
+
+func (e *BaseBranchNotInSyncError) Error() string {
+	if e.Status == SyncStatusDiverged {
+		return fmt.Sprintf(`branch '%s' has diverged from '%s' by %d commit(s).
+
+The base branch and its remote each have commits the other does not.
+Finishing now would merge onto a stale base.
+
+Reconcile it (e.g. git checkout %s && git pull) or pass --force to finish anyway.`,
+			e.BranchName, e.RemoteBranch, e.CommitCount, e.BranchName)
+	}
+	return fmt.Sprintf(`branch '%s' is %d commit(s) behind '%s'.
+
+The base branch has commits on its remote that are not present locally.
+Finishing now would merge onto a stale base.
+
+Update it (e.g. git checkout %s && git pull) or pass --force to finish anyway.`,
+		e.BranchName, e.CommitCount, e.RemoteBranch, e.BranchName)
+}
+
+func (e *BaseBranchNotInSyncError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
 // RemoteNotConfiguredError indicates a required remote is not configured
 type RemoteNotConfiguredError struct {
 	Remote    string

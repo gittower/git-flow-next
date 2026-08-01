@@ -167,7 +167,7 @@ CLI push flags are not persisted across `--continue`. Options are re-resolved on
 
 ## REMOTE SYNC CHECK
 
-Before performing the merge operation, the finish command checks if the local topic branch is in sync with its remote tracking branch. This safety check prevents accidental data loss when the remote has commits that are not present locally (behind or diverged). Being ahead of the remote is tolerated with a note, since finish merges the local commits into the parent and (by default) deletes the topic branch. Only the topic branch is sync-checked; the parent branch is fetched best-effort but not compared.
+Before performing the merge operation, the finish command checks if the local topic branch is in sync with its remote tracking branch. This safety check prevents accidental data loss when the remote has commits that are not present locally (behind or diverged). Being ahead of the remote is tolerated with a note, since finish merges the local commits into the parent and (by default) deletes the topic branch. The parent (merge-target) branch is checked too — see *Parent Branch Sync Check* below.
 
 ### Sync Status Behavior
 
@@ -180,6 +180,20 @@ Before performing the merge operation, the finish command checks if the local to
 **Diverged**: Both local and remote have unique commits. Finish **aborts with an error** with a diverged-specific message, since finishing would discard the remote-only commits.
 
 **No Tracking**: Branch has no remote tracking branch configured. Finish proceeds normally (no remote to compare against).
+
+### Parent Branch Sync Check
+
+In addition to the topic branch, finish checks that the parent (merge-target) branch — for example `develop` when finishing a feature, or `main` when finishing a release — is in sync with its remote before merging into it. This prevents finish from writing a merge onto a stale base that would have to be reconciled (or force-pushed) later.
+
+The parent must not be **behind** or **diverged** from its remote, but being **equal** or **ahead** is accepted. A locally-ahead parent is the normal state right after a previous finish that has not been pushed yet, so it must not block work. Like the topic check in `finish`, an ahead parent is tolerated (behind/diverged remain fatal) — the parent simply proceeds silently rather than printing an ahead note.
+
+**Equal**: Parent matches its remote. Finish proceeds.
+
+**Ahead**: Parent has local commits not on its remote (e.g. an earlier unpushed finish). Finish **proceeds** silently.
+
+**Behind** / **Diverged**: The parent's remote has commits the local parent lacks. Finish **aborts with an error** naming the parent branch; update the parent (for example `git checkout develop && git pull`) or pass **--force**.
+
+The parent check is gated the same way as the topic check: it is skipped when no remote is configured, when the parent has no remote tracking branch, or when the parent's remote ref is gone (never pushed or deleted after a remote merge). With **--no-fetch** the parent is not fetched but the check still runs against existing tracking data. **--force** bypasses it along with the topic check.
 
 ### Bypassing the Check
 

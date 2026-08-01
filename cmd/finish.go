@@ -238,7 +238,7 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 	// fetch failure or a behind/diverged topic aborts here, before any merge. Being *ahead* is
 	// tolerated (downgraded to a note): finish merges the unpushed commits into the parent and then
 	// deletes the topic branch, so requiring a push first would preserve nothing.
-	if err := runFetchSyncPreflight(cfg, branchType, cfg.Remote, name, shortName, branchConfig.Parent, resolvedOptions.ShouldFetch, force, preflightOptions{tolerateAhead: true}); err != nil {
+	if err := runFetchSyncPreflight(cfg, branchType, cfg.Remote, name, shortName, branchConfig.Parent, resolvedOptions.ShouldFetch, force, preflightOptions{tolerateAhead: true, parentSyncCheck: true}); err != nil {
 		return err
 	}
 
