@@ -14,7 +14,7 @@ Create and checkout a new topic branch of the specified type. This command works
 
 The new branch is created from the configured starting point for the topic branch type, or from the specified base commit/branch if provided.
 
-By default, start fetches from the remote before creating the branch so it starts from up-to-date remote state. Opt out with **--no-fetch** or by setting `gitflow.<type>.start.fetch false`. If no remote is configured, the fetch is skipped silently, and a fetch failure is a non-fatal warning — the branch is still created (start has no sync gate).
+By default, start fetches from the remote before creating the branch, so its remote-tracking refs are current first. (The branch is still created from the configured local start point; the fetch refreshes remote-tracking refs but does not fast-forward that start point.) Opt out with **--no-fetch** or by setting `gitflow.<type>.start.fetch false`. If no remote is configured, the fetch is skipped silently, and a fetch failure is a non-fatal warning — the branch is still created (start has no sync gate).
 
 ## ARGUMENTS
 
@@ -105,7 +105,7 @@ git flow hotfix start 1.1.1 v1.1.0
 
 ### Without Remote Synchronization
 
-Start is fetched by default; skip the fetch to work offline or avoid touching the network:
+Start fetches by default; skip the fetch to work offline or avoid touching the network:
 ```bash
 git flow feature start new-api --no-fetch
 ```
@@ -157,7 +157,7 @@ The start command performs several validations:
 
 ### Remote Workflow
 ```bash
-# Start (fetches latest remote state by default) and immediately publish
+# Start (fetches from the remote by default) and immediately publish
 git flow feature start new-api
 git push -u origin feature/new-api
 ```

@@ -207,7 +207,7 @@ These are operational settings that adjust command behavior. Some can override L
 
 **fetch**
 : Fetch from remote before the operation. This is a Layer 2 operational setting only (there is no Layer 1 branch-type knob). Resolution is uniform across commands: per-command default, then `gitflow.<type>.<cmd>.fetch`, then the `--fetch`/`--no-fetch` CLI flag (which always wins).
-: *Default*: **true** for both `finish` (so the sync check runs against fresh data) and `start` (so branches begin from up-to-date remote state).
+: *Default*: **true** for both `finish` (so the sync check runs against fresh data) and `start` (so remote-tracking refs are refreshed before the branch is created).
 
 **keep**
 : Keep branch after finishing (finish command only).
