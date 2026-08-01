@@ -33,13 +33,14 @@ func setDottedConfig(t *testing.T, dir string, kv map[string]string) {
 func TestLoadConfigDottedBranchName(t *testing.T) {
 	dir := setupTestRepo(t)
 	defer cleanupTestRepo(t, dir)
+	t.Parallel()
 
 	setDottedConfig(t, dir, map[string]string{
 		"gitflow.branch.custom.main.type":             "base",
 		"gitflow.branch.custom.main.upstreamStrategy": "merge",
 	})
 
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(openRepo(t, dir))
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
@@ -65,6 +66,7 @@ func TestLoadConfigDottedBranchName(t *testing.T) {
 func TestLoadConfigDottedTopicRoundTrip(t *testing.T) {
 	dir := setupTestRepo(t)
 	defer cleanupTestRepo(t, dir)
+	t.Parallel()
 
 	setDottedConfig(t, dir, map[string]string{
 		"gitflow.branch.qa.release.type":               "topic",
@@ -77,7 +79,7 @@ func TestLoadConfigDottedTopicRoundTrip(t *testing.T) {
 		"gitflow.branch.qa.release.tagPrefix":          "qa-",
 	})
 
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(openRepo(t, dir))
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
@@ -128,6 +130,7 @@ func TestLoadConfigDottedTopicRoundTrip(t *testing.T) {
 func TestLoadConfigDottedBooleanAndPrefix(t *testing.T) {
 	dir := setupTestRepo(t)
 	defer cleanupTestRepo(t, dir)
+	t.Parallel()
 
 	setDottedConfig(t, dir, map[string]string{
 		"gitflow.branch.custom.dev.type":       "base",
@@ -135,7 +138,7 @@ func TestLoadConfigDottedBooleanAndPrefix(t *testing.T) {
 		"gitflow.branch.custom.dev.autoUpdate": "true",
 	})
 
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(openRepo(t, dir))
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
@@ -158,12 +161,13 @@ func TestLoadConfigDottedBooleanAndPrefix(t *testing.T) {
 func TestLoadConfigMultiDotName(t *testing.T) {
 	dir := setupTestRepo(t)
 	defer cleanupTestRepo(t, dir)
+	t.Parallel()
 
 	setDottedConfig(t, dir, map[string]string{
 		"gitflow.branch.release.2.0.type": "base",
 	})
 
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(openRepo(t, dir))
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
@@ -187,6 +191,7 @@ func TestLoadConfigMultiDotName(t *testing.T) {
 func TestLoadConfigMixedCaseDottedName(t *testing.T) {
 	dir := setupTestRepo(t)
 	defer cleanupTestRepo(t, dir)
+	t.Parallel()
 
 	// Two keys with the same fold key but different case. Git stores subsections
 	// case-sensitively, so these are two distinct config entries; the reader
@@ -209,7 +214,7 @@ func TestLoadConfigMixedCaseDottedName(t *testing.T) {
 		t.Fatalf("Failed to set gitflow version: %v", err)
 	}
 
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(openRepo(t, dir))
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}

@@ -21,11 +21,21 @@ func openRepo(t *testing.T, dir string) *git.Repo {
 	return repo
 }
 
-// setupConflictingBranches creates a feature branch and a diverging main branch
-// that both touch conflict.txt, per GIT_TEST_SCENARIOS.md (branch first, then
-// conflicting content). It leaves the repo checked out on main.
+// setupConflictingBranches seeds conflict.txt on the base, then has a feature
+// branch and the diverging main branch each modify it differently, producing a
+// modify/modify (UU) conflict per GIT_TEST_SCENARIOS.md. It leaves the repo
+// checked out on main.
 func setupConflictingBranches(t *testing.T, dir string) {
 	t.Helper()
+	// Seed the file on the base (main) so both sides modify a common ancestor
+	// version, yielding a UU (both-modified) conflict rather than AA (add/add).
+	testutil.WriteFile(t, dir, "conflict.txt", "base content")
+	if _, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to add base file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Base conflict file"); err != nil {
+		t.Fatalf("Failed to commit base file: %v", err)
+	}
 	if _, err := testutil.RunGit(t, dir, "checkout", "-b", "feature"); err != nil {
 		t.Fatalf("Failed to create feature branch: %v", err)
 	}

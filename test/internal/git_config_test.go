@@ -11,18 +11,14 @@ import (
 // Steps:
 // 1. Sets up a test repository
 // 2. Adds multiple values for a single git config key using 'git config --add'
-// 3. Calls GetConfigAllValues for that key
+// 3. Calls repo.GetConfigAllValues for that key
 // 4. Verifies all values are returned in order
-// 5. Calls GetConfigAllValues for a non-existent key
+// 5. Calls repo.GetConfigAllValues for a non-existent key
 // 6. Verifies empty result with no error
 func TestGetConfigAllValues(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
-
-	// Change to the test directory so git commands work
-	// (GetConfigAllValues uses git config which operates in current directory)
-	originalDir := t.TempDir() // dummy to satisfy the compiler
-	_ = originalDir
 
 	// Set multiple values for a single key
 	_, err := testutil.RunGit(t, dir, "config", "test.multivalue", "first")
@@ -38,10 +34,12 @@ func TestGetConfigAllValues(t *testing.T) {
 		t.Fatalf("Failed to add third config value: %v", err)
 	}
 
-	// We need to run the test from within the test directory
-	// since GetConfigAllValues uses git config which operates in the current directory
-	// Use a subprocess approach via testutil
-	values, err := git.GetConfigAllValuesInDir(dir, "test.multivalue")
+	repo, err := git.Open(dir)
+	if err != nil {
+		t.Fatalf("git.Open failed: %v", err)
+	}
+
+	values, err := repo.GetConfigAllValues("test.multivalue")
 	if err != nil {
 		t.Fatalf("GetConfigAllValues returned error: %v", err)
 	}
@@ -56,7 +54,7 @@ func TestGetConfigAllValues(t *testing.T) {
 	}
 
 	// Test non-existent key
-	values, err = git.GetConfigAllValuesInDir(dir, "test.nonexistent")
+	values, err = repo.GetConfigAllValues("test.nonexistent")
 	if err != nil {
 		t.Errorf("GetConfigAllValues for non-existent key returned error: %v", err)
 	}
