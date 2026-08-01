@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gittower/git-flow-next/internal/git"
 	"github.com/gittower/git-flow-next/internal/hooks"
 	"github.com/gittower/git-flow-next/test/testutil"
 )
@@ -433,6 +434,68 @@ echo "Type: ${BRANCH_TYPE}, Name: ${BRANCH_NAME}, Base: ${BASE_BRANCH}, Version:
 	}
 }
 
+// TestFilterDiscoveredAndRunInTargetRepoOffCwd verifies that a filter configured
+// in repo B (via gitflow.path.hooks) is both discovered through B's handle-bound
+// config and executed with its working directory set to B's work tree, off-CWD.
+func TestFilterDiscoveredAndRunInTargetRepoOffCwd(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	customHooksDir, err := os.MkdirTemp("", "git-flow-offcwd-filter-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(customHooksDir)
+
+	markerFile := filepath.Join(dir, "filter-cwd.txt")
+	// Writes its working directory to the marker AND transforms the input.
+	script := `#!/bin/sh
+pwd > "` + markerFile + `"
+echo "v$1"
+`
+	createExecutableScript2(t, customHooksDir, "filter-flow-release-start-version", script)
+
+	// Point B's config at the custom hooks dir; discovery must read B's config.
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.path.hooks", customHooksDir); err != nil {
+		t.Fatalf("Failed to set gitflow.path.hooks: %v", err)
+	}
+
+	repo, err := git.Open(dir)
+	if err != nil {
+		t.Fatalf("git.Open failed: %v", err)
+	}
+
+	result, err := hooks.RunVersionFilter(repo.GitDir(), "release", "1.0.0")
+	if err != nil {
+		t.Fatalf("RunVersionFilter failed: %v", err)
+	}
+	if result != "v1.0.0" {
+		t.Errorf("Expected transformed value 'v1.0.0', got %q (filter not discovered in B?)", result)
+	}
+
+	content, err := os.ReadFile(markerFile)
+	if err != nil {
+		t.Fatalf("Filter did not run — marker missing: %v", err)
+	}
+	got := evalSymlinks(t, strings.TrimSpace(string(content)))
+	want := evalSymlinks(t, repo.WorkTree())
+	if got != want {
+		t.Errorf("Filter ran in %q, want target work tree %q", got, want)
+	}
+}
+
+// createExecutableScript2 creates an executable script in an arbitrary directory.
+func createExecutableScript2(t *testing.T, dir, name, content string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("Failed to create dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0755); err != nil {
+		t.Fatalf("Failed to create script %s: %v", name, err)
+	}
+}
+
 // TestGetFilterName tests the dynamic filter name generation.
 func TestGetFilterName(t *testing.T) {
 	tests := []struct {
@@ -487,18 +550,11 @@ echo "v${VERSION}"
 `
 	createExecutableScript(t, mainRepo, "filter-flow-release-start-version", script)
 
-	// Get the worktree's git directory
-	oldDir, _ := os.Getwd()
-	os.Chdir(worktreePath)
-	worktreeGitDirOutput, err := testutil.RunGit(t, worktreePath, "rev-parse", "--git-dir")
-	os.Chdir(oldDir)
-	if err != nil {
-		t.Fatalf("Failed to get worktree git directory: %v", err)
-	}
-	worktreeGitDir := strings.TrimSpace(worktreeGitDirOutput)
+	// Get the worktree's absolute git directory via a git.Repo handle.
+	wtGitDir := worktreeGitDir(t, worktreePath)
 
 	// Run version filter from worktree context
-	result, err := hooks.RunVersionFilter(worktreeGitDir, "release", "1.0.0")
+	result, err := hooks.RunVersionFilter(wtGitDir, "release", "1.0.0")
 	if err != nil {
 		t.Fatalf("RunVersionFilter failed in worktree: %v", err)
 	}
@@ -534,15 +590,8 @@ echo "Release ${VERSION} from worktree"
 `
 	createExecutableScript(t, mainRepo, "filter-flow-release-finish-tag-message", script)
 
-	// Get the worktree's git directory
-	oldDir, _ := os.Getwd()
-	os.Chdir(worktreePath)
-	worktreeGitDirOutput, err := testutil.RunGit(t, worktreePath, "rev-parse", "--git-dir")
-	os.Chdir(oldDir)
-	if err != nil {
-		t.Fatalf("Failed to get worktree git directory: %v", err)
-	}
-	worktreeGitDir := strings.TrimSpace(worktreeGitDirOutput)
+	// Get the worktree's absolute git directory via a git.Repo handle.
+	wtGitDir := worktreeGitDir(t, worktreePath)
 
 	ctx := hooks.FilterContext{
 		BranchType: "release",
@@ -553,7 +602,7 @@ echo "Release ${VERSION} from worktree"
 	}
 
 	// Run tag message filter from worktree context
-	result, err := hooks.RunTagMessageFilter(worktreeGitDir, "release", ctx)
+	result, err := hooks.RunTagMessageFilter(wtGitDir, "release", ctx)
 	if err != nil {
 		t.Fatalf("RunTagMessageFilter failed in worktree: %v", err)
 	}

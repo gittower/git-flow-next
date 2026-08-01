@@ -7,9 +7,31 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gittower/git-flow-next/internal/git"
 	"github.com/gittower/git-flow-next/internal/hooks"
 	"github.com/gittower/git-flow-next/test/testutil"
 )
+
+// worktreeGitDir returns the absolute per-worktree git dir for path via a
+// git.Repo handle, replacing the old os.Chdir + `git rev-parse --git-dir` dance.
+func worktreeGitDir(t *testing.T, path string) string {
+	t.Helper()
+	repo, err := git.Open(path)
+	if err != nil {
+		t.Fatalf("git.Open(%q) failed: %v", path, err)
+	}
+	return repo.GitDir()
+}
+
+// evalSymlinks normalizes a path so comparisons survive macOS's /var symlink.
+func evalSymlinks(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return path
+	}
+	return resolved
+}
 
 // createHookScript creates an executable hook script in the hooks directory.
 func createHookScript(t *testing.T, dir, name, content string) {
@@ -440,34 +462,12 @@ exit 0
 `
 	createHookScript(t, mainRepo, "pre-flow-feature-start", script)
 
-	// Get the worktree's git directory by running git rev-parse from the worktree
-	// Save current directory
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
-	}
-
-	// Change to worktree directory to get its git dir
-	if err := os.Chdir(worktreePath); err != nil {
-		t.Fatalf("Failed to change to worktree directory: %v", err)
-	}
-
-	// Get git directory from worktree's perspective
-	worktreeGitDirOutput, err := testutil.RunGit(t, worktreePath, "rev-parse", "--git-dir")
-	if err != nil {
-		os.Chdir(oldDir)
-		t.Fatalf("Failed to get worktree git directory: %v", err)
-	}
-	worktreeGitDir := strings.TrimSpace(worktreeGitDirOutput)
-
-	// Restore original directory
-	if err := os.Chdir(oldDir); err != nil {
-		t.Fatalf("Failed to restore directory: %v", err)
-	}
+	// Get the worktree's absolute git directory via a git.Repo handle.
+	wtGitDir := worktreeGitDir(t, worktreePath)
 
 	// The worktree git dir should contain "worktrees" in the path
-	if !strings.Contains(worktreeGitDir, "worktrees") {
-		t.Errorf("Expected worktree git dir to contain 'worktrees', got: %s", worktreeGitDir)
+	if !strings.Contains(wtGitDir, "worktrees") {
+		t.Errorf("Expected worktree git dir to contain 'worktrees', got: %s", wtGitDir)
 	}
 
 	// Run the pre-hook using the worktree's git directory
@@ -479,7 +479,7 @@ exit 0
 		Origin:     "origin",
 	}
 
-	err = hooks.RunPreHook(worktreeGitDir, "feature", hooks.HookActionStart, ctx)
+	err = hooks.RunPreHook(wtGitDir, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("RunPreHook failed in worktree: %v", err)
 	}
@@ -516,15 +516,8 @@ exit 0
 `
 	createHookScript(t, mainRepo, "post-flow-feature-finish", script)
 
-	// Get the worktree's git directory
-	oldDir, _ := os.Getwd()
-	os.Chdir(worktreePath)
-	worktreeGitDirOutput, err := testutil.RunGit(t, worktreePath, "rev-parse", "--git-dir")
-	os.Chdir(oldDir)
-	if err != nil {
-		t.Fatalf("Failed to get worktree git directory: %v", err)
-	}
-	worktreeGitDir := strings.TrimSpace(worktreeGitDirOutput)
+	// Get the worktree's absolute git directory via a git.Repo handle.
+	wtGitDir := worktreeGitDir(t, worktreePath)
 
 	ctx := hooks.HookContext{
 		BranchType: "feature",
@@ -535,7 +528,7 @@ exit 0
 		ExitCode:   0,
 	}
 
-	result := hooks.RunPostHook(worktreeGitDir, "feature", hooks.HookActionFinish, ctx)
+	result := hooks.RunPostHook(wtGitDir, "feature", hooks.HookActionFinish, ctx)
 	if !result.Executed {
 		t.Error("Expected post-hook to execute in worktree")
 	}
@@ -826,6 +819,92 @@ exit 0
 	err := hooks.RunPreHook(gitDir, "release", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("Start hook failed: %v", err)
+	}
+}
+
+// TestRunPreHookExecutesInTargetWorkTreeOffCwd verifies a pre-hook fed the target
+// repo's absolute git dir runs with its working directory set to that repo's work
+// tree, not the process CWD.
+func TestRunPreHookExecutesInTargetWorkTreeOffCwd(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	markerFile := filepath.Join(dir, "prehook-cwd.txt")
+	script := `#!/bin/sh
+pwd > "` + markerFile + `"
+exit 0
+`
+	createHookScript(t, dir, "pre-flow-feature-start", script)
+
+	repo, err := git.Open(dir)
+	if err != nil {
+		t.Fatalf("git.Open failed: %v", err)
+	}
+
+	ctx := hooks.HookContext{
+		BranchType: "feature",
+		BranchName: "test",
+		FullBranch: "feature/test",
+		BaseBranch: "develop",
+		Origin:     "origin",
+	}
+
+	if err := hooks.RunPreHook(repo.GitDir(), "feature", hooks.HookActionStart, ctx); err != nil {
+		t.Fatalf("RunPreHook failed: %v", err)
+	}
+
+	content, err := os.ReadFile(markerFile)
+	if err != nil {
+		t.Fatalf("Hook did not run — marker missing: %v", err)
+	}
+	got := evalSymlinks(t, strings.TrimSpace(string(content)))
+	want := evalSymlinks(t, repo.WorkTree())
+	if got != want {
+		t.Errorf("Pre-hook ran in %q, want target work tree %q", got, want)
+	}
+}
+
+// TestRunPostHookExecutesInTargetWorkTreeOffCwd is the post-hook analogue.
+func TestRunPostHookExecutesInTargetWorkTreeOffCwd(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	markerFile := filepath.Join(dir, "posthook-cwd.txt")
+	script := `#!/bin/sh
+pwd > "` + markerFile + `"
+exit 0
+`
+	createHookScript(t, dir, "post-flow-feature-finish", script)
+
+	repo, err := git.Open(dir)
+	if err != nil {
+		t.Fatalf("git.Open failed: %v", err)
+	}
+
+	ctx := hooks.HookContext{
+		BranchType: "feature",
+		BranchName: "test",
+		FullBranch: "feature/test",
+		BaseBranch: "develop",
+		Origin:     "origin",
+		ExitCode:   0,
+	}
+
+	result := hooks.RunPostHook(repo.GitDir(), "feature", hooks.HookActionFinish, ctx)
+	if !result.Executed {
+		t.Fatal("Expected post-hook to execute")
+	}
+
+	content, err := os.ReadFile(markerFile)
+	if err != nil {
+		t.Fatalf("Hook did not run — marker missing: %v", err)
+	}
+	got := evalSymlinks(t, strings.TrimSpace(string(content)))
+	want := evalSymlinks(t, repo.WorkTree())
+	if got != want {
+		t.Errorf("Post-hook ran in %q, want target work tree %q", got, want)
 	}
 }
 
@@ -1319,15 +1398,8 @@ echo "post-$EXIT_CODE" >> "` + markerFile + `"
 `
 	createHookScript(t, mainRepo, "post-flow-release-start", postScript)
 
-	// Get worktree git directory
-	oldDir, _ := os.Getwd()
-	os.Chdir(worktreePath)
-	worktreeGitDirOutput, err := testutil.RunGit(t, worktreePath, "rev-parse", "--git-dir")
-	os.Chdir(oldDir)
-	if err != nil {
-		t.Fatalf("Failed to get worktree git directory: %v", err)
-	}
-	worktreeGitDir := strings.TrimSpace(worktreeGitDirOutput)
+	// Get worktree git directory via a git.Repo handle.
+	wtGitDir := worktreeGitDir(t, worktreePath)
 
 	ctx := hooks.HookContext{
 		BranchType: "release",
@@ -1339,7 +1411,7 @@ echo "post-$EXIT_CODE" >> "` + markerFile + `"
 	}
 
 	operationRan := false
-	err = hooks.WithHooks(worktreeGitDir, "release", hooks.HookActionStart, ctx, func() error {
+	err = hooks.WithHooks(wtGitDir, "release", hooks.HookActionStart, ctx, func() error {
 		operationRan = true
 		return nil
 	})

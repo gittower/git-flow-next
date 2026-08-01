@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/gittower/git-flow-next/internal/config"
+	"github.com/gittower/git-flow-next/internal/git"
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
@@ -597,18 +598,12 @@ func TestInitWithDefaultsAndOverrides(t *testing.T) {
 		t.Error("Expected 'custom-dev' branch to exist")
 	}
 
-	// Change to the test directory before loading config
-	oldDir, err := os.Getwd()
+	// Verify configuration through a handle for the test repo (no os.Chdir).
+	repo, err := git.Open(dir)
 	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
+		t.Fatalf("Failed to open repo: %v", err)
 	}
-	defer os.Chdir(oldDir)
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("Failed to change to test directory: %v", err)
-	}
-
-	// Verify configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		t.Fatalf("Failed to load configuration: %v", err)
 	}
@@ -1614,5 +1609,48 @@ func TestInitWithEmptyIdentityValue(t *testing.T) {
 	}
 	if !strings.Contains(output, "git user identity is not configured") {
 		t.Errorf("Expected output to contain 'git user identity is not configured', got: %s", output)
+	}
+}
+
+// TestInitFileRelativePathResolvesAgainstInvocationDir verifies that a relative
+// --file argument is resolved against the invocation directory (the process CWD
+// where git-flow was run), not the work-tree root. The parent-dir existence
+// check must run after that normalization: with a nested relative path
+// (cfgdir/myconfig), cfgdir/ exists under the invocation dir B/sub but not under
+// the work-tree root B/, so only invocation-dir resolution succeeds.
+func TestInitFileRelativePathResolvesAgainstInvocationDir(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Nested invocation dir B/sub with a cfgdir/ under it; ensure the work-tree
+	// root has NO cfgdir/ so a work-tree-relative resolution would fail.
+	subDir := filepath.Join(dir, "sub")
+	cfgDir := filepath.Join(subDir, "cfgdir")
+	if err := os.MkdirAll(cfgDir, 0755); err != nil {
+		t.Fatalf("Failed to create nested cfgdir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "cfgdir")); !os.IsNotExist(err) {
+		t.Fatalf("Precondition failed: work-tree-root cfgdir must not exist")
+	}
+
+	// Invoke from B/sub with a nested relative --file path.
+	output, err := runGitFlow(t, subDir, "init", "--file", "cfgdir/myconfig", "--defaults")
+	if err != nil {
+		t.Fatalf("init --file failed: %v\nOutput: %s", err, output)
+	}
+
+	// The config file must be written under the invocation dir.
+	written := filepath.Join(subDir, "cfgdir", "myconfig")
+	content, err := os.ReadFile(written)
+	if err != nil {
+		t.Fatalf("Expected config at %s: %v", written, err)
+	}
+	if !strings.Contains(string(content), "version") {
+		t.Errorf("Expected gitflow config content in %s, got:\n%s", written, content)
+	}
+
+	// The work-tree-root cfgdir must never have been created.
+	if _, err := os.Stat(filepath.Join(dir, "cfgdir")); !os.IsNotExist(err) {
+		t.Errorf("work-tree-root cfgdir was created/read; --file did not resolve against invocation dir")
 	}
 }

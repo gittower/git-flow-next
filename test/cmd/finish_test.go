@@ -1807,3 +1807,108 @@ func TestFinishReleaseWithoutInitialization(t *testing.T) {
 		t.Errorf("Expected 'not initialized' error, got: %s", output)
 	}
 }
+
+// TestFinishTagMessageFileRelativePathCli verifies that a relative
+// --messagefile argument is resolved against the invocation directory, not the
+// work-tree root, when git-flow finish creates the release tag.
+func TestFinishTagMessageFileRelativePathCli(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if _, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to init git-flow: %v", err)
+	}
+
+	subDir := filepath.Join(dir, "sub")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create sub dir: %v", err)
+	}
+	const wantMsg = "Custom tag message from a nested file"
+	if err := os.WriteFile(filepath.Join(subDir, "msg.txt"), []byte(wantMsg+"\n"), 0644); err != nil {
+		t.Fatalf("Failed to write message file: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "msg.txt")); !os.IsNotExist(err) {
+		t.Fatalf("Precondition failed: work-tree-root msg.txt must not exist")
+	}
+
+	if _, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
+		t.Fatalf("Failed to start release: %v", err)
+	}
+	testutil.WriteFile(t, dir, "release-note.txt", "notes")
+	if _, err := testutil.RunGit(t, dir, "add", "release-note.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "release work"); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Invoke finish from the nested subdir with a relative message-file path.
+	output, err := testutil.RunGitFlow(t, subDir, "release", "finish", "1.0.0", "--messagefile", "msg.txt")
+	if err != nil {
+		t.Fatalf("release finish failed: %v\nOutput: %s", err, output)
+	}
+
+	contents, err := testutil.RunGit(t, dir, "tag", "-l", "--format=%(contents)", "1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to read tag contents: %v", err)
+	}
+	if !strings.Contains(contents, wantMsg) {
+		t.Errorf("Tag message did not come from B/sub/msg.txt.\nGot: %q\nWant substring: %q", contents, wantMsg)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "msg.txt")); !os.IsNotExist(err) {
+		t.Errorf("work-tree-root msg.txt was created/read; message file did not resolve against invocation dir")
+	}
+}
+
+// TestFinishTagMessageFileRelativePathFromConfig verifies the same invocation-dir
+// resolution when the message file comes from Layer-2 config
+// (gitflow.release.finish.messagefile) rather than the CLI flag.
+func TestFinishTagMessageFileRelativePathFromConfig(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if _, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to init git-flow: %v", err)
+	}
+
+	subDir := filepath.Join(dir, "sub")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create sub dir: %v", err)
+	}
+	const wantMsg = "Config-provided tag message from a nested file"
+	if err := os.WriteFile(filepath.Join(subDir, "msg.txt"), []byte(wantMsg+"\n"), 0644); err != nil {
+		t.Fatalf("Failed to write message file: %v", err)
+	}
+
+	// Layer-2 config carries the relative path; it keeps invocation-dir meaning.
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.release.finish.messagefile", "msg.txt"); err != nil {
+		t.Fatalf("Failed to set messagefile config: %v", err)
+	}
+
+	if _, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
+		t.Fatalf("Failed to start release: %v", err)
+	}
+	testutil.WriteFile(t, dir, "release-note.txt", "notes")
+	if _, err := testutil.RunGit(t, dir, "add", "release-note.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "release work"); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, subDir, "release", "finish", "1.0.0")
+	if err != nil {
+		t.Fatalf("release finish failed: %v\nOutput: %s", err, output)
+	}
+
+	contents, err := testutil.RunGit(t, dir, "tag", "-l", "--format=%(contents)", "1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to read tag contents: %v", err)
+	}
+	if !strings.Contains(contents, wantMsg) {
+		t.Errorf("Tag message did not come from config-referenced B/sub/msg.txt.\nGot: %q\nWant substring: %q", contents, wantMsg)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "msg.txt")); !os.IsNotExist(err) {
+		t.Errorf("work-tree-root msg.txt was created/read; config message file did not resolve against invocation dir")
+	}
+}
