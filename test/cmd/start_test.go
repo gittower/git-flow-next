@@ -397,33 +397,99 @@ func TestStartWithoutInitialization(t *testing.T) {
 	}
 }
 
-// TestStartWithoutFetch tests Scenario 19: the default start behavior does not fetch (default false).
-// Uses a remote-backed fixture so the absence of "Fetching" reflects the default, not a missing remote.
+// TestStartFetchesByDefault tests Scenario 1 (#98): with no fetch config and no flag, start
+// fetches from the remote by default and the remote advance becomes visible locally.
+// This is the regression guard for the fetch-on-by-default change: origin/develop advancing
+// OLD -> NEW is the only observable proof the default fetch actually ran. The advance is made
+// from a second clone so the primary's origin/develop is not updated before start runs —
+// otherwise the test would pass without ever fetching.
+//
+// Note: this asserts the fetch ran, NOT that the feature branch is based on NEW. A plain
+// 'git fetch origin' advances origin/develop but does not fast-forward local develop, and
+// executeStart branches from the local start point, so the branch is still based on OLD local
+// develop. That branching behavior is owned by #134 and is out of #98's scope; this mirrors the
+// assertion convention of TestStartFetchesAdvancedStartPoint (config-forced path).
 // Steps:
-// 1. Sets up a test repository with a remote and initializes git-flow
-// 2. Runs 'git flow feature start' with no fetch flag and no fetch config
-// 3. Verifies no "Fetching" line appears
-// 4. Verifies the feature branch is created
-func TestStartWithoutFetch(t *testing.T) {
-	// Setup test repo with remote so absence of fetch reflects the default (not a missing remote)
+// 1. Sets up a test repository with a remote and initializes git-flow (NO fetch config, NO flag)
+// 2. Records OLD = the primary's origin/develop
+// 3. Advances develop from a second clone (commit + push); records NEW = the bare remote develop
+// 4. Asserts the primary's origin/develop is still OLD and the bare develop is NEW (out of sync)
+// 5. Runs 'git flow feature start'
+// 6. Verifies a "Fetching" line, the branch is created, and origin/develop now resolves to NEW
+func TestStartFetchesByDefault(t *testing.T) {
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Run git-flow feature start without the fetch flag (default is no fetch)
-	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "no-fetch-test")
+	// Record OLD = the primary's origin/develop before advancing
+	oldRaw, err := testutil.RunGit(t, dir, "rev-parse", "origin/develop")
+	if err != nil {
+		t.Fatalf("Failed to get origin/develop: %v", err)
+	}
+	old := strings.TrimSpace(oldRaw)
+
+	// Advance develop from a second clone
+	secondDir := t.TempDir()
+	if _, err := testutil.RunGit(t, secondDir, "clone", remoteDir, "."); err != nil {
+		t.Fatalf("Failed to clone: %v", err)
+	}
+	testutil.ConfigureGitIdentity(t, secondDir)
+	if _, err := testutil.RunGit(t, secondDir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop in second repo: %v", err)
+	}
+	testutil.WriteFile(t, secondDir, "advance.txt", "advanced content")
+	if _, err := testutil.RunGit(t, secondDir, "add", "advance.txt"); err != nil {
+		t.Fatalf("Failed to add file in second repo: %v", err)
+	}
+	if _, err := testutil.RunGit(t, secondDir, "commit", "-m", "Advance develop"); err != nil {
+		t.Fatalf("Failed to commit in second repo: %v", err)
+	}
+	if _, err := testutil.RunGit(t, secondDir, "push", "origin", "develop"); err != nil {
+		t.Fatalf("Failed to push from second repo: %v", err)
+	}
+
+	// Record NEW = the bare remote develop
+	newRaw, err := testutil.RunGit(t, remoteDir, "rev-parse", "refs/heads/develop")
+	if err != nil {
+		t.Fatalf("Failed to get bare develop: %v", err)
+	}
+	newSHA := strings.TrimSpace(newRaw)
+
+	// Precondition: primary origin/develop still OLD, bare develop is NEW, and they differ
+	primaryBeforeRaw, err := testutil.RunGit(t, dir, "rev-parse", "origin/develop")
+	if err != nil {
+		t.Fatalf("Failed to get primary origin/develop: %v", err)
+	}
+	if strings.TrimSpace(primaryBeforeRaw) != old {
+		t.Fatalf("Precondition failed: expected primary origin/develop to still be OLD (%s), got %s", old, strings.TrimSpace(primaryBeforeRaw))
+	}
+	if old == newSHA {
+		t.Fatalf("Precondition failed: expected OLD (%s) != NEW (%s)", old, newSHA)
+	}
+
+	// Run start with no fetch config and no flag — the new default should drive the fetch
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "advanced-default")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
 	}
 
-	// Verify that output does not contain fetching info
-	if strings.Contains(output, "Fetching from") {
-		t.Errorf("Expected no fetch operation, but output indicates fetching: %s", output)
+	// Verify fetch ran by default
+	if !strings.Contains(output, "Fetching from") {
+		t.Errorf("Expected a fetch to run by default. Output: %s", output)
 	}
 
-	// Verify the branch was created
-	if !testutil.BranchExists(t, dir, "feature/no-fetch-test") {
-		t.Error("Expected feature/no-fetch-test branch to exist")
+	// Verify branch created
+	if !testutil.BranchExists(t, dir, "feature/advanced-default") {
+		t.Error("Expected feature/advanced-default branch to exist")
+	}
+
+	// Verify the advance is now visible: primary origin/develop == NEW (proof the default fetch ran)
+	afterRaw, err := testutil.RunGit(t, dir, "rev-parse", "origin/develop")
+	if err != nil {
+		t.Fatalf("Failed to get origin/develop after start: %v", err)
+	}
+	if strings.TrimSpace(afterRaw) != newSHA {
+		t.Errorf("Expected origin/develop to advance to NEW (%s) after default start, got %s", newSHA, strings.TrimSpace(afterRaw))
 	}
 }
 
@@ -781,5 +847,186 @@ func TestStartUnreachableRemoteWarnsAndCreates(t *testing.T) {
 	// Verify branch created
 	if !testutil.BranchExists(t, dir, "feature/unreachable-test") {
 		t.Error("Expected feature/unreachable-test branch to exist")
+	}
+}
+
+// TestStartFetchConfigFalseSkipsFetch tests Scenario 2 (#98): an explicit
+// gitflow.<type>.start.fetch=false opt-out wins over the new fetch-on-by-default.
+// Uses a remote-backed fixture so the absence of "Fetching" reflects the config, not a
+// missing remote.
+// Steps:
+// 1. Sets up a test repository with a remote and initializes git-flow
+// 2. Sets gitflow.feature.start.fetch=false; no flag
+// 3. Runs 'git flow feature start'
+// 4. Verifies no "Fetching from" line appears (config false wins over the default)
+// 5. Verifies the feature branch is created
+func TestStartFetchConfigFalseSkipsFetch(t *testing.T) {
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	// Explicit opt-out via config
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.start.fetch", "false"); err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "config-false-test")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
+	}
+
+	// Verify no fetch (config false overrides the new default)
+	if strings.Contains(output, "Fetching from") {
+		t.Errorf("Expected no fetch due to config false, but output indicates fetching: %s", output)
+	}
+
+	// Verify branch created
+	if !testutil.BranchExists(t, dir, "feature/config-false-test") {
+		t.Error("Expected feature/config-false-test branch to exist")
+	}
+}
+
+// TestStartNoFetchFlagSkipsByDefault tests Scenario 3 (#98): --no-fetch overrides the new
+// fetch-on-by-default when there is no fetch config.
+// Uses a remote-backed fixture so the absence of "Fetching" reflects the flag, not a missing
+// remote.
+// Steps:
+// 1. Sets up a test repository with a remote and initializes git-flow (no fetch config)
+// 2. Runs 'git flow feature start ... --no-fetch'
+// 3. Verifies no "Fetching from" line appears (flag overrides the default)
+// 4. Verifies the feature branch is created
+func TestStartNoFetchFlagSkipsByDefault(t *testing.T) {
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "no-fetch-flag-test", "--no-fetch")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
+	}
+
+	// Verify no fetch (--no-fetch overrides the new default)
+	if strings.Contains(output, "Fetching from") {
+		t.Errorf("Expected no fetch due to --no-fetch flag, but output indicates fetching: %s", output)
+	}
+
+	// Verify branch created
+	if !testutil.BranchExists(t, dir, "feature/no-fetch-flag-test") {
+		t.Error("Expected feature/no-fetch-flag-test branch to exist")
+	}
+}
+
+// TestStartFetchFlagOverridesConfigFalse tests Scenario 4 (#98): --fetch beats
+// gitflow.<type>.start.fetch=false, confirming the new default did not disturb precedence.
+// Steps:
+// 1. Sets up a test repository with a remote and initializes git-flow
+// 2. Sets gitflow.feature.start.fetch=false
+// 3. Runs 'git flow feature start ... --fetch'
+// 4. Verifies a "Fetching from" line appears (flag beats config false)
+// 5. Verifies the feature branch is created
+func TestStartFetchFlagOverridesConfigFalse(t *testing.T) {
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.start.fetch", "false"); err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "flag-over-config-test", "--fetch")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
+	}
+
+	// Verify fetch ran (flag beats config false)
+	if !strings.Contains(output, "Fetching from") {
+		t.Errorf("Expected fetch due to --fetch flag overriding config false: %s", output)
+	}
+
+	// Verify branch created
+	if !testutil.BranchExists(t, dir, "feature/flag-over-config-test") {
+		t.Error("Expected feature/flag-over-config-test branch to exist")
+	}
+}
+
+// TestStartDefaultNoRemoteFetchSkipped tests Scenario 5 (#98): with no remote and no fetch
+// config, the new default fetch is skipped silently and the branch is still created. Confirms
+// the new default never turns into a "not a git repository" error in local-only repos.
+// This is the no-config sibling of TestStartFeatureBranchNoRemoteFetchSkipped.
+// Steps:
+// 1. Sets up a test repository WITHOUT a remote and initializes git-flow with defaults
+// 2. Runs 'git flow feature start' (NO fetch config — relies on the new default)
+// 3. Verifies output does NOT contain "Fetching" (fetch skipped silently)
+// 4. Verifies output does NOT contain "does not appear to be a git repository"
+// 5. Verifies the feature branch is created
+func TestStartDefaultNoRemoteFetchSkipped(t *testing.T) {
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if _, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	// Start a feature branch relying on the new default (no fetch config)
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "no-remote-default-test")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
+	}
+
+	// Verify fetch was skipped silently
+	if strings.Contains(output, "Fetching") {
+		t.Error("Expected fetch to be skipped silently, but output contains 'Fetching'")
+	}
+	if strings.Contains(output, "does not appear to be a git repository") {
+		t.Error("Expected no confusing error messages about missing remote")
+	}
+
+	// Verify branch created
+	if !testutil.BranchExists(t, dir, "feature/no-remote-default-test") {
+		t.Error("Expected feature/no-remote-default-test branch to exist")
+	}
+}
+
+// TestStartDefaultUnreachableRemoteWarnsAndCreates tests Scenario 6 (#98): with no fetch config
+// and an unreachable remote, the new default fetch is attempted, its failure is a non-fatal
+// warning, and the branch is still created. Confirms the default fetch is non-fatal for start
+// (no sync gate). This is the no-config sibling of TestStartUnreachableRemoteWarnsAndCreates.
+// RunGitFlow uses CombinedOutput, so both the "Fetching from" attempt and the warning are
+// observable.
+// Steps:
+// 1. Sets up a test repository with a remote and initializes git-flow (NO fetch config)
+// 2. Points origin at a nonexistent path
+// 3. Runs 'git flow feature start' (no flag — relies on the new default)
+// 4. Verifies the command still succeeds (exit 0)
+// 5. Verifies combined output contains "Fetching from origin..." (fetch attempted under default)
+// 6. Verifies combined output contains the fetch-specific warning
+// 7. Verifies the feature branch is created
+func TestStartDefaultUnreachableRemoteWarnsAndCreates(t *testing.T) {
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "remote", "set-url", "origin", "./nonexistent-remote-repo.git"); err != nil {
+		t.Fatalf("Failed to break remote: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "unreachable-default-test")
+	if err != nil {
+		t.Fatalf("Expected start to succeed despite fetch failure. Error: %v\nOutput: %s", err, output)
+	}
+
+	// Verify the fetch was attempted under the new default
+	if !strings.Contains(output, "Fetching from origin...") {
+		t.Errorf("Expected a fetch attempt under the new default. Output: %s", output)
+	}
+
+	// Verify the fetch-specific warning (disambiguated from the base-branch-storage warning)
+	if !strings.Contains(output, "Warning: failed to fetch from remote 'origin'") {
+		t.Errorf("Expected a fetch-failure warning. Output: %s", output)
+	}
+
+	// Verify branch created
+	if !testutil.BranchExists(t, dir, "feature/unreachable-default-test") {
+		t.Error("Expected feature/unreachable-default-test branch to exist")
 	}
 }

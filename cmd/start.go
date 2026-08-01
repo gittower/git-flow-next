@@ -112,7 +112,7 @@ func start(branchType string, name string, base string, shouldFetch *bool) error
 
 // executeStart performs the actual start operation (called within hooks wrapper)
 func executeStart(branchType string, name string, base string, shouldFetch *bool, cfg *config.Config, branchConfig config.BranchConfig, fullBranchName string, startPoint string) error {
-	// Determine if we should fetch using the shared resolver (default false for start):
+	// Determine if we should fetch using the shared resolver (default true for start):
 	// Layer 1 default -> gitflow.<type>.start.fetch config -> CLI flag.
 	remoteName := cfg.Remote
 	if config.ResolveStartShouldFetch(cfg, branchType, shouldFetch) {

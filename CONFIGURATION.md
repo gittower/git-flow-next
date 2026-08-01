@@ -159,7 +159,7 @@ The finish command supports per-branch-type configuration:
 | `keepremote` | Keep remote branch | `true`, `false` | `false` |
 | `keeplocal` | Keep local branch | `true`, `false` | `false` |
 | `force-delete` | Force delete branch | `true`, `false` | `false` |
-| `fetch` | Fetch before operation (`gitflow.<type>.<cmd>.fetch`; default → config → `--fetch`/`--no-fetch`) | `true`, `false` | `true` for `finish`, `false` for `start` |
+| `fetch` | Fetch before operation (`gitflow.<type>.<cmd>.fetch`; default → config → `--fetch`/`--no-fetch`) | `true`, `false` | `true` for both `finish` and `start` |
 | `push` | Push finished branches to remote | `true`, `false` | `false` |
 | `pushtag` | Push created tag to remote | `true`, `false` | Follows `push` |
 
