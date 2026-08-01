@@ -235,8 +235,10 @@ func executeFinish(branchType string, name string, continueOp bool, abortOp bool
 
 	// Fetch the topic (and parent, best-effort) and verify the topic is in sync with its remote.
 	// This runs only on the initial finish, never on --continue/--abort (handled above). A fatal
-	// fetch failure or an out-of-sync topic aborts here, before any merge.
-	if err := runFetchSyncPreflight(cfg, branchType, cfg.Remote, name, shortName, branchConfig.Parent, resolvedOptions.ShouldFetch, force, preflightOptions{}); err != nil {
+	// fetch failure or a behind/diverged topic aborts here, before any merge. Being *ahead* is
+	// tolerated (downgraded to a note): finish merges the unpushed commits into the parent and then
+	// deletes the topic branch, so requiring a push first would preserve nothing.
+	if err := runFetchSyncPreflight(cfg, branchType, cfg.Remote, name, shortName, branchConfig.Parent, resolvedOptions.ShouldFetch, force, preflightOptions{tolerateAhead: true}); err != nil {
 		return err
 	}
 

@@ -411,7 +411,7 @@ git flow release finish v1.0 --tag  # Forces tag creation despite config
 git config gitflow.branch.feature.upstreamStrategy merge
 
 # Layer 2: Command-specific override
-git config gitflow.feature.finish.merge rebase
+git config gitflow.feature.finish.rebase true
 
 # Layer 3: Command-line override (WINS)
 git flow feature finish my-feature --squash  # Forces squash merge
@@ -458,6 +458,14 @@ if err := git.BranchExists(branchName); err != nil {
     return &errors.BranchNotFoundError{BranchName: branchName}
 }
 ```
+
+### Cobra Positional Argument Validation
+
+Every leaf command must declare an explicit Cobra `Args` validator. Use
+`cobra.NoArgs` when the command takes no positional arguments, or a bounded
+validator such as `cobra.ExactArgs`, `cobra.MaximumNArgs`, or
+`cobra.RangeArgs` that matches exactly what the command consumes. Parent and
+dispatch commands that only delegate to subcommands are exempt.
 
 ### Options Struct Pattern
 

@@ -130,12 +130,12 @@ git config gitflow.branch.feature.prefix "feat/"
 git config gitflow.branch.release.prefix "rel/"
 
 # Merge strategies (upstream - finish operations)
-git config gitflow.feature.finish.merge rebase
-git config gitflow.release.finish.merge squash
+git config gitflow.feature.finish.rebase true
+git config gitflow.release.finish.squash true
 
 # Merge strategies (downstream - update operations)
-git config gitflow.feature.downstreamStrategy rebase
-git config gitflow.release.downstreamStrategy merge
+git config gitflow.branch.feature.downstreamStrategy rebase
+git config gitflow.branch.release.downstreamStrategy merge
 
 # Base branch relationships
 git config gitflow.branch.develop.parent main

@@ -167,7 +167,7 @@ The finish command supports per-branch-type configuration:
 
 ```bash
 # Override feature finish to use rebase
-gitflow.feature.finish.merge=rebase
+gitflow.feature.finish.rebase=true
 
 # Disable tags for feature branches
 gitflow.feature.finish.notag=true
@@ -219,10 +219,10 @@ When `fetch` is enabled, delete fetches from the remote so Git can detect a bran
 
 ```bash
 # Force rebase for feature updates
-gitflow.feature.downstreamStrategy=rebase
+gitflow.branch.feature.downstreamStrategy=rebase
 
 # Use merge for release updates
-gitflow.release.downstreamStrategy=merge
+gitflow.branch.release.downstreamStrategy=merge
 ```
 
 ## Configuration Precedence
@@ -342,7 +342,7 @@ git config --get-regexp '^gitflow\.feature\.finish\.'
 git config gitflow.branch.feature.upstreamStrategy rebase
 
 # Set command-specific configuration
-git config gitflow.feature.finish.merge squash
+git config gitflow.feature.finish.squash true
 
 # Set global configuration (all repositories)
 git config --global gitflow.feature.finish.notag true
@@ -352,7 +352,7 @@ git config --global gitflow.feature.finish.notag true
 
 ```bash
 # Remove specific setting
-git config --unset gitflow.feature.finish.merge
+git config --unset gitflow.feature.finish.rebase
 
 # Remove all git-flow configuration (reset)
 git config --remove-section gitflow

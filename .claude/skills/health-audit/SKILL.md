@@ -1,7 +1,7 @@
 ---
 name: health-audit
-description: Internal codebase health audit — checks docs, skills, architecture/duplication, coding-guidelines, and tests for drift. Runs all areas by default, or one named area. Writes per-area reports to .ai/health-audit-<date>/.
-argument-hint: "[area: docs | skills | architecture | guidelines | tests] (omit for all)"
+description: Internal codebase health audit — checks docs, skills, duplication, dead code, coding-guidelines, correctness, and tests for drift and real defects. Runs all areas by default, or one named area. Writes per-area reports to .ai/health-audit-<date>/.
+argument-hint: "[area: docs | skills | duplication | dead-code | guidelines | correctness | tests] (omit for all)"
 allowed-tools: Bash, Read, Write, Glob, Grep, Task
 ---
 
@@ -21,18 +21,21 @@ issues. It only reports. Findings are meant to feed the normal pipelines
 
 `/health-audit [area]`
 
-- No argument → run **all five areas** in parallel, then write a `SUMMARY.md`.
+- No argument → run **all seven areas** in parallel, then write a `SUMMARY.md`.
 - One `area` → run only that area. Valid slugs (also the report filenames):
-  `docs`, `skills`, `architecture`, `guidelines`, `tests`.
+  `docs`, `skills`, `duplication`, `dead-code`, `guidelines`, `correctness`,
+  `tests`.
 
 ## Areas and truth sources
 
 | Slug | Audits | Truth source |
 |------|--------|--------------|
-| `docs` | manpages vs actual flags/config/commands | `cmd/*.go`, config keys, `version/` |
-| `skills` | stale refs, overlap, doc-consistency of `.claude/skills/` | the skill files + root guideline docs |
-| `architecture` | duplication, layering, dead/parallel code | `ARCHITECTURE.md`, `CODING_GUIDELINES.md`, source |
-| `guidelines` | coding-guideline compliance | `CODING_GUIDELINES.md`, CLAUDE.md "Code Conventions" |
+| `docs` | manpages vs actual flags/config/commands; root technical-doc drift | `cmd/*.go`, config keys, `version/`, `ARCHITECTURE.md`, `CODE_REFERENCE.md` |
+| `skills` | stale refs, overlap, and AI-guidance consistency (`.claude/skills/`, `.github/copilot-instructions.md`, `CLAUDE.md`) | the skill files + root guideline docs |
+| `duplication` | copy-paste logic, parallel implementations | source + `CODING_GUIDELINES.md` |
+| `dead-code` | unused exports/files, unreachable or orphan code | source |
+| `guidelines` | coding-guideline compliance, layering, config precedence | `CODING_GUIDELINES.md`, CLAUDE.md "Code Conventions" |
+| `correctness` | real defects: unhandled errors, wrong exit codes, boundary/state bugs | source |
 | `tests` | build/test pass, coverage gaps, convention drift | `TESTING_GUIDELINES.md`, CLAUDE.md testing sections |
 
 ## Instructions
@@ -47,7 +50,7 @@ date +%Y-%m-%d
 
 - If an argument was given, validate it against the five slugs (reject anything
   else with the valid list) and run only that one.
-- Otherwise run all five.
+- Otherwise run all seven.
 
 The output directory is `.ai/health-audit-<today>/`. Create it. `.ai/` is
 gitignored, so nothing here gets committed. If the dir already exists (a re-run
@@ -92,6 +95,14 @@ Then the per-area body:
    coverage (CLAUDE.md makes doc updates MANDATORY for command changes).
 5. `version/version.go` vs `cmd/version.go` — do the version constants match?
    Skip stylistic/wording nitpicks.
+6. ROOT TECHNICAL DOCS — `ARCHITECTURE.md` and `CODE_REFERENCE.md` describe the
+   codebase structure and drift silently as code moves. Cross-check them
+   against `cmd/` and `internal/`: commands or packages that exist but aren't
+   mentioned, files/paths referenced that have moved or been removed, and
+   structural claims (layering, package responsibilities) that no longer hold.
+   Use `git log` recency as a hint — a doc far older than the code it describes
+   is a drift candidate — but confirm each mismatch against the actual tree.
+   Skip prose/wording nitpicks; report only factual staleness.
 
 **`skills`** — Check `.claude/skills/` (and any `.claude/commands/`):
 1. STALE REFERENCES: grep each skill for referenced files, paths, skill names,
@@ -106,23 +117,39 @@ Then the per-area body:
 4. Skills referenced in `DEV_WORKFLOW.md`/`CLAUDE.md` that don't exist, and
    skills that exist but are referenced nowhere (orphans / undocumented
    relative to peers).
+5. AI-GUIDANCE CONSISTENCY: `.github/copilot-instructions.md` and `CLAUDE.md`
+   are curated summaries of the same rules the guideline docs encode. Check
+   they haven't drifted from the source of truth: commit format vs
+   `COMMIT_GUIDELINES.md` (incl. the `Co-Authored-By` attribution rule), the
+   three-layer config precedence and `internal/git` wrapper rule vs
+   `CODING_GUIDELINES.md`/`ARCHITECTURE.md`, and mandatory test/doc/version-sync
+   requirements. Flag contradictions and rules that changed in a guideline doc
+   but not in these summaries. A high-level omission (a summary intentionally
+   not listing every detail) is not a finding — only contradictions are.
 
-**`architecture`** — Read `ARCHITECTURE.md` and `CODING_GUIDELINES.md` first,
-then audit `cmd/` and `internal/`:
+**`duplication`** — Read `CODING_GUIDELINES.md` first, then audit `cmd/` and
+`internal/` for logic that has diverged or is about to:
 1. TRUE DUPLICATION: near-identical logic blocks in 2+ places that could share
    a helper (flag parsing, config-precedence resolution, conflict/merge-state
    handling, validation, hook-context construction). Give every copy's
    `file:line`.
-2. LAYERING: CLAUDE.md requires all Git ops go through `internal/git`. Find
-   `exec.Command("git", ...)` calls that bypass the wrapper (note if in `cmd/`
-   vs read-only `internal/` — the former is worse).
-3. Three-layer config precedence (branch-type def → command config → CLI
-   flags) — implemented consistently, or does one command resolve differently?
-4. Dead code (exported symbols with no non-test caller; unused files) and
-   parallel implementations (two functions doing the same job under different
-   names).
-   Lean away from flagging acceptable repetition; call it out only when it has
-   caused, or is likely to cause, real divergence.
+2. PARALLEL IMPLEMENTATIONS: two functions doing the same job under different
+   names, or a newer path that superseded an older one but left it in place.
+   Respect the anti-over-engineering philosophy: some repetition is fine. Call
+   it out only when the copies have already diverged, or are likely to, causing
+   real bugs. A near-duplicate that would only save a few lines is NOT a
+   finding.
+
+**`dead-code`** — Audit `cmd/`, `internal/`, and `testutil/` for code nothing
+reaches:
+1. Exported symbols with no non-test caller; unexported symbols with no caller
+   at all; unused files.
+2. Unreachable branches and orphan helpers (including dead or duplicated
+   `testutil` helpers).
+   Before flagging, confirm there is truly no caller across `cmd/`, `internal/`,
+   and tests — registration/reflection patterns (e.g. Cobra command
+   registration, `init()` side effects) can hide callers. When unsure whether a
+   symbol is intentional public API, mark it low severity.
 
 **`guidelines`** — Read `CODING_GUIDELINES.md` + CLAUDE.md "Code Conventions"
 first; check compliance with the project's stated MUST/ALWAYS/NEVER rules:
@@ -130,12 +157,36 @@ first; check compliance with the project's stated MUST/ALWAYS/NEVER rules:
    exit codes per condition; typed errors actually satisfy the `errors.Error`
    interface. Find bare `fmt.Errorf`/`errors.New` where a typed error is
    expected, and exit codes that diverge from the documented set.
-2. GIT INTEGRATION: git through `internal/git`; graceful conflict handling;
+2. GIT INTEGRATION & LAYERING: git through `internal/git`; find
+   `exec.Command("git", ...)` calls that bypass the wrapper (note if in `cmd/`
+   vs read-only `internal/` — the former is worse); graceful conflict handling;
    **uncommitted-changes check before mutating operations**.
 3. COMMAND IMPLEMENTATION: consistent Cobra structure; the "validate git-flow
    is initialized" preamble on every command except `init`; long AND short
    flags; input validation; examples/usage present.
-4. Any other explicit rule in `CODING_GUIDELINES.md`, checked against code.
+4. CONFIG PRECEDENCE: three-layer resolution (branch-type def → command config
+   → CLI flags, flags always win) implemented consistently — does any command
+   resolve differently?
+5. Any other explicit rule in `CODING_GUIDELINES.md`, checked against code.
+
+**`correctness`** — The one area that steps beyond drift into real defects.
+Stay disciplined: report a bug ONLY with a concrete failure scenario (specific
+inputs/state → wrong result or crash). Respect the pragmatic philosophy — do
+NOT flag style, long functions, or theoretical "could be cleaner" issues.
+Audit `cmd/` and `internal/`:
+1. UNHANDLED ERRORS: returned errors ignored or swallowed; `err` checked but
+   the wrong branch taken; deferred `Close`/cleanup errors dropped where the
+   result matters.
+2. EXIT CODES / ERROR TYPES: a condition that returns the wrong exit code, or a
+   failure path that returns success (nil error) and lets execution continue.
+3. STATE & BOUNDARY: merge-state read/written inconsistently across
+   continue/abort; off-by-one, empty-slice, or nil-map access; branch-name /
+   prefix edge cases; ordering assumptions that don't hold.
+4. GIT-OP CORRECTNESS: operations run in the wrong order, against the wrong
+   ref, or without a required precondition (fetch, uncommitted-changes check)
+   such that work could be lost or a branch left in a bad state.
+   Report each as `file:line` + the trigger + the wrong outcome. Grade severity
+   by blast radius: data loss or branch corruption = high; a bad message = low.
 
 **`tests`** — Read `TESTING_GUIDELINES.md` first, then:
 1. Run `go build ./...` and `go test ./...` (allow several minutes;
@@ -153,7 +204,7 @@ first; check compliance with the project's stated MUST/ALWAYS/NEVER rules:
 
 ### 3. Write SUMMARY.md (full runs only)
 
-When all five areas ran, after the subagents finish, read the five area files
+When all seven areas ran, after the subagents finish, read the seven area files
 and write `.ai/health-audit-<today>/SUMMARY.md`:
 
 ```markdown

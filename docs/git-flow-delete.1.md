@@ -94,12 +94,7 @@ git flow delete --force
 
 ### Remote Management
 
-Delete only remote tracking branch:
-```bash
-git flow feature delete published-feature --remote --no-local
-```
-
-Clean up both local and remote:
+Delete a branch and its remote tracking branch:
 ```bash
 git flow feature delete completed-feature --remote
 ```

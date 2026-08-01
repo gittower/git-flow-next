@@ -41,23 +41,23 @@ The operation maintains a persistent state file that allows it to resume after c
 : Abort the finish operation and return to the original state. When no finish operation is in progress, **--abort** is a no-op and exits successfully. Like **--continue**, it acts only on a finish operation: a foreign in-progress update or integrate is refused (exit 3) rather than aborted.
 
 **--force**, **-f**
-: Force finish: ignore fetch failures, skip the remote sync check, and allow finishing non-standard branches. The fetch is still attempted, but any failure is ignored rather than fatal, and the safety check that prevents finishing when the local branch is ahead of, behind, or diverged from its remote tracking branch is bypassed.
+: Force finish: ignore fetch failures, skip the remote sync check, and allow finishing non-standard branches. The fetch is still attempted, but any failure is ignored rather than fatal, and the safety check that prevents finishing when the local branch is behind or diverged from its remote tracking branch is bypassed.
 
 ### Tag Creation
 
 **--tag**
 : Create a tag for the finished branch (overrides configuration)
 
-**--notag**
+**--notag**, **-n**
 : Don't create a tag for the finished branch (overrides configuration)
 
-**--sign**
+**--sign**, **-s**
 : Sign the tag cryptographically with GPG
 
 **--no-sign**
 : Don't sign the tag cryptographically
 
-**--signingkey** *keyid*
+**--signingkey**, **-u** *keyid*
 : Use the given GPG key for the digital signature
 
 **--message**, **-m** *message*
@@ -66,12 +66,12 @@ The operation maintains a persistent state file that allows it to resume after c
 **--messagefile** *file*
 : Use contents of the given file as tag message
 
-**--tagname** *name*
+**--tagname**, **-T** *name*
 : Use the given tag name instead of the default
 
 ### Branch Retention
 
-**--keep**
+**--keep**, **-k**
 : Keep the topic branch after finishing (don't delete)
 
 **--no-keep**
@@ -89,7 +89,7 @@ The operation maintains a persistent state file that allows it to resume after c
 **--no-keeplocal**
 : Delete the local branch after finishing
 
-**--force-delete**
+**--force-delete**, **-D**
 : Force delete the branch even if not fully merged
 
 **--no-force-delete**
@@ -103,7 +103,7 @@ The operation maintains a persistent state file that allows it to resume after c
 **--no-rebase**
 : Don't rebase topic branch (use configured strategy)
 
-**--squash**
+**--squash**, **-S**
 : Squash all commits into single commit (overrides configured strategy)
 
 **--no-squash**
@@ -118,7 +118,7 @@ The operation maintains a persistent state file that allows it to resume after c
 **--update-message** *message*
 : Custom commit message for child branch update operations (parent to child branches). When finishing a release or hotfix, child branches like develop are automatically updated from the parent. This option allows customizing those merge commit messages. Supports placeholders (see MESSAGE PLACEHOLDERS below). Can be configured as default via `gitflow.<type>.finish.updatemessage`.
 
-**--preserve-merges**
+**--preserve-merges**, **-p**
 : Preserve merges during rebase operations
 
 **--no-preserve-merges**
@@ -140,7 +140,7 @@ The operation maintains a persistent state file that allows it to resume after c
 
 ### Remote Push Options
 
-By default, finishing a branch performs only local work; nothing is pushed. These options opt in to pushing the results of a completed finish to the configured remote (`gitflow.remote`, default `origin`) as a final stage, after all merges, tags, child updates, and branch deletion are done. The finished topic branch itself is never pushed by these options.
+By default, finishing a branch performs only local work; nothing is pushed. These options opt in to pushing the results of a completed finish to the configured remote (`gitflow.origin`, default `origin`) as a final stage, after all merges, tags, child updates, and branch deletion are done. The finished topic branch itself is never pushed by these options.
 
 When pushing branches, finish pushes the target (parent) branch first, followed by each auto-updated child base branch (for example `main` then `develop` on a release or hotfix finish). Each branch is pushed explicitly to the configured remote with a plain `git push <remote> <branch>`, so it does not depend on or alter the branch's upstream tracking configuration.
 
@@ -167,13 +167,13 @@ CLI push flags are not persisted across `--continue`. Options are re-resolved on
 
 ## REMOTE SYNC CHECK
 
-Before performing the merge operation, the finish command checks if the local topic branch is in sync with its remote tracking branch. This safety check prevents accidental data loss when the remote has commits that are not present locally, and prevents merging work that has not been published. Only the topic branch is sync-checked; the parent branch is fetched best-effort but not compared.
+Before performing the merge operation, the finish command checks if the local topic branch is in sync with its remote tracking branch. This safety check prevents accidental data loss when the remote has commits that are not present locally (behind or diverged). Being ahead of the remote is tolerated with a note, since finish merges the local commits into the parent and (by default) deletes the topic branch. Only the topic branch is sync-checked; the parent branch is fetched best-effort but not compared.
 
 ### Sync Status Behavior
 
 **Equal**: Local and remote are at the same commit. Finish proceeds normally.
 
-**Ahead**: Local has commits not pushed to remote. Finish **aborts with an error** so the unpublished commits are not merged without being pushed first.
+**Ahead**: Local has commits not pushed to remote. Finish **proceeds** and prints a note. The unpushed commits are merged into the parent branch and the topic branch is then deleted (by default), so requiring a push first would preserve nothing.
 
 **Behind**: Remote has commits not present locally. Finish **aborts with an error** to prevent discarding those changes.
 

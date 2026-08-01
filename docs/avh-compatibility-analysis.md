@@ -72,16 +72,16 @@ These AVH options need translation but are automatically handled during migratio
 | `gitflow.prefix.support` | `gitflow.branch.support.prefix` | New hierarchical format |
 | `gitflow.prefix.versiontag` | `gitflow.branch.*.tagprefix` | Applied to all tag-creating types |
 
-### 🔄 Strategy Translation Required
-These AVH boolean flags need translation to our strategy-based system. The resolver handles `notag` at runtime (Layer 2), but the import does not auto-convert these to git-flow-next's preferred format:
+### ✅ Merge Strategy & Tag Flags (Direct Match)
+These AVH boolean flags are read directly by git-flow-next's resolver at runtime (Layer 2) — no translation or conversion is needed. There is no `gitflow.<type>.finish.merge` key; the finish strategy is resolved from `gitflow.branch.<name>.upstreamStrategy` plus these `finish.rebase`/`finish.squash` booleans:
 
-| AVH Option | git-flow-next Equivalent | Translation Rule |
-|------------|--------------------------|------------------|
-| `gitflow.feature.finish.rebase=true` | `gitflow.feature.finish.merge=rebase` | Boolean to strategy |
-| `gitflow.feature.finish.squash=true` | `gitflow.feature.finish.merge=squash` | Boolean to strategy |
-| `gitflow.release.finish.squash=true` | `gitflow.release.finish.merge=squash` | Boolean to strategy |
-| `gitflow.release.finish.notag=true` | `gitflow.branch.release.tag=false` | Inverted boolean (works at runtime via resolver, not migrated) |
-| `gitflow.hotfix.finish.notag=true` | `gitflow.branch.hotfix.tag=false` | Inverted boolean (works at runtime via resolver, not migrated) |
+| AVH Option | git-flow-next | Notes |
+|------------|---------------|-------|
+| `gitflow.feature.finish.rebase=true` | `gitflow.feature.finish.rebase=true` | ✅ Direct match — resolver reads it as-is |
+| `gitflow.feature.finish.squash=true` | `gitflow.feature.finish.squash=true` | ✅ Direct match — resolver reads it as-is |
+| `gitflow.release.finish.squash=true` | `gitflow.release.finish.squash=true` | ✅ Direct match — resolver reads it as-is |
+| `gitflow.release.finish.notag=true` | `gitflow.release.finish.notag=true` | ✅ Direct match — read at runtime (equivalently `gitflow.branch.release.tag=false`) |
+| `gitflow.hotfix.finish.notag=true` | `gitflow.hotfix.finish.notag=true` | ✅ Direct match — read at runtime (equivalently `gitflow.branch.hotfix.tag=false`) |
 
 ### ⚠️ Missing Options in git-flow-next
 These git-flow-avh options are **not currently supported** in git-flow-next:

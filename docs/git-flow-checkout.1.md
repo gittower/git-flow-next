@@ -22,6 +22,11 @@ The checkout command is a convenient wrapper around **git checkout** that automa
 *name*|*nameprefix*
 : Full name or partial name prefix of the topic branch to checkout. Supports partial matching for convenience.
 
+## OPTIONS
+
+**--showcommands**
+: Show the underlying git commands as they are executed.
+
 ## PARTIAL NAME MATCHING
 
 The checkout command supports partial name matching for convenience:

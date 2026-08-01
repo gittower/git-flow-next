@@ -13,15 +13,22 @@ git-flow-next/
 ├── cmd/                    # Command implementations
 │   ├── root.go            # Root CLI command setup with Cobra
 │   ├── init.go            # Repository initialization command
-│   ├── start.go           # Branch starting logic  
+│   ├── config.go          # config subcommands (add/edit/rename/delete/list)
+│   ├── start.go           # Branch starting logic
 │   ├── finish.go          # Branch finishing logic (most complex)
+│   ├── update.go          # Branch updating from parent
+│   ├── integrate.go       # Integrate a base branch into its parent
 │   ├── topicbranch.go     # Dynamic command registration for branch types
+│   ├── shorthand.go       # Shorthand commands (auto-detect branch type)
+│   ├── continue_abort.go  # Continue/abort in-progress operations; foreign-op guard
+│   ├── preflight.go       # Shared pre-merge fetch/sync preflight guard
+│   ├── publish.go         # Publish a topic branch to the remote
+│   ├── track.go           # Track a remote topic branch
 │   ├── list.go            # Branch listing commands
 │   ├── checkout.go        # Branch checkout functionality
 │   ├── delete.go          # Branch deletion
 │   ├── rename.go          # Branch renaming
-│   ├── update.go          # Branch updating from parent
-│   └── overview.go        # Repository overview/status
+│   └── overview.go        # Repository overview
 ├── internal/              # Internal packages (not exported)
 │   ├── config/           # Git configuration management
 │   │   └── config.go     # Branch type definitions, config loading
@@ -29,6 +36,10 @@ git-flow-next/
 │   │   └── repo.go       # Git operations with error handling
 │   ├── mergestate/       # Merge conflict state persistence
 │   │   └── mergestate.go # State management for multi-step operations
+│   ├── hooks/            # Client-side hook execution
+│   │   ├── hooks.go      # Hook runner and context construction
+│   │   ├── filters.go    # Hook matching/filtering
+│   │   └── types.go      # Hook type definitions
 │   ├── errors/           # Custom error types and exit codes
 │   │   └── errors.go     # Structured error handling
 │   ├── util/             # Validation and utility functions
@@ -94,9 +105,9 @@ git flow hotfix start critical-fix
 git flow release start v1.0
 
 # git-flow-next unified approach
-git flow topic start feature my-feature
-git flow topic start hotfix critical-fix  
-git flow topic start release v1.0
+git flow feature start my-feature
+git flow hotfix start critical-fix
+git flow release start v1.0
 ```
 
 All topic branches use the same `start` and `finish` commands, with behavior determined by configuration rather than branch type.
@@ -207,14 +218,14 @@ git config gitflow.branch.release.parent main
 git config gitflow.branch.hotfix.parent main
 
 # Merge strategies (upstream - finish operations)
-git config gitflow.feature.finish.merge merge
-git config gitflow.release.finish.merge merge
-git config gitflow.hotfix.finish.merge merge
+git config gitflow.branch.feature.upstreamStrategy merge
+git config gitflow.branch.release.upstreamStrategy merge
+git config gitflow.branch.hotfix.upstreamStrategy merge
 
 # Merge strategies (downstream - update operations)
-git config gitflow.feature.downstreamStrategy rebase
-git config gitflow.release.downstreamStrategy merge
-git config gitflow.hotfix.downstreamStrategy rebase
+git config gitflow.branch.feature.downstreamStrategy rebase
+git config gitflow.branch.release.downstreamStrategy merge
+git config gitflow.branch.hotfix.downstreamStrategy rebase
 
 # Tag settings
 git config gitflow.feature.finish.notag true
@@ -255,7 +266,7 @@ Topic branch types are configured with the same key format:
     parent = develop
     startPoint = develop
     upstreamStrategy = rebase
-    downstreamStrategy = squash-merge
+    downstreamStrategy = merge
 ```
 
 ### Configurable Properties (Layer 1 — Branch Type Definition)
@@ -463,7 +474,7 @@ When finishing a topic branch, git-flow-next automatically updates child base br
 
 ```bash
 # Finishing a hotfix into main automatically updates develop
-git flow topic finish hotfix security-patch
+git flow hotfix finish security-patch
 
 # The system will:
 # 1. Merge hotfix/security-patch into main  
@@ -489,12 +500,12 @@ Configure automatic updates in base branch settings:
 git flow init
 
 # Topic branch operations
-git flow topic start <type> <name>
-git flow topic finish <type> <name>
-git flow topic list <type>
+git flow <type> start <name>
+git flow <type> finish <name>
+git flow <type> list
 
-# Base branch operations  
-git flow merge-upstream <branch>  # or: git flow up <branch>
+# Base branch operations
+git flow integrate <branch>        # Integrate a base branch into its parent
 git flow update <branch>
 git flow update <branch> --rebase  # Force rebase strategy
 
@@ -503,19 +514,20 @@ git flow rebase                    # Shorthand for: git flow <type> update --reb
 git flow update                    # Shorthand for: git flow <type> update
 git flow finish                    # Shorthand for: git flow <type> finish
 
-# Status and overview
-git flow status
+# Overview
 git flow overview
 ```
 
-### Command Aliases
+### Dynamically Generated Commands
 
-For compatibility, traditional commands are aliased:
+Topic-branch commands are generated per branch type from configuration. Each
+configured type (feature, release, hotfix, support, and any custom type) gets
+the same set of subcommands:
 
 ```bash
-git flow feature start <name>    # → git flow topic start feature <name>
-git flow hotfix finish <name>    # → git flow topic finish hotfix <name>
-git flow release list            # → git flow topic list release
+git flow feature start <name>    # start a feature branch
+git flow hotfix finish <name>    # finish a hotfix branch
+git flow release list            # list release branches
 ```
 
 ### Shorthand Commands
@@ -583,11 +595,9 @@ The flexible configuration system enables easy integration with modern CI/CD pip
 git-flow-next maintains compatibility with existing git-flow-avh configurations while providing migration tools for enhanced features:
 
 ```bash
-# Import existing configuration
-git flow init --import-avh
-
-# Migrate to new configuration format
-git flow config migrate
+# Existing git-flow-avh configuration is imported automatically on init
+# (when AVH config is present and no explicit options are given)
+git flow init
 ```
 
 ## Extensibility

@@ -556,7 +556,7 @@ func TestFinishFeatureSquashWithNoVerify(t *testing.T) {
 	}
 
 	// Configure squash merge strategy for feature finish
-	_, err = testutil.RunGit(t, dir, "config", "gitflow.feature.finish.merge", "squash")
+	_, err = testutil.RunGit(t, dir, "config", "gitflow.feature.finish.squash", "true")
 	if err != nil {
 		t.Fatalf("Failed to set squash merge strategy: %v", err)
 	}
@@ -601,7 +601,24 @@ func TestFinishFeatureSquashWithNoVerify(t *testing.T) {
 		t.Errorf("Expected to be on develop branch, got: %s", currentBranch)
 	}
 
-	// Verify the feature file exists on develop (changes squashed)
+	// Verify squash strategy was actually used, not the default merge
+	if !strings.Contains(output, "Merging using strategy: squash") {
+		t.Errorf("Expected output to indicate squash strategy, got: %s", output)
+	}
+
+	// Verify the develop tip is a squash commit, not a merge commit: a squash
+	// produces a single-parent commit, whereas a merge would have two parents.
+	parents, err := testutil.RunGit(t, dir, "rev-list", "--parents", "-n", "1", "develop")
+	if err != nil {
+		t.Fatalf("Failed to get parent commits: %v", err)
+	}
+	// Output is the commit hash followed by its parent hashes; a squash commit
+	// yields exactly two fields (commit + single parent).
+	if fields := len(strings.Fields(strings.TrimSpace(parents))); fields != 2 {
+		t.Errorf("Expected a squash (single-parent) commit on develop, got %d parent(s)", fields-1)
+	}
+
+	// Verify the feature file exists on develop (changes squashed in)
 	featureFile := filepath.Join(dir, "feature.txt")
 	if _, err := os.Stat(featureFile); os.IsNotExist(err) {
 		t.Error("Feature file should exist on develop after squash merge")

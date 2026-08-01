@@ -27,7 +27,7 @@ Initialize git-flow configuration in the current Git repository. This command se
 
 ### Preset Options
 
-**--preset**=*preset*
+**--preset**=*preset*, **-p** *preset*
 : Apply a predefined workflow preset. Valid values: **classic**, **github**, **gitlab**
 
 **--custom**
@@ -57,17 +57,11 @@ These options control where git-flow configuration is stored. Only one scope opt
 
 ### Branch Name Overrides
 
-**--main**=*name*
+**--main**=*name*, **-m** *name*
 : Override main branch name (default: main)
 
-**--develop**=*name*  
+**--develop**=*name*, **-e** *name*
 : Override develop branch name (default: develop)
-
-**--production**=*name*
-: Override production branch name for GitLab flow (default: production)
-
-**--staging**=*name*
-: Override staging branch name for GitLab flow (default: staging)
 
 ### Prefix Overrides
 

@@ -8,7 +8,9 @@ git-flow-update - Update topic branches with parent changes
 
 **git-flow** *topic* **update** [*name*] [*options*]
 
-**git-flow update** [*name*] [*options*]
+**git-flow update** [*base-branch*] [*options*]
+
+**git-flow rebase** [*base-branch*] [**--continue**|**--abort**]
 
 ## DESCRIPTION
 
@@ -26,7 +28,10 @@ If a conflict occurs, the update saves a persistent state file and can be resume
 : The topic branch type (feature, release, hotfix, support, or any configured custom type)
 
 *name*
-: Name of the topic branch to update. If omitted, the current branch is used (when using shorthand **git-flow update**)
+: Name of the topic branch to update on the **git-flow** *topic* **update** surface. If omitted, the current topic branch is used.
+
+*base-branch*
+: Base branch to update on the top-level **git-flow update** or **git-flow rebase** surface. If omitted, the current base branch is used.
 
 ## OPTIONS
 
@@ -172,10 +177,10 @@ git config gitflow.branch.hotfix.downstreamStrategy merge
 ### Command-Level Overrides
 ```bash
 # Always use rebase for feature updates
-git config gitflow.feature.downstreamStrategy rebase
+git config gitflow.branch.feature.downstreamStrategy rebase
 
-# Always use merge for release updates  
-git config gitflow.release.downstreamStrategy merge
+# Always use merge for release updates
+git config gitflow.branch.release.downstreamStrategy merge
 ```
 
 ## STRATEGY RECOMMENDATIONS
