@@ -3,8 +3,6 @@ package config
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -170,16 +168,10 @@ func DefaultConfig() *Config {
 	}
 }
 
-// LoadConfig loads the git-flow configuration from Git config
-func LoadConfig() (*Config, error) {
-	// Get current directory for git operations
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current directory: %w", err)
-	}
-
+// Load loads the git-flow configuration from the given repository's Git config.
+func Load(repo *git.Repo) (*Config, error) {
 	// Check if git-flow is initialized
-	initialized, err := IsInitialized()
+	initialized, err := IsInitialized(repo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if git-flow is initialized: %w", err)
 	}
@@ -190,11 +182,11 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// Get git-flow version
-	version, err := git.GetConfigInDir(currentDir, "gitflow.version")
+	version, err := repo.GetConfig("gitflow.version")
 	if err != nil {
 		// If no version is set but AVH config exists, import AVH config
-		if CheckGitFlowAVHConfig() {
-			return ImportGitFlowAVHConfig()
+		if CheckGitFlowAVHConfig(repo) {
+			return ImportGitFlowAVHConfig(repo)
 		}
 		// If no version is set, assume it's not initialized properly
 		return DefaultConfig(), nil
@@ -209,7 +201,7 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// Load all gitflow.* command-specific config at once
-	allGitflowConfig, err := loadAllGitflowConfig(currentDir)
+	allGitflowConfig, err := loadAllGitflowConfig(repo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load gitflow config: %w", err)
 	}
@@ -222,10 +214,10 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// Get all gitflow.branch.* config entries
-	// We need to adapt GetAllConfig to work with directory
-	cmd := exec.Command("git", "config", "--get-regexp", "gitflow\\.branch\\.")
-	cmd.Dir = currentDir
-	output, err := cmd.Output()
+	branchLines, err := repo.GetConfigRegexpLines("gitflow\\.branch\\.")
+	if err != nil {
+		return nil, fmt.Errorf("failed to load gitflow branch config: %w", err)
+	}
 
 	// Process branch configurations from command output.
 	//
@@ -244,9 +236,8 @@ func LoadConfig() (*Config, error) {
 	// branch name used as the branchMap key.
 	canonicalNames := make(map[string]string)
 
-	if err == nil {
-		lines := strings.Split(string(output), "\n")
-		for _, line := range lines {
+	{
+		for _, line := range branchLines {
 			if line == "" {
 				continue
 			}
@@ -332,21 +323,15 @@ func LoadConfig() (*Config, error) {
 
 // IsInitialized checks if git-flow is initialized in the repository
 // This includes both git-flow-next and git-flow-avh configurations
-func IsInitialized() (bool, error) {
-	// Get current directory for git operations
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return false, fmt.Errorf("failed to get current directory: %w", err)
-	}
-
+func IsInitialized(repo *git.Repo) (bool, error) {
 	// Check for our own gitflow.version config
-	version, err := git.GetConfigInDir(currentDir, "gitflow.version")
+	version, err := repo.GetConfig("gitflow.version")
 	if err == nil && version != "" {
 		return true, nil
 	}
 
 	// Check for git-flow-avh configuration
-	if CheckGitFlowAVHConfig() {
+	if CheckGitFlowAVHConfig(repo) {
 		return true, nil
 	}
 
@@ -355,15 +340,9 @@ func IsInitialized() (bool, error) {
 
 // IsGitFlowNextInitialized checks if git-flow-next specifically is initialized
 // This only checks for our own configuration, not git-flow-avh
-func IsGitFlowNextInitialized() (bool, error) {
-	// Get current directory for git operations
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return false, fmt.Errorf("failed to get current directory: %w", err)
-	}
-
+func IsGitFlowNextInitialized(repo *git.Repo) (bool, error) {
 	// Check for our own gitflow.version config
-	version, err := git.GetConfigInDir(currentDir, "gitflow.version")
+	version, err := repo.GetConfig("gitflow.version")
 	if err == nil && version != "" {
 		return true, nil
 	}
@@ -402,21 +381,15 @@ func IsGitFlowNextInitializedWithScope(scope git.ConfigScope, filePath string) (
 }
 
 // CheckGitFlowAVHConfig checks if git-flow-avh configuration exists
-func CheckGitFlowAVHConfig() bool {
-	// Get current directory for git operations
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return false
-	}
-
+func CheckGitFlowAVHConfig(repo *git.Repo) bool {
 	// Check for gitflow.branch.master (used in git-flow-avh)
-	master, err := git.GetConfigInDir(currentDir, "gitflow.branch.master")
+	master, err := repo.GetConfig("gitflow.branch.master")
 	if err == nil && master != "" {
 		return true
 	}
 
 	// Check for gitflow.prefix.feature (used in git-flow-avh)
-	featurePrefix, err := git.GetConfigInDir(currentDir, "gitflow.prefix.feature")
+	featurePrefix, err := repo.GetConfig("gitflow.prefix.feature")
 	if err == nil && featurePrefix != "" {
 		return true
 	}
@@ -425,17 +398,11 @@ func CheckGitFlowAVHConfig() bool {
 }
 
 // ImportGitFlowAVHConfig imports git-flow-avh configuration
-func ImportGitFlowAVHConfig() (*Config, error) {
+func ImportGitFlowAVHConfig(repo *git.Repo) (*Config, error) {
 	config := DefaultConfig()
 
-	// Get current directory for git operations
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current directory: %w", err)
-	}
-
 	// Check for custom remote in git-flow-avh config
-	remote, err := git.GetConfigInDir(currentDir, "gitflow.origin")
+	remote, err := repo.GetConfig("gitflow.origin")
 	if err == nil && remote != "" {
 		config.Remote = remote
 	}
@@ -448,7 +415,7 @@ func ImportGitFlowAVHConfig() (*Config, error) {
 
 	// Get branch names from git-flow-avh config
 	for avhName, ourName := range branchMap {
-		branchName, err := git.GetConfigInDir(currentDir, "gitflow.branch."+avhName)
+		branchName, err := repo.GetConfig("gitflow.branch." + avhName)
 		if err == nil && branchName != "" {
 			// Update branch name in our config
 			branchConfig := config.Branches[ourName]
@@ -482,7 +449,7 @@ func ImportGitFlowAVHConfig() (*Config, error) {
 	for avhName, ourName := range prefixMap {
 		if avhName == "versiontag" {
 			// Special handling for version tag prefix
-			prefix, err := git.GetConfigInDir(currentDir, "gitflow.prefix."+avhName)
+			prefix, err := repo.GetConfig("gitflow.prefix." + avhName)
 			if err == nil && prefix != "" {
 				// Set the tag prefix for release and hotfix branches
 				releaseConfig := config.Branches["release"]
@@ -502,7 +469,7 @@ func ImportGitFlowAVHConfig() (*Config, error) {
 			continue
 		}
 
-		prefix, err := git.GetConfigInDir(currentDir, "gitflow.prefix."+avhName)
+		prefix, err := repo.GetConfig("gitflow.prefix." + avhName)
 		if err == nil && prefix != "" {
 			// Update prefix in our config
 			branchConfig := config.Branches[ourName]
@@ -764,17 +731,16 @@ func MarkRepoInitializedWithScope(scope git.ConfigScope, filePath string) error 
 }
 
 // ClearConfig removes all git-flow configuration
-func ClearConfig() error {
+func ClearConfig(repo *git.Repo) error {
 	// Get all gitflow.* config entries
-	configs, err := git.GetAllConfig("gitflow\\.")
+	configs, err := repo.GetAllConfig("gitflow\\.")
 	if err != nil {
 		return fmt.Errorf("failed to get gitflow configurations: %w", err)
 	}
 
 	// Remove each config entry
 	for key := range configs {
-		err = git.UnsetConfig(key)
-		if err != nil {
+		if err := repo.UnsetConfig(key); err != nil {
 			return fmt.Errorf("failed to unset %s: %w", key, err)
 		}
 	}
@@ -880,22 +846,16 @@ func gitlabFlowConfig() *Config {
 }
 
 // loadAllGitflowConfig loads all gitflow.* configuration keys at once
-func loadAllGitflowConfig(currentDir string) (map[string]string, error) {
-	cmd := exec.Command("git", "config", "--get-regexp", "gitflow\\.")
-	cmd.Dir = currentDir
-	output, err := cmd.Output()
-
-	result := make(map[string]string)
-
+func loadAllGitflowConfig(repo *git.Repo) (map[string]string, error) {
+	rawLines, err := repo.GetConfigRegexpLines("gitflow\\.")
 	if err != nil {
-		// If no config values match, don't treat it as an error
-		if strings.Contains(err.Error(), "exit status 1") {
-			return result, nil
-		}
 		return nil, fmt.Errorf("failed to get gitflow config: %w", err)
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	result := make(map[string]string)
+
+	// Join and re-trim to mirror the previous strings.TrimSpace(output) behavior.
+	lines := strings.Split(strings.TrimSpace(strings.Join(rawLines, "\n")), "\n")
 	for _, line := range lines {
 		if line == "" {
 			continue
