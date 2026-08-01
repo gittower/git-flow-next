@@ -80,16 +80,17 @@ func runFetchSyncPreflight(cfg *config.Config, branchType, remote, topicBranch, 
 	if shouldFetch && git.RemoteExists(remote) {
 		fmt.Printf("Fetching from remote '%s'...\n", remote)
 
-		// Fetch the parent best-effort. A benign missing remote ref means any local tracking ref is
-		// stale, so the parent sync check is skipped against it (#99); a transport/auth failure is a
-		// non-fatal note here because the same failure is already fatal at the topic fetch below.
-		// Skip entirely when the branch type has no configured parent, so we never issue
+		// Fetch the parent best-effort. When the parent sync check is enabled (finish), a benign
+		// missing remote ref means the local tracking ref is stale, so the check is skipped against
+		// it (#99). Any other failure — and any failure at all when the check is off (delete) — is a
+		// non-fatal note here, because a transport/auth failure is already fatal at the topic fetch
+		// below. Skip entirely when the branch type has no configured parent, so we never issue
 		// `git fetch <remote> ""` or emit a spurious note.
 		if parentBranch != "" {
 			if err := git.FetchBranch(remote, parentBranch); err != nil {
-				if goerrors.Is(err, git.ErrRemoteRefNotFound) {
-					// The remote parent branch is gone; prune the stale tracking ref best-effort and
-					// skip the parent sync check against it.
+				if opts.parentSyncCheck && goerrors.Is(err, git.ErrRemoteRefNotFound) {
+					// The parent sync check is enabled and the remote parent branch is gone; prune the
+					// stale tracking ref best-effort and skip the parent sync check against it.
 					fmt.Printf("Note: Remote branch for base '%s' not found; skipping parent sync check\n", parentBranch)
 					parentRefFound = false
 					if derr := git.DeleteRemoteTrackingRef(remote, parentBranch); derr != nil {
