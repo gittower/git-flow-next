@@ -11,19 +11,19 @@ import (
 )
 
 // UpdateBranchFromParent updates a branch with changes from its parent branch using the configured strategy
-func UpdateBranchFromParent(branchName string, parentBranch string, strategy string, saveState bool, state *mergestate.MergeState) error {
-	return UpdateBranchFromParentWithMessage(branchName, parentBranch, strategy, "", saveState, state)
+func UpdateBranchFromParent(repo *git.Repo, branchName string, parentBranch string, strategy string, saveState bool, state *mergestate.MergeState) error {
+	return UpdateBranchFromParentWithMessage(repo, branchName, parentBranch, strategy, "", saveState, state)
 }
 
 // UpdateBranchFromParentWithMessage updates a branch with changes from its parent branch using the configured strategy and optional custom message
-func UpdateBranchFromParentWithMessage(branchName string, parentBranch string, strategy string, customMessage string, saveState bool, state *mergestate.MergeState) error {
+func UpdateBranchFromParentWithMessage(repo *git.Repo, branchName string, parentBranch string, strategy string, customMessage string, saveState bool, state *mergestate.MergeState) error {
 	// Checkout the branch if needed
-	currentBranch, err := git.GetCurrentBranch()
+	currentBranch, err := repo.GetCurrentBranch()
 	if err != nil {
 		return &errors.GitError{Operation: "get current branch", Err: err}
 	}
 	if currentBranch != branchName {
-		if err := git.Checkout(branchName); err != nil {
+		if err := repo.Checkout(branchName); err != nil {
 			return &errors.GitError{Operation: fmt.Sprintf("checkout branch '%s'", branchName), Err: err}
 		}
 	}
@@ -34,20 +34,20 @@ func UpdateBranchFromParentWithMessage(branchName string, parentBranch string, s
 	switch strings.ToLower(strategy) {
 	case "rebase":
 		fmt.Printf("Using rebase strategy for '%s'\n", branchName)
-		mergeErr = git.Rebase(parentBranch)
+		mergeErr = repo.Rebase(parentBranch)
 	case "squash":
 		fmt.Printf("Using squash strategy for '%s'\n", branchName)
 		if customMessage != "" {
-			mergeErr = git.MergeSquashWithMessage(parentBranch, customMessage, false)
+			mergeErr = repo.MergeSquashWithMessage(parentBranch, customMessage, false)
 		} else {
-			mergeErr = git.SquashMerge(parentBranch, false)
+			mergeErr = repo.SquashMerge(parentBranch, false)
 		}
 	default:
 		fmt.Printf("Using merge strategy for '%s'\n", branchName)
 		if customMessage != "" {
-			mergeErr = git.MergeWithMessage(parentBranch, customMessage, true, false)
+			mergeErr = repo.MergeWithMessage(parentBranch, customMessage, true, false)
 		} else {
-			mergeErr = git.Merge(parentBranch, false)
+			mergeErr = repo.Merge(parentBranch, false)
 		}
 	}
 
@@ -55,7 +55,7 @@ func UpdateBranchFromParentWithMessage(branchName string, parentBranch string, s
 		if strings.Contains(mergeErr.Error(), "conflict") {
 			if saveState && state != nil {
 				// Save merge state if requested
-				if err := mergestate.SaveMergeState(state); err != nil {
+				if err := mergestate.SaveMergeState(repo, state); err != nil {
 					return &errors.GitError{Operation: "save merge state", Err: err}
 				}
 			}

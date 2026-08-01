@@ -34,8 +34,17 @@ func RunPostHook(gitDir string, branchType string, action HookAction, ctx HookCo
 	return runHook(gitDir, HookPost, branchType, action, ctx)
 }
 
-// configLookup is a package-level function variable for testability.
-var configLookup = git.GetConfigInDir
+// configLookup reads a single git config value for the repository rooted at dir.
+// It is a package-level variable for testability. It opens a git.Repo handle so
+// the lookup is bound to that repository's absolute paths rather than the process
+// working directory.
+var configLookup = func(dir, key string) (string, error) {
+	repo, err := git.Open(dir)
+	if err != nil {
+		return "", err
+	}
+	return repo.GetConfig(key)
+}
 
 // resolveHooksPath resolves a hooks path that may be relative to the repository root.
 func resolveHooksPath(hooksPath, repoRoot string) string {
