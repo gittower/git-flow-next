@@ -386,60 +386,50 @@ func TestExample(t *testing.T) {
 }
 ```
 
-### ❌ AVOID: Using `os.Chdir()` with Internal Functions
+### ❌ NEVER: Use `os.Chdir()` in tests
 
-Some tests use `os.Chdir()` to change the working directory, then call internal git functions that don't accept directory parameters. This pattern is fragile:
+`os.Chdir()` mutates process-global state, so it is banned in the test suite
+(there are zero occurrences). In-process tests that exercise `internal/git`,
+`internal/config`, `internal/mergestate`, or `internal/hooks` must open an
+explicit repository handle instead.
+
+### ✅ CORRECT: Open a `git.Repo` handle for the target repository
+
+Every repo-bound operation is a method on `*git.Repo`, and the config,
+merge-state, and hooks packages take the handle (or its absolute git dir). Open
+the handle for the test repository and call methods on it — no working-directory
+change is involved, and the process CWD (the test package directory) is
+irrelevant:
 
 ```go
-// PROBLEMATIC: Relies on global state
 func TestExample(t *testing.T) {
+    t.Parallel() // safe: no shared process state
     dir := testutil.SetupTestRepo(t)
     defer testutil.CleanupTestRepo(t, dir)
 
-    originalDir, _ := os.Getwd()
-    defer os.Chdir(originalDir)  // Must restore!
+    repo, err := git.Open(dir)
+    if err != nil {
+        t.Fatalf("git.Open failed: %v", err)
+    }
 
-    if err := os.Chdir(dir); err != nil {
+    if err := repo.Checkout("develop"); err != nil { // bound to `dir`
         t.Fatal(err)
     }
 
-    // These internal functions have no dir parameter
-    // They rely on os.Chdir() having been called
-    if err := git.Checkout("develop"); err != nil {  // ⚠️ Uses current dir
-        t.Fatal(err)
+    cfg, err := config.Load(repo)                     // reads `dir`'s config
+    // ...
+
+    if err := mergestate.SaveMergeState(repo, state); err != nil { // writes under dir/.git
+        // ...
     }
 }
 ```
 
-**Why this is problematic:**
-- If `os.Chdir()` fails or defer doesn't run, subsequent tests break
-- Test parallelization becomes impossible (shared global state)
-- Harder to understand which directory commands execute in
-
-### When `os.Chdir()` Is Acceptable
-
-In some cases, `os.Chdir()` is necessary because internal functions (`internal/git/repo.go`, `internal/git/config.go`) don't accept directory parameters. If you must use this pattern:
-
-1. **Always save and restore** the original directory with defer
-2. **Place defer immediately** after the `os.Chdir()` call
-3. **Document why** the pattern is necessary
-4. **Consider adding `*InDir` variants** to internal functions if this pattern repeats
-
-```go
-// If os.Chdir() is unavoidable, do it safely:
-originalDir, err := os.Getwd()
-if err != nil {
-    t.Fatalf("Failed to get working directory: %v", err)
-}
-if err := os.Chdir(dir); err != nil {
-    t.Fatalf("Failed to change to test directory: %v", err)
-}
-defer func() {
-    if err := os.Chdir(originalDir); err != nil {
-        t.Errorf("Failed to restore working directory: %v", err)
-    }
-}()
-```
+`git.Open` resolves the work tree, git dir, and common git dir to absolute
+paths, so accessors like `repo.GitDir()` are always absolute (never the bare
+`.git`). Feed `repo.GitDir()` to the hooks/filters helpers
+(`hooks.RunPreHook(repo.GitDir(), …)`). Because nothing depends on the process
+working directory, these tests are safe to run with `t.Parallel()`.
 
 ### Known Areas Using `os.Chdir()`
 
