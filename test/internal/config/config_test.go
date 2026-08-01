@@ -59,6 +59,13 @@ func openRepo(t *testing.T, dir string) *git.Repo {
 	return repo
 }
 
+// TestLoadConfigCaseInsensitive verifies that branch property keys are matched
+// case-insensitively when loading configuration.
+// Steps:
+// 1. Sets up a test repository
+// 2. Sets startPoint keys with mixed casing (startPoint, StartPoint, STARTPOINT)
+// 3. Loads config through a git.Repo handle for the repository
+// 4. Verifies each branch's start point resolves regardless of key case
 func TestLoadConfigCaseInsensitive(t *testing.T) {
 	t.Parallel()
 	dir := setupTestRepo(t)
@@ -86,6 +93,13 @@ func TestLoadConfigCaseInsensitive(t *testing.T) {
 	}
 }
 
+// TestLoadConfigWithMixedCaseProperties verifies that all branch config
+// properties are parsed regardless of the casing used in their config keys.
+// Steps:
+// 1. Sets up a test repository
+// 2. Sets the full set of feature branch properties with mixed-case keys
+// 3. Loads config through a git.Repo handle for the repository
+// 4. Verifies each parsed feature property matches the expected value
 func TestLoadConfigWithMixedCaseProperties(t *testing.T) {
 	t.Parallel()
 	dir := setupTestRepo(t)
@@ -133,6 +147,12 @@ func TestLoadConfigWithMixedCaseProperties(t *testing.T) {
 	}
 }
 
+// TestApplyOverrides_NoOverrides verifies that applying empty overrides leaves
+// the default branch configuration intact.
+// Steps:
+// 1. Builds a default config
+// 2. Applies an empty ConfigOverrides
+// 3. Verifies all default branches retain their types, parents, and start points
 func TestApplyOverrides_NoOverrides(t *testing.T) {
 	t.Parallel()
 	cfg := config.DefaultConfig()
@@ -175,6 +195,14 @@ func TestApplyOverrides_NoOverrides(t *testing.T) {
 	assert.Equal(t, "main", supportConfig.StartPoint)
 }
 
+// TestApplyOverrides_CustomBranchNames verifies that overriding the main and
+// develop branch names rekeys the branches and updates dependent parents.
+// Steps:
+// 1. Builds a default config
+// 2. Applies overrides setting custom main and develop branch names
+// 3. Verifies the custom-named base branches exist with correct parents
+// 4. Verifies feature/release/hotfix/support parents point at the custom names
+// 5. Verifies the original "main" and "develop" keys no longer exist
 func TestApplyOverrides_CustomBranchNames(t *testing.T) {
 	t.Parallel()
 	cfg := config.DefaultConfig()
@@ -221,6 +249,13 @@ func TestApplyOverrides_CustomBranchNames(t *testing.T) {
 	assert.False(t, exists)
 }
 
+// TestApplyOverrides_CustomPrefixes verifies that custom branch prefix overrides
+// are applied without altering parents or start points.
+// Steps:
+// 1. Builds a default config
+// 2. Applies overrides setting custom feature/release/hotfix/support prefixes
+// 3. Verifies each branch adopts its custom prefix
+// 4. Verifies each branch retains its default parent and start point
 func TestApplyOverrides_CustomPrefixes(t *testing.T) {
 	t.Parallel()
 	cfg := config.DefaultConfig()
@@ -252,6 +287,13 @@ func TestApplyOverrides_CustomPrefixes(t *testing.T) {
 	assert.Equal(t, "main", supportConfig.StartPoint)
 }
 
+// TestApplyOverrides_CustomTagPrefix verifies that a custom tag prefix override
+// is applied to the tagging branches.
+// Steps:
+// 1. Builds a default config
+// 2. Applies an override setting a custom tag prefix
+// 3. Verifies the release and hotfix branches adopt the custom tag prefix
+// 4. Verifies their parents and start points are unchanged
 func TestApplyOverrides_CustomTagPrefix(t *testing.T) {
 	t.Parallel()
 	cfg := config.DefaultConfig()
@@ -270,6 +312,14 @@ func TestApplyOverrides_CustomTagPrefix(t *testing.T) {
 	assert.Equal(t, "main", hotfixConfig.StartPoint)
 }
 
+// TestApplyOverrides_AllOverrides verifies that applying the full set of
+// overrides together produces a consistent, fully customized config.
+// Steps:
+// 1. Builds a default config
+// 2. Applies custom branch names, prefixes, and tag prefix together
+// 3. Verifies the custom-named base branches exist with correct parents
+// 4. Verifies feature/release/hotfix/support prefixes, parents, and start points
+// 5. Verifies the custom tag prefix on release and hotfix branches
 func TestApplyOverrides_AllOverrides(t *testing.T) {
 	t.Parallel()
 	cfg := config.DefaultConfig()
@@ -318,6 +368,12 @@ func TestApplyOverrides_AllOverrides(t *testing.T) {
 	assert.Equal(t, "custom-main", supportConfig.StartPoint)
 }
 
+// TestDefaultRemoteConfiguration verifies that the remote defaults to "origin"
+// when no remote is configured.
+// Steps:
+// 1. Sets up a test repository and marks it git-flow-initialized
+// 2. Loads config through a git.Repo handle for the repository
+// 3. Verifies the loaded remote is "origin"
 func TestDefaultRemoteConfiguration(t *testing.T) {
 	t.Parallel()
 	dir := setupTestRepo(t)
@@ -332,6 +388,12 @@ func TestDefaultRemoteConfiguration(t *testing.T) {
 	assert.Equal(t, "origin", cfg.Remote, "Default remote should be 'origin'")
 }
 
+// TestGitFlowAVHRemoteImport verifies that the remote is imported from the
+// git-flow-avh gitflow.origin key.
+// Steps:
+// 1. Sets up a test repository and sets gitflow.origin to a custom remote
+// 2. Imports git-flow-avh config through a git.Repo handle
+// 3. Verifies the imported config's remote matches the avh value
 func TestGitFlowAVHRemoteImport(t *testing.T) {
 	t.Parallel()
 	dir := setupTestRepo(t)
@@ -346,6 +408,14 @@ func TestGitFlowAVHRemoteImport(t *testing.T) {
 	assert.Equal(t, "avh-remote", cfg.Remote, "git-flow-avh remote should be imported")
 }
 
+// TestLoadConfigPreservesBranchNameCase verifies that the canonical casing of a
+// branch name is preserved and remains case-insensitively resolvable.
+// Steps:
+// 1. Sets up a test repository with a mixed-case branch name (V9_Release)
+// 2. Loads config through a git.Repo handle for the repository
+// 3. Verifies the canonical key 'V9_Release' is preserved and not lowercased
+// 4. Verifies ResolveBranchName resolves a lowercased query to the canonical key
+// 5. Verifies the branch's parsed Type and UpstreamStrategy
 func TestLoadConfigPreservesBranchNameCase(t *testing.T) {
 	t.Parallel()
 	dir := setupTestRepo(t)
@@ -386,6 +456,13 @@ func TestLoadConfigPreservesBranchNameCase(t *testing.T) {
 
 // --- Scenario 6: config read off-CWD ---
 
+// TestLoadConfigReflectsTargetRepoOffCwd verifies config.Load reads from the
+// target repository, not the process working directory.
+// Steps:
+// 1. Sets up a test repository B and initializes git-flow in it
+// 2. Sets a custom feature prefix (feat/) in B
+// 3. Loads config through a git.Repo handle for B
+// 4. Verifies the loaded feature prefix is 'feat/' from B
 func TestLoadConfigReflectsTargetRepoOffCwd(t *testing.T) {
 	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
@@ -407,6 +484,13 @@ func TestLoadConfigReflectsTargetRepoOffCwd(t *testing.T) {
 	}
 }
 
+// TestLoadConfigUninitializedReturnsDefaults verifies config.Load returns
+// defaults for a repository that has not been git-flow-initialized.
+// Steps:
+// 1. Sets up a test repository B without initializing git-flow
+// 2. Loads config through a git.Repo handle for B
+// 3. Verifies no error is returned
+// 4. Verifies the default feature prefix ('feature/') and default remote ('origin')
 func TestLoadConfigUninitializedReturnsDefaults(t *testing.T) {
 	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
@@ -425,6 +509,13 @@ func TestLoadConfigUninitializedReturnsDefaults(t *testing.T) {
 	}
 }
 
+// TestLoadConfigImportsAvhOffCwd verifies config.Load imports git-flow-avh
+// configuration from the target repository when no gitflow.version is present.
+// Steps:
+// 1. Sets up a test repository B with distinctive git-flow-avh keys and no version
+// 2. Loads config through a git.Repo handle for B
+// 3. Verifies the AVH master rename ('production') is imported and 'main' is gone
+// 4. Verifies the imported feature prefix is 'feat/'
 func TestLoadConfigImportsAvhOffCwd(t *testing.T) {
 	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
@@ -453,6 +544,13 @@ func TestLoadConfigImportsAvhOffCwd(t *testing.T) {
 
 // --- Scenario 7: config mutation off-CWD ---
 
+// TestConfigSetIsolatedToTargetRepo verifies that a config write through one
+// repository's handle affects only that repository.
+// Steps:
+// 1. Sets up and initializes two test repositories A and B
+// 2. Sets a custom feature prefix ('xb/') through B's handle
+// 3. Verifies B's loaded config reflects the new prefix
+// 4. Verifies A's loaded config retains the default 'feature/' prefix
 func TestConfigSetIsolatedToTargetRepo(t *testing.T) {
 	t.Parallel()
 	dirA := testutil.SetupTestRepo(t)
@@ -489,6 +587,13 @@ func TestConfigSetIsolatedToTargetRepo(t *testing.T) {
 	}
 }
 
+// TestConfigClearIsolatedToTargetRepo verifies that clearing config through one
+// repository's handle affects only that repository.
+// Steps:
+// 1. Sets up and initializes two test repositories A and B
+// 2. Clears gitflow config through B's handle
+// 3. Verifies B's gitflow.branch.feature.prefix is removed
+// 4. Verifies A's gitflow.branch.feature.prefix remains 'feature/'
 func TestConfigClearIsolatedToTargetRepo(t *testing.T) {
 	t.Parallel()
 	dirA := testutil.SetupTestRepo(t)

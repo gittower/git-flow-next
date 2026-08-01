@@ -81,6 +81,14 @@ func initRepoB(t *testing.T) *git.Repo {
 	return repo
 }
 
+// TestSaveMergeStateWritesUnderTargetGitDir verifies SaveMergeState persists to
+// the target repository's git dir, not the process working directory's repo.
+// Steps:
+// 1. Creates and opens a handle for target repository B
+// 2. Snapshots the CWD-implicit candidate state path before the operation
+// 3. Calls SaveMergeState with B's handle and a sample state
+// 4. Verifies the state file exists under B's git dir
+// 5. Verifies the ambient CWD candidate path is unchanged
 func TestSaveMergeStateWritesUnderTargetGitDir(t *testing.T) {
 	t.Parallel()
 	repo := initRepoB(t)
@@ -100,6 +108,14 @@ func TestSaveMergeStateWritesUnderTargetGitDir(t *testing.T) {
 	assertUnchanged(t, cwdCandidate, existedBefore, contentBefore)
 }
 
+// TestLoadMergeStateRoundTripsOffCwd verifies a saved merge state loads back
+// intact through the target repository's handle, independent of the CWD.
+// Steps:
+// 1. Creates and opens a handle for target repository B
+// 2. Saves a sample state through B's handle
+// 3. Loads the state back through B's handle
+// 4. Verifies all scalar fields match the saved state
+// 5. Verifies the ChildBranches slice round-trips correctly
 func TestLoadMergeStateRoundTripsOffCwd(t *testing.T) {
 	t.Parallel()
 	repo := initRepoB(t)
@@ -127,6 +143,13 @@ func TestLoadMergeStateRoundTripsOffCwd(t *testing.T) {
 	}
 }
 
+// TestClearMergeStateRemovesFileOffCwd verifies ClearMergeState removes the
+// state file under the target repository's git dir, independent of the CWD.
+// Steps:
+// 1. Creates and opens a handle for target repository B
+// 2. Saves a sample state and confirms the state file exists under B's git dir
+// 3. Calls ClearMergeState through B's handle
+// 4. Verifies the state file has been removed
 func TestClearMergeStateRemovesFileOffCwd(t *testing.T) {
 	t.Parallel()
 	repo := initRepoB(t)
@@ -147,6 +170,13 @@ func TestClearMergeStateRemovesFileOffCwd(t *testing.T) {
 	}
 }
 
+// TestLoadMergeStateAbsentReturnsNil verifies loading merge state from a repo
+// with no persisted state returns nil without an error.
+// Steps:
+// 1. Creates and opens a handle for target repository B with no saved state
+// 2. Calls LoadMergeState through B's handle
+// 3. Verifies no error is returned
+// 4. Verifies the returned state is nil
 func TestLoadMergeStateAbsentReturnsNil(t *testing.T) {
 	t.Parallel()
 	repo := initRepoB(t)

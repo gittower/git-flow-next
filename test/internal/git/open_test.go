@@ -42,6 +42,12 @@ func relFromCwd(t *testing.T, target string) string {
 // TestOpenTargetsGivenRepoNotCwd verifies the core CWD-independence property:
 // git.Open(B) operates on repository B even though the process working directory
 // is neither B nor the second repo A, and a mutation on B's handle does not touch A.
+// Steps:
+// 1. Creates two independent test repositories A and B
+// 2. Opens a handle for B with git.Open(B)
+// 3. Creates branch feature/only-in-b through B's handle
+// 4. Verifies feature/only-in-b exists in B
+// 5. Verifies feature/only-in-b did not leak into A
 func TestOpenTargetsGivenRepoNotCwd(t *testing.T) {
 	t.Parallel()
 
@@ -73,6 +79,12 @@ func TestOpenTargetsGivenRepoNotCwd(t *testing.T) {
 // TestOpenAccessorsAreAbsoluteFromNestedSubdir verifies that opening a repo via a
 // genuinely relative path to a nested subdirectory yields absolute accessors that
 // resolve to the target repository's root and git dir.
+// Steps:
+// 1. Creates a test repository and a nested sub/dir inside it
+// 2. Computes a relative path from the process CWD to the nested dir
+// 3. Opens a handle with git.Open(relative nested path)
+// 4. Verifies WorkTree(), GitDir(), and CommonGitDir() are all absolute
+// 5. Verifies WorkTree() resolves to the repository root and GitDir() lives inside it
 func TestOpenAccessorsAreAbsoluteFromNestedSubdir(t *testing.T) {
 	t.Parallel()
 
@@ -122,6 +134,12 @@ func TestOpenAccessorsAreAbsoluteFromNestedSubdir(t *testing.T) {
 // TestOpenAccessorsAbsoluteForLinkedWorktree verifies accessors for a linked
 // worktree: GitDir() points at the per-worktree git dir, CommonGitDir() at the
 // main .git, both absolute.
+// Steps:
+// 1. Creates a test repository and adds a linked worktree via git worktree add
+// 2. Opens a handle for the linked worktree path
+// 3. Verifies WorkTree(), GitDir(), and CommonGitDir() are all absolute
+// 4. Verifies GitDir() points at the per-worktree dir under .git/worktrees
+// 5. Verifies CommonGitDir() points at the main repository's .git
 func TestOpenAccessorsAbsoluteForLinkedWorktree(t *testing.T) {
 	t.Parallel()
 
@@ -168,6 +186,10 @@ func TestOpenAccessorsAbsoluteForLinkedWorktree(t *testing.T) {
 
 // TestOpenEmptyStringReturnsError verifies git.Open("") errors without falling
 // back to the process working directory (which is itself a valid git repo).
+// Steps:
+// 1. Calls git.Open("") with an empty directory argument
+// 2. Verifies an error is returned
+// 3. Verifies the returned repo handle is nil
 func TestOpenEmptyStringReturnsError(t *testing.T) {
 	t.Parallel()
 
@@ -182,6 +204,11 @@ func TestOpenEmptyStringReturnsError(t *testing.T) {
 
 // TestOpenNonRepoDirReturnsError verifies git.Open on a plain non-repo directory
 // errors rather than resolving an ancestor repo or the process CWD.
+// Steps:
+// 1. Creates a plain temporary directory that is not a git repository
+// 2. Calls git.Open on that directory
+// 3. Verifies an error is returned
+// 4. Verifies the returned repo handle is nil
 func TestOpenNonRepoDirReturnsError(t *testing.T) {
 	t.Parallel()
 
