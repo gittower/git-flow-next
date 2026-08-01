@@ -20,7 +20,6 @@ func TestConfigAddBase(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	// Initialize git-flow with defaults
 	var err error
 	_, err = testutil.RunGitFlow(t, tempDir, "init", "--defaults")
@@ -90,7 +89,6 @@ func TestConfigAddTopic(t *testing.T) {
 	// Setup test repository
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	// Initialize git-flow with defaults
 	var err error
@@ -168,7 +166,6 @@ func TestConfigRenameBase(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	// Initialize git-flow with defaults
 	var err error
 	_, err = testutil.RunGitFlow(t, tempDir, "init", "--defaults")
@@ -235,7 +232,6 @@ func TestConfigDeleteBase(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	// Initialize git-flow with defaults and add staging branch
 	var err error
 	_, err = testutil.RunGitFlow(t, tempDir, "init", "--defaults")
@@ -290,7 +286,6 @@ func TestConfigDeleteTopic(t *testing.T) {
 	// Setup test repository
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	// Initialize git-flow with defaults
 	_, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults")
@@ -379,7 +374,6 @@ func TestConfigList(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	// Test list with no configuration
 	t.Run("List uninitialized", func(t *testing.T) {
 		_, err := captureConfigList(t, tempDir)
@@ -466,7 +460,6 @@ func TestCircularDependencyValidation(t *testing.T) {
 	// Setup test repository
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	// Initialize git-flow with defaults
 	var err error
@@ -631,7 +624,6 @@ func TestConfigAddBaseUppercaseName(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
 	}
@@ -659,7 +651,6 @@ func TestConfigAddBaseUppercaseName(t *testing.T) {
 func TestConfigAddBaseExactCaseParent(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
@@ -693,7 +684,6 @@ func TestConfigAddBaseDifferentCaseParentUsesCanonicalRef(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
 	}
@@ -725,7 +715,6 @@ func TestConfigAddBaseMixedCaseParentResolves(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
 	}
@@ -754,7 +743,6 @@ func TestConfigAddBaseMixedCaseParentResolves(t *testing.T) {
 func TestConfigAddTopicStartingPointResolvesCaseInsensitively(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
@@ -786,7 +774,6 @@ func TestConfigAddTopicParentResolvesCaseInsensitively(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
 	}
@@ -816,7 +803,6 @@ func TestConfigAddTopicParentResolvesCaseInsensitively(t *testing.T) {
 func TestConfigAddTopicCaseOnlyReAddRejected(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
@@ -849,7 +835,6 @@ func TestConfigAddTopicCaseOnlyReAddRejected(t *testing.T) {
 func TestConfigAddBaseCaseOnlyVariantRejected(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
@@ -884,7 +869,6 @@ func TestConfigEditBaseResolvesCaseInsensitively(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
 	}
@@ -914,7 +898,6 @@ func TestConfigEditTopicResolvesCaseInsensitively(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
 	}
@@ -942,7 +925,6 @@ func TestConfigEditTopicResolvesCaseInsensitively(t *testing.T) {
 func TestConfigDeleteBaseResolvesCaseInsensitively(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
@@ -973,7 +955,6 @@ func TestConfigDeleteBaseResolvesCaseInsensitively(t *testing.T) {
 func TestConfigRenameBaseResolvesAndUpdatesChildren(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
@@ -1013,7 +994,6 @@ func TestConfigRenameBaseResolvesAndUpdatesChildren(t *testing.T) {
 func TestConfigRenameBaseCaseCollisionRejected(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
@@ -1056,7 +1036,6 @@ func TestConfigRenameBaseCaseOnlySelfRename(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
 	}
@@ -1093,7 +1072,6 @@ func TestConfigAddBaseAbsentParentErrors(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
 	}
@@ -1125,7 +1103,6 @@ func TestConfigAddBaseAbsentParentErrors(t *testing.T) {
 func TestConfigNoDuplicateFromReloadRoundTrip(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
@@ -1159,7 +1136,6 @@ func TestConfigNoDuplicateFromReloadRoundTrip(t *testing.T) {
 func TestConfigListShowsCanonicalCase(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
@@ -1196,7 +1172,6 @@ func TestConfigLowercaseNamesNoRegression(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
 	}
@@ -1229,7 +1204,6 @@ func TestConfigInitDefaultsUnaffected(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
 	}
@@ -1253,7 +1227,6 @@ func TestConfigInitDefaultsUnaffected(t *testing.T) {
 func TestConfigRenameTopicResolvesCaseInsensitively(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
@@ -1284,7 +1257,6 @@ func TestConfigDeleteTopicResolvesCaseInsensitively(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
-
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
 	}
@@ -1312,7 +1284,6 @@ func TestConfigDeleteTopicResolvesCaseInsensitively(t *testing.T) {
 func TestConfigEditTopicStartingPointResolvesCaseInsensitively(t *testing.T) {
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
-
 
 	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v", err)
