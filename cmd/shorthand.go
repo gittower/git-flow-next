@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -10,6 +11,14 @@ import (
 	"github.com/gittower/git-flow-next/internal/git"
 	"github.com/spf13/cobra"
 )
+
+type notTopicBranchError struct {
+	branch string
+}
+
+func (err *notTopicBranchError) Error() string {
+	return fmt.Sprintf("current branch '%s' is not a valid topic branch (use explicit command, e.g., git flow feature finish)", err.branch)
+}
 
 // init registers all shorthand commands automatically
 func init() {
@@ -62,11 +71,11 @@ func RegisterShorthandCommands() {
 		Use:   "update [base-branch]",
 		Short: "Update the current branch from its parent",
 		Args:  cobra.MaximumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			continueOp, _ := cmd.Flags().GetBool("continue")
 			abortOp, _ := cmd.Flags().GetBool("abort")
 			useRebase, _ := cmd.Flags().GetBool("rebase")
-			runShorthandUpdate(useRebase, continueOp, abortOp, args)
+			return runShorthandUpdate(useRebase, continueOp, abortOp, args)
 		},
 	}
 	addUpdateFlags(updateCmd)
@@ -77,11 +86,11 @@ func RegisterShorthandCommands() {
 		Use:   "rebase [base-branch]",
 		Short: "Rebase the current branch onto its parent",
 		Args:  cobra.MaximumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			// Always use rebase strategy for this shorthand
 			continueOp, _ := cmd.Flags().GetBool("continue")
 			abortOp, _ := cmd.Flags().GetBool("abort")
-			runShorthandUpdate(true, continueOp, abortOp, args)
+			return runShorthandUpdate(true, continueOp, abortOp, args)
 		},
 	}
 	rebaseCmd.Flags().BoolP("continue", "c", false, "Continue the update operation after resolving conflicts")
@@ -236,15 +245,17 @@ given, the current branch is integrated into its parent.`,
 }
 
 // runShorthandUpdate resolves the branch to update for the top-level update/rebase
-// surface and routes through UpdateCommand, which maps errors to exit codes and
-// exits (so the top-level surface exits 3, not main.go's exit 1). A topic current
-// branch is updated by its type; otherwise the current or named base branch is
-// used (branchType == "").
-func runShorthandUpdate(useRebase, continueOp, abortOp bool, args []string) {
+// surface. A topic current branch is updated by its type; a non-topic current
+// branch falls back to the current or named base branch (branchType == "").
+func runShorthandUpdate(useRebase, continueOp, abortOp bool, args []string) error {
 	branchType, name, err := detectBranchTypeAndName()
 	if err == nil {
 		UpdateCommand(branchType, name, useRebase, continueOp, abortOp)
-		return
+		return nil
+	}
+	var notTopicErr *notTopicBranchError
+	if !errors.As(err, &notTopicErr) {
+		return err
 	}
 	// Not a topic branch: fall back to the current or named base branch.
 	var branchName string
@@ -252,6 +263,7 @@ func runShorthandUpdate(useRebase, continueOp, abortOp bool, args []string) {
 		branchName = args[0]
 	}
 	UpdateCommand("", branchName, useRebase, continueOp, abortOp)
+	return nil
 }
 
 // detectBranchTypeAndName detects type and name from current branch
@@ -277,7 +289,7 @@ func detectBranchTypeAndName() (string, string, error) {
 
 	switch len(matches) {
 	case 0:
-		return "", "", fmt.Errorf("current branch '%s' is not a valid topic branch (use explicit command, e.g., git flow feature finish)", currentBranch)
+		return "", "", &notTopicBranchError{branch: currentBranch}
 	case 1:
 		typ := matches[0].Type
 		name := strings.TrimPrefix(currentBranch, matches[0].Prefix)

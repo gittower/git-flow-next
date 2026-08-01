@@ -16,6 +16,8 @@ git-flow-update - Update topic branches with parent changes
 
 Update a branch with the latest changes from its parent branch using the configured downstream merge strategy. On the topic surface (**git-flow** *topic* **update**) it works with any topic branch type (feature, release, hotfix, support, or custom types); on the top-level surface (**git-flow update**) it also updates the current base branch from its parent (for example, **develop** from **main**).
 
+The top-level **update** and **rebase** shorthands use the base-branch fallback only when the current branch is not a topic branch. Other branch-detection errors, including a cancelled ambiguous-branch prompt, stop the command without starting an update.
+
 The update operation merges or rebases changes from the parent branch into the target branch, keeping it current with the latest development.
 
 If a conflict occurs, the update saves a persistent state file and can be resumed with **--continue** or rolled back with **--abort** after resolving the conflict — the same resume/abort model as **git-flow finish** and **git-flow integrate**. The **--continue**/**--abort** flags act only on an in-progress update; an in-progress finish or integrate is never affected.
@@ -207,7 +209,7 @@ Each topic branch type updates from its configured parent:
 : Successful update, or **--abort** with nothing in progress (forgiving no-op)
 
 **1**
-: git-flow is not initialized
+: git-flow is not initialized, or shorthand branch detection failed or was cancelled
 
 **2**
 : Invalid input (e.g. unknown branch type)
