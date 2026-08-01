@@ -245,11 +245,7 @@ Example:
 
 // ConfigAddBaseCommand adds a base branch configuration
 func ConfigAddBaseCommand(name, parent, upstreamStrategy, downstreamStrategy string, autoUpdate bool) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeConfigAddBase(repo, name, parent, upstreamStrategy, downstreamStrategy, autoUpdate); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
@@ -264,11 +260,7 @@ func ConfigAddBaseCommand(name, parent, upstreamStrategy, downstreamStrategy str
 
 // ConfigAddTopicCommand adds a topic branch type configuration
 func ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeConfigAddTopic(repo, name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
@@ -283,11 +275,7 @@ func ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy
 
 // ConfigEditBaseCommand edits a base branch configuration
 func ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy string, autoUpdate bool) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeConfigEditBase(repo, name, upstreamStrategy, downstreamStrategy, autoUpdate); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
@@ -302,11 +290,7 @@ func ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy string, au
 
 // ConfigEditTopicCommand edits a topic branch type configuration
 func ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeConfigEditTopic(repo, name, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
@@ -321,11 +305,7 @@ func ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downs
 
 // ConfigRenameBaseCommand renames a base branch
 func ConfigRenameBaseCommand(oldName, newName string) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeConfigRenameBase(repo, oldName, newName); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
@@ -340,11 +320,7 @@ func ConfigRenameBaseCommand(oldName, newName string) {
 
 // ConfigRenameTopicCommand renames a topic branch type
 func ConfigRenameTopicCommand(oldName, newName string) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeConfigRenameTopic(repo, oldName, newName); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
@@ -359,11 +335,7 @@ func ConfigRenameTopicCommand(oldName, newName string) {
 
 // ConfigDeleteBaseCommand deletes a base branch configuration
 func ConfigDeleteBaseCommand(name string) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeConfigDeleteBase(repo, name); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
@@ -378,11 +350,7 @@ func ConfigDeleteBaseCommand(name string) {
 
 // ConfigDeleteTopicCommand deletes a topic branch type configuration
 func ConfigDeleteTopicCommand(name string) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeConfigDeleteTopic(repo, name); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
@@ -397,11 +365,7 @@ func ConfigDeleteTopicCommand(name string) {
 
 // ConfigListCommand lists the current configuration
 func ConfigListCommand() {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeConfigList(repo); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {

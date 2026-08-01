@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 
+	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/internal/git"
 )
 
@@ -33,6 +35,23 @@ func openRepo() (*git.Repo, error) {
 		cachedRepo, cachedErr = git.Open(dir)
 	})
 	return cachedRepo, cachedErr
+}
+
+// mustOpenRepo opens the invocation repository or exits the process. A failure
+// here means the invocation directory is not inside a git repository — a git
+// error, not a "git-flow not initialized" condition (which is detected later,
+// against an opened repo). It therefore reports a GitError wrapping the
+// underlying cause and exits with the git error code, rather than the
+// misleading NotInitializedError/exit-1 that would send users to 'git flow
+// init' instead of 'git init'.
+func mustOpenRepo() *git.Repo {
+	repo, err := openRepo()
+	if err != nil {
+		gitErr := &errors.GitError{Operation: "open repository", Err: err}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", gitErr)
+		os.Exit(int(gitErr.ExitCode()))
+	}
+	return repo
 }
 
 // normalizeInvocationPath resolves a possibly-relative path against the

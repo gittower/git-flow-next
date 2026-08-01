@@ -11,11 +11,7 @@ import (
 
 // RenameCommand handles renaming a topic branch
 func RenameCommand(branchType string, oldName string, newName string) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeRename(repo, branchType, oldName, newName); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {

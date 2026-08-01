@@ -12,11 +12,7 @@ import (
 
 // DeleteCommand handles the deletion of a topic branch
 func DeleteCommand(branchType string, name string, force *bool, remote *bool, fetch *bool) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeDelete(repo, branchType, name, force, remote, fetch); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {

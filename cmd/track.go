@@ -13,11 +13,7 @@ import (
 
 // TrackCommand is the implementation of the track command for topic branches
 func TrackCommand(branchType string, name string) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := track(repo, branchType, name); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {

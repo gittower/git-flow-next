@@ -25,11 +25,7 @@ This command displays the current git-flow configuration and lists all active to
 
 // OverviewCommand is the implementation of the overview command
 func OverviewCommand() {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := overview(repo); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {

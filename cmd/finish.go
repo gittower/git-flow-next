@@ -85,11 +85,7 @@ const (
 
 // FinishCommand is the implementation of the finish command for topic branches
 func FinishCommand(branchType string, name string, continueOp bool, abortOp bool, force bool, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeFinish(repo, branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {

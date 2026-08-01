@@ -25,11 +25,7 @@ import (
 // forces exit 1) is what makes the top-level surface exit 3 for merge-in-progress,
 // no-merge, and unresolved-conflict conditions, consistent with finish/integrate.
 func UpdateCommand(branchType string, name string, useRebase, continueOp, abortOp bool) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeUpdate(repo, branchType, name, useRebase, continueOp, abortOp); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {

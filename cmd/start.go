@@ -14,11 +14,7 @@ import (
 // If shouldFetch is nil, the function will check config for fetch preference
 // If base is empty, the function will use the configured starting point
 func StartCommand(branchType string, name string, base string, shouldFetch *bool) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := start(repo, branchType, name, base, shouldFetch); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {

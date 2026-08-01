@@ -16,11 +16,7 @@ import (
 // pushOptions are CLI-provided push options to transmit to the server.
 // noPushOption suppresses all push options (both CLI and config defaults).
 func PublishCommand(branchType string, name string, pushOptions []string, noPushOption bool) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := publish(repo, branchType, name, pushOptions, noPushOption); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {

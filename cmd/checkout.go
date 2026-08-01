@@ -12,11 +12,7 @@ import (
 
 // CheckoutCommand handles checking out a topic branch
 func CheckoutCommand(branchType string, nameOrPrefix string, showCommands bool) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeCheckout(repo, branchType, nameOrPrefix, showCommands); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {

@@ -34,11 +34,7 @@ import (
 // IntegrateCommand is the public entry point for the integrate command. It maps
 // git-flow errors to their exit codes and exits non-zero on failure.
 func IntegrateCommand(name string, continueOp bool, abortOp bool, tagOptions *config.TagOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool) {
-	repo, err := openRepo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.NotInitializedError{})
-		os.Exit(int((&errors.NotInitializedError{}).ExitCode()))
-	}
+	repo := mustOpenRepo()
 	if err := executeIntegrate(repo, name, continueOp, abortOp, tagOptions, mergeOptions, fetch); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {

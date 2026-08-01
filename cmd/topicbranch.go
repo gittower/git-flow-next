@@ -134,12 +134,7 @@ func registerBranchCommand(branchType string) {
 			// uninitialized, so without this gate the detection below (and the
 			// downstream finish logic) would emit a misleading "branch does not
 			// exist"/"not a branch" error instead of "not initialized".
-			repo, err := openRepo()
-			if err != nil {
-				notInit := &errors.NotInitializedError{}
-				fmt.Fprintf(os.Stderr, "Error: %v\n", notInit)
-				os.Exit(int(notInit.ExitCode()))
-			}
+			repo := mustOpenRepo()
 			initialized, err := config.IsInitialized(repo)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", &errors.GitError{Operation: "check if git-flow is initialized", Err: err})
