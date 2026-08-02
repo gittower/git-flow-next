@@ -726,19 +726,34 @@ func TestFinishPushRunsAfterContinue(t *testing.T) {
 
 // TestFinishPushRejectedNonFastForward tests that a rejected (non-ff) push surfaces
 // as an error while leaving the completed local finish intact.
+//
+// Ordering matters here because of two later features: start fetches by default (#98)
+// and finish runs a parent-sync-check preflight (#99). The remote must be diverged
+// *after* the topic branch is created and *without* refreshing the local origin/main
+// tracking ref, so the preflight still sees main in sync and finish proceeds to the
+// push. If the divergence were visible to the tracking ref, the #99 preflight would
+// abort with "branch 'main' is behind 'origin/main'" before the push path is ever
+// reached (the failure that this ordering deliberately avoids).
+//
 // Steps:
 // 1. Sets up a single-track repo with origin tracking main
-// 2. Diverges origin/main by pushing a commit from a second clone
-// 3. Creates feature branch 'login' with one commit locally (main stays behind)
-// 4. Runs 'git flow feature finish login --push --no-fetch'
-// 5. Verifies non-zero exit and the error reports the rejected push
+// 2. Creates feature branch 'login' with one commit locally, before any divergence (so start's default fetch does not refresh origin/main)
+// 3. Diverges origin/main by pushing a commit from a second clone, leaving the local tracking ref stale (so the parent-sync-check sees main in sync)
+// 4. Runs 'git flow feature finish login --push --no-fetch' (the stale tracking ref lets finish merge locally so only the real push is rejected)
+// 5. Verifies non-zero exit and the error reports the rejected push (not the preflight)
 // 6. Verifies the local finish is complete (feature deleted, main has merge, no merge state)
 func TestFinishPushRejectedNonFastForward(t *testing.T) {
 	dir, remoteDir := setupSingleTrackWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Diverge origin/main via a second clone.
+	// Create the feature locally first, before diverging the remote, so the default
+	// fetch on 'feature start' (#98) does not pull the divergence into origin/main.
+	createTopicCommit(t, dir, "feature", "login", "login.txt", "login content")
+
+	// Diverge origin/main via a second clone. dir does not fetch afterwards, so its
+	// origin/main tracking ref stays at the base and the #99 parent-sync-check sees
+	// main as in sync; only the actual push below is rejected as non-fast-forward.
 	secondDir := t.TempDir()
 	if _, err := testutil.RunGit(t, secondDir, "clone", remoteDir, "."); err != nil {
 		t.Fatalf("Failed to clone remote: %v", err)
@@ -757,9 +772,6 @@ func TestFinishPushRejectedNonFastForward(t *testing.T) {
 		t.Fatalf("Failed to push remote change: %v", err)
 	}
 
-	// Create the feature locally; local main stays behind origin/main.
-	createTopicCommit(t, dir, "feature", "login", "login.txt", "login content")
-
 	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "login", "--push", "--no-fetch")
 	if err == nil {
 		t.Fatalf("Expected finish to fail on non-ff push. Output: %s", output)
@@ -768,6 +780,12 @@ func TestFinishPushRejectedNonFastForward(t *testing.T) {
 	lower := strings.ToLower(output)
 	if !strings.Contains(lower, "reject") && !strings.Contains(lower, "non-fast-forward") && !strings.Contains(lower, "fast-forward") {
 		t.Errorf("Expected error to report rejected/non-fast-forward push. Output: %s", output)
+	}
+	// Guard against silently passing on the #99 parent-sync-check preflight instead of
+	// the push rejection: that error path never reaches the push and would leave the
+	// local finish incomplete, defeating the point of this test.
+	if strings.Contains(lower, "behind") && strings.Contains(lower, "stale base") {
+		t.Errorf("Expected the rejected push, not the parent-sync-check preflight. Output: %s", output)
 	}
 
 	// Local finish is already complete; nothing rolled back.
