@@ -1015,40 +1015,41 @@ func TestDeleteWithMultiValueBaseConfigWarns(t *testing.T) {
 // 7. Verifies no cleanup warning is printed and the branch is deleted
 func TestDeleteWithBaseConfigInNonLocalScopeNoWarning(t *testing.T) {
 	// Isolate the global config to a temp file so nothing touches the
-	// developer's real global config. RunGit/RunGitFlow exec inheriting
-	// os.Environ(), so the subprocess sees this override.
-	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "global-gitconfig"))
+	// developer's real global config. The override is passed through each
+	// subprocess env (not the test process env) so it stays scoped to this
+	// test and is safe under parallel execution.
+	env := []string{"GIT_CONFIG_GLOBAL=" + filepath.Join(t.TempDir(), "global-gitconfig")}
 
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Initialize git-flow with defaults
-	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults")
 	if err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
 	}
 
 	// Create feature branch (stores base config locally)
-	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "scoped-base")
+	output, err = runGitFlowWithEnv(t, dir, env, "feature", "start", "scoped-base")
 	if err != nil {
 		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
 	}
 
 	// Remove the local base key to simulate a branch not started locally
-	_, err = testutil.RunGit(t, dir, "config", "--local", "--unset", "gitflow.branch.feature/scoped-base.base")
+	_, err = testutil.RunGitWithEnv(t, dir, env, "config", "--local", "--unset", "gitflow.branch.feature/scoped-base.base")
 	if err != nil {
 		t.Fatalf("Failed to unset local base config: %v", err)
 	}
 
 	// Add the base key to the global scope only (lands in the isolated GIT_CONFIG_GLOBAL file)
-	_, err = testutil.RunGit(t, dir, "config", "--global", "--add", "gitflow.branch.feature/scoped-base.base", "develop")
+	_, err = testutil.RunGitWithEnv(t, dir, env, "config", "--global", "--add", "gitflow.branch.feature/scoped-base.base", "develop")
 	if err != nil {
 		t.Fatalf("Failed to add global base config: %v", err)
 	}
 
 	// Delete the feature branch
-	output, err = testutil.RunGitFlow(t, dir, "feature", "delete", "scoped-base")
+	output, err = runGitFlowWithEnv(t, dir, env, "feature", "delete", "scoped-base")
 	if err != nil {
 		t.Fatalf("Failed to delete feature branch: %v\nOutput: %s", err, output)
 	}
