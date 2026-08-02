@@ -37,8 +37,14 @@ func setupWorktree(t *testing.T, branch string) (mainRepo, worktreePath string, 
 		t.Fatalf("Failed to create temp directory for worktree: %v", err)
 	}
 	// Remove the directory so `git worktree add` can create it.
-	os.RemoveAll(worktreePath)
-	t.Cleanup(func() { os.RemoveAll(worktreePath) })
+	if err = os.RemoveAll(worktreePath); err != nil {
+		t.Fatalf("Failed to clear worktree path %q: %v", worktreePath, err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(worktreePath); err != nil {
+			t.Errorf("Failed to cleanup worktree %q: %v", worktreePath, err)
+		}
+	})
 
 	if _, err = testutil.RunGit(t, mainRepo, "worktree", "add", worktreePath, "-b", branch); err != nil {
 		t.Fatalf("Failed to create worktree: %v", err)
