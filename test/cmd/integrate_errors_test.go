@@ -15,6 +15,7 @@ import (
 //  2. Run: git flow integrate feature/foo.
 //  3. Assert non-zero exit, message mentions base branches and finish, no mutation.
 func TestIntegrateRejectsTopicBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -49,6 +50,7 @@ func TestIntegrateRejectsTopicBranch(t *testing.T) {
 //  2. Run: git flow integrate main.
 //  3. Assert non-zero exit, error mentions parent, nothing mutated.
 func TestIntegrateNoParent(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -77,6 +79,7 @@ func TestIntegrateNoParent(t *testing.T) {
 //  2. Run: git flow integrate develop.
 //  3. Assert non-zero exit, self-parent error, nothing mutated.
 func TestIntegrateSelfParent(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -106,6 +109,7 @@ func TestIntegrateSelfParent(t *testing.T) {
 //  2. Run: git flow integrate develop.
 //  3. Assert non-zero exit, strategy error, nothing merged.
 func TestIntegrateUpstreamStrategyNone(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -134,6 +138,7 @@ func TestIntegrateUpstreamStrategyNone(t *testing.T) {
 //  2. Run: git flow integrate nonexistent.
 //  3. Assert non-zero exit.
 func TestIntegrateUnknownBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -155,6 +160,7 @@ func TestIntegrateUnknownBranch(t *testing.T) {
 //  2. Run: git flow integrate (no arg).
 //  3. Assert non-zero exit, error mentions base branch.
 func TestIntegrateCurrentBranchNotBase(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -181,6 +187,7 @@ func TestIntegrateCurrentBranchNotBase(t *testing.T) {
 //  2. Run: git flow integrate develop.
 //  3. Assert non-zero exit, nothing mutated.
 func TestIntegrateParentMissing(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -214,6 +221,7 @@ func TestIntegrateParentMissing(t *testing.T) {
 //  3. Assert non-zero exit, error mentions the branch does not exist, no merge
 //     state was written, and main is unchanged.
 func TestIntegrateSourceBranchDeleted(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -252,6 +260,7 @@ func TestIntegrateSourceBranchDeleted(t *testing.T) {
 //  2. Run: git flow integrate develop.
 //  3. Assert non-zero exit with a not-initialized error.
 func TestIntegrateNotInitialized(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 

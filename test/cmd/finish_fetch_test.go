@@ -20,6 +20,7 @@ import (
 // 9. Verifies the branch is merged into develop
 // 10. Verifies the feature branch is deleted
 func TestFinishFeatureBranchWithFetchFlag(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -82,6 +83,7 @@ func TestFinishFeatureBranchWithFetchFlag(t *testing.T) {
 // 7. Verifies the branch is merged into develop
 // 8. Verifies the feature branch is deleted
 func TestFinishFeatureBranchWithNoFetchFlag(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -149,6 +151,7 @@ func TestFinishFeatureBranchWithNoFetchFlag(t *testing.T) {
 // 7. Verifies the branch is merged into develop
 // 8. Verifies the feature branch is deleted
 func TestFinishFeatureBranchDefaultFetch(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote (needed to verify fetch occurs)
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -214,6 +217,7 @@ func TestFinishFeatureBranchDefaultFetch(t *testing.T) {
 // 8. Verifies the branch is merged into develop
 // 9. Verifies the feature branch is deleted
 func TestFinishFeatureBranchNoFetchFromConfig(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote so the absence of fetch reflects the config
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -283,6 +287,7 @@ func TestFinishFeatureBranchNoFetchFromConfig(t *testing.T) {
 // 8. Verifies the branch is merged into develop
 // 9. Verifies the feature branch is deleted
 func TestFinishFeatureBranchNoFetchFlagOverridesConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -359,6 +364,7 @@ func TestFinishFeatureBranchNoFetchFlagOverridesConfig(t *testing.T) {
 // 10. Verifies the branch is merged into develop
 // 11. Verifies the feature branch is deleted
 func TestFinishFeatureBranchFetchFlagOverridesConfig(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -430,6 +436,7 @@ func TestFinishFeatureBranchFetchFlagOverridesConfig(t *testing.T) {
 // 10. Verifies the branch is merged into develop
 // 11. Verifies the feature branch is deleted
 func TestFinishFeatureBranchContinueDoesNotFetch(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -554,6 +561,7 @@ func TestFinishFeatureBranchContinueDoesNotFetch(t *testing.T) {
 // 5. Verifies output does NOT contain "does not appear to be a git repository" (no confusing error)
 // 6. Verifies finish completes successfully (branch merged and deleted)
 func TestFinishFeatureBranchNoRemote(t *testing.T) {
+	t.Parallel()
 	// Setup test repository without remote
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -647,6 +655,7 @@ func commitFeatureAndPush(t *testing.T, dir, file, content, commitMsg, branch st
 // 3. Finishes the feature branch
 // 4. Verifies no sync abort and that the branch is merged into develop
 func TestFinishNoUpstreamSkipsFetch(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -697,6 +706,7 @@ func TestFinishNoUpstreamSkipsFetch(t *testing.T) {
 // 6. Finishes the feature branch WITHOUT --force
 // 7. Verifies no ahead/diverged abort and that commit C is merged into develop
 func TestFinishStaleRemoteRefIsBenign(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -776,6 +786,7 @@ func TestFinishStaleRemoteRefIsBenign(t *testing.T) {
 // 6. Verifies a fatal error naming the topic branch and suggesting --no-fetch / --force
 // 7. Verifies the merge did not happen (develop unchanged, branch still exists)
 func TestFinishUnreachableRemoteAborts(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -831,6 +842,7 @@ func TestFinishUnreachableRemoteAborts(t *testing.T) {
 // 4. Finishes with --no-fetch
 // 5. Verifies no fetch occurred and the branch merged into develop
 func TestFinishUnreachableRemoteNoFetchCompletes(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -876,6 +888,7 @@ func TestFinishUnreachableRemoteNoFetchCompletes(t *testing.T) {
 // 4. Finishes with --force
 // 5. Verifies the branch merged into develop
 func TestFinishUnreachableRemoteForceCompletes(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -917,6 +930,7 @@ func TestFinishUnreachableRemoteForceCompletes(t *testing.T) {
 // 4. Finishes with --force
 // 5. Verifies the branch merged into develop
 func TestFinishAheadRemoteForceCompletes(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -959,6 +973,7 @@ func TestFinishAheadRemoteForceCompletes(t *testing.T) {
 // 4. Finishes with --force
 // 5. Verifies the branch merged into develop
 func TestFinishDivergedRemoteForceCompletes(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -1025,6 +1040,7 @@ func TestFinishDivergedRemoteForceCompletes(t *testing.T) {
 // 4. Finishes the feature branch
 // 5. Verifies finish completes and the topic merged into local develop
 func TestFinishParentAbsentOnRemoteIsBenign(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)

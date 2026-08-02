@@ -15,6 +15,7 @@ import (
 // 3. Runs 'git flow feature track' for the remote branch
 // 4. Verifies local tracking branch is created
 func TestTrackFeatureBranch(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -86,6 +87,7 @@ func TestTrackFeatureBranch(t *testing.T) {
 // 3. Runs 'git flow release track' for the remote branch
 // 4. Verifies local tracking branch is created with correct prefix
 func TestTrackReleaseBranch(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -139,6 +141,7 @@ func TestTrackReleaseBranch(t *testing.T) {
 // 4. Attempts to track the same branch
 // 5. Verifies appropriate error is returned
 func TestTrackBranchAlreadyExistsLocally(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -184,6 +187,7 @@ func TestTrackBranchAlreadyExistsLocally(t *testing.T) {
 // 2. Attempts to track a non-existent remote branch
 // 3. Verifies appropriate error is returned
 func TestTrackBranchNotFoundOnRemote(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -218,6 +222,7 @@ func TestTrackBranchNotFoundOnRemote(t *testing.T) {
 // 3. Tracks the branch using the configured remote
 // 4. Verifies tracking is set up correctly
 func TestTrackWithCustomRemote(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -304,6 +309,7 @@ func TestTrackWithCustomRemote(t *testing.T) {
 // 3. Runs 'git flow feature track feature/full-name' (with prefix)
 // 4. Verifies local tracking branch is created correctly
 func TestTrackWithFullBranchName(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -354,6 +360,7 @@ func TestTrackWithFullBranchName(t *testing.T) {
 // 2. Attempts to track a branch
 // 3. Verifies appropriate error is returned
 func TestTrackWithoutInitialization(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -386,6 +393,7 @@ func TestTrackWithoutInitialization(t *testing.T) {
 // 2. Attempts to track with empty name
 // 3. Verifies appropriate error is returned
 func TestTrackWithEmptyBranchName(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -420,6 +428,7 @@ func TestTrackWithEmptyBranchName(t *testing.T) {
 // 3. Runs 'git flow hotfix track' for the remote branch
 // 4. Verifies local tracking branch is created
 func TestTrackHotfixBranch(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -472,6 +481,7 @@ func TestTrackHotfixBranch(t *testing.T) {
 // 3. Verifies the command fails with an error
 // 4. Verifies the error message mentions the missing remote (contains "No remote")
 func TestTrackFeatureBranchNoRemoteError(t *testing.T) {
+	t.Parallel()
 	// Setup test repository without remote
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

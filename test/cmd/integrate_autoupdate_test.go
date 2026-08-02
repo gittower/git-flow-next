@@ -15,6 +15,7 @@ import (
 //  3. Assert main has a merge commit containing both C and X, develop is
 //     auto-updated to contain X, and HEAD is on main.
 func TestIntegrateDivergedParentCreatesMergeAndUpdatesChild(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -59,6 +60,7 @@ func TestIntegrateDivergedParentCreatesMergeAndUpdatesChild(t *testing.T) {
 //  4. Assert main gains C; staging is rebased (S replayed, hash changed, no merge
 //     commit); develop merge is a no-op; legacy is untouched; nothing deleted.
 func TestIntegrateMultipleChildrenMixedStrategies(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 

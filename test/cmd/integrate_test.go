@@ -142,6 +142,7 @@ func integStateExists(t *testing.T, dir string) bool {
 //  3. Assert main fast-forwarded to C with no merge commit, no tag, develop
 //     unchanged (== main), HEAD on main, both branches still present.
 func TestIntegrateFastForwardNoTag(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -185,6 +186,7 @@ func TestIntegrateFastForwardNoTag(t *testing.T) {
 //  2. Run: git flow integrate (no argument).
 //  3. Assert main fast-forwarded to C, HEAD on main.
 func TestIntegrateCurrentBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -218,6 +220,7 @@ func TestIntegrateCurrentBranch(t *testing.T) {
 //  2. Run: git flow integrate develop.
 //  3. Assert exit 0, main unchanged, no tag, both branches present, HEAD on main.
 func TestIntegrateNothingToIntegrate(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -254,6 +257,7 @@ func TestIntegrateNothingToIntegrate(t *testing.T) {
 //  2. Run: git flow integrate develop --tag v1.0.0.
 //  3. Assert exit 0 and annotated tag v1.0.0 exists on main.
 func TestIntegrateNothingToIntegrateWithTag(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -286,6 +290,7 @@ func TestIntegrateNothingToIntegrateWithTag(t *testing.T) {
 //  3. Run: git flow integrate develop --fetch.
 //  4. Assert main contains both R (fetched) and C.
 func TestIntegrateFetchPullsRemoteChanges(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -326,6 +331,7 @@ func TestIntegrateFetchPullsRemoteChanges(t *testing.T) {
 //  3. Run: git flow integrate develop --no-fetch.
 //  4. Assert R is absent from main; main advanced only by C.
 func TestIntegrateNoFetchOverridesConfig(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -371,6 +377,7 @@ func TestIntegrateNoFetchOverridesConfig(t *testing.T) {
 //  4. Assert exit 0, a Warning is printed, "Fetch completed" is NOT printed,
 //     C is integrated into main, and R (unfetchable) is absent from local main.
 func TestIntegrateFetchParentCheckedOutSurfacesFailure(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)

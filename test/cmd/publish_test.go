@@ -15,6 +15,7 @@ import (
 // 3. Runs 'git flow feature publish my-feature'
 // 4. Verifies branch exists on remote and tracking is set up
 func TestPublishFeatureBranch(t *testing.T) {
+	t.Parallel()
 	// Setup test repo with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -55,6 +56,7 @@ func TestPublishFeatureBranch(t *testing.T) {
 // 3. Runs 'git flow feature publish' without a name
 // 4. Verifies current branch is published
 func TestPublishCurrentBranch(t *testing.T) {
+	t.Parallel()
 	// Setup test repo with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -100,6 +102,7 @@ func TestPublishCurrentBranch(t *testing.T) {
 // 2. Attempts to publish a non-existent branch
 // 3. Verifies appropriate error is returned
 func TestPublishBranchNotFoundLocally(t *testing.T) {
+	t.Parallel()
 	// Setup test repo with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -133,6 +136,7 @@ func TestPublishBranchNotFoundLocally(t *testing.T) {
 // 3. Attempts to publish the same branch again
 // 4. Verifies appropriate error is returned
 func TestPublishBranchAlreadyExistsOnRemote(t *testing.T) {
+	t.Parallel()
 	// Setup test repo with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -177,6 +181,7 @@ func TestPublishBranchAlreadyExistsOnRemote(t *testing.T) {
 // 3. Publishes the branch
 // 4. Verifies branch is pushed to the custom remote
 func TestPublishWithCustomRemote(t *testing.T) {
+	t.Parallel()
 	// Setup test repo
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -245,6 +250,7 @@ func TestPublishWithCustomRemote(t *testing.T) {
 // 3. Runs 'git flow release publish' for the branch
 // 4. Verifies branch exists on remote with correct prefix
 func TestPublishReleaseBranch(t *testing.T) {
+	t.Parallel()
 	// Setup test repo with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -285,6 +291,7 @@ func TestPublishReleaseBranch(t *testing.T) {
 // 3. Runs 'git flow hotfix publish' for the branch
 // 4. Verifies branch exists on remote with correct prefix
 func TestPublishHotfixBranch(t *testing.T) {
+	t.Parallel()
 	// Setup test repo with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -325,6 +332,7 @@ func TestPublishHotfixBranch(t *testing.T) {
 // 3. Publishes using full name 'feature/my-feature'
 // 4. Verifies branch is published correctly (without double prefix)
 func TestPublishWithFullBranchName(t *testing.T) {
+	t.Parallel()
 	// Setup test repo with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -370,6 +378,7 @@ func TestPublishWithFullBranchName(t *testing.T) {
 // 2. Attempts to publish a branch
 // 3. Verifies appropriate error is returned
 func TestPublishWithoutInitialization(t *testing.T) {
+	t.Parallel()
 	// Setup test repo without git-flow init
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -401,6 +410,7 @@ func TestPublishWithoutInitialization(t *testing.T) {
 // 2. Creates a feature branch but tries to publish as release
 // 3. Verifies appropriate error is returned
 func TestPublishCurrentBranchWrongType(t *testing.T) {
+	t.Parallel()
 	// Setup test repo with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -439,6 +449,7 @@ func TestPublishCurrentBranchWrongType(t *testing.T) {
 // 5. Verifies the error message mentions the missing remote (contains "No remote")
 // 6. Verifies the feature branch still exists locally (not affected by the error)
 func TestPublishFeatureBranchNoRemoteError(t *testing.T) {
+	t.Parallel()
 	// Setup test repository without remote
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

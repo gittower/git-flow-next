@@ -15,6 +15,7 @@ import (
 // 4. Checks out the feature branch using git-flow
 // 5. Verifies we're on the correct branch
 func TestCheckoutFeature(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -59,6 +60,7 @@ func TestCheckoutFeature(t *testing.T) {
 // 5. Verifies we're on the correct branch
 // 6. Attempts to checkout with ambiguous prefix (should fail)
 func TestCheckoutFeatureWithPrefix(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -111,6 +113,7 @@ func TestCheckoutFeatureWithPrefix(t *testing.T) {
 // 2. Attempts to checkout a non-existent branch
 // 3. Verifies the operation fails with appropriate error
 func TestCheckoutNonExistentFeature(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -137,6 +140,7 @@ func TestCheckoutNonExistentFeature(t *testing.T) {
 // 5. Verifies the output contains the git command
 // 6. Verifies we're on the correct branch
 func TestCheckoutFeatureWithShowCommands(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -183,6 +187,7 @@ func TestCheckoutFeatureWithShowCommands(t *testing.T) {
 // 2. Attempts to checkout using an invalid branch type
 // 3. Verifies the operation fails with appropriate error
 func TestCheckoutWithInvalidBranchType(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -207,6 +212,7 @@ func TestCheckoutWithInvalidBranchType(t *testing.T) {
 // 3. Runs checkout without args to list branches
 // 4. Verifies the output contains all feature branches
 func TestCheckoutFeatureNoArgs(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

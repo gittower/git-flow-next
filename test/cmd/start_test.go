@@ -11,6 +11,7 @@ import (
 
 // TestStartFeatureBranch tests the start command for feature branches
 func TestStartFeatureBranch(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -46,6 +47,7 @@ func TestStartFeatureBranch(t *testing.T) {
 
 // TestStartReleaseAndHotfixBranches tests the start command for release and hotfix branches
 func TestStartReleaseAndHotfixBranches(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -91,6 +93,7 @@ func TestStartReleaseAndHotfixBranches(t *testing.T) {
 
 // TestStartWithCustomConfig tests the start command with custom configuration
 func TestStartWithCustomConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -127,6 +130,7 @@ func TestStartWithCustomConfig(t *testing.T) {
 
 // TestStartWithExistingBranch tests the start command with an existing branch
 func TestStartWithExistingBranch(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -167,6 +171,7 @@ func TestStartWithExistingBranch(t *testing.T) {
 
 // TestStartWithNonExistentStartPoint tests the start command with a non-existent start point
 func TestStartWithNonExistentStartPoint(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -211,6 +216,7 @@ func TestStartWithNonExistentStartPoint(t *testing.T) {
 
 // TestStartWithNoStartPoint tests that when start point is not specified, parent branch is used
 func TestStartWithNoStartPoint(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -262,6 +268,7 @@ func TestStartWithNoStartPoint(t *testing.T) {
 
 // TestStartWithEmptyBranchName tests the start command with an empty branch name
 func TestStartWithEmptyBranchName(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -296,6 +303,7 @@ func TestStartWithEmptyBranchName(t *testing.T) {
 
 // TestStartWithInvalidBranchType tests the start command with an invalid branch type
 func TestStartWithInvalidBranchType(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -331,6 +339,7 @@ func TestStartWithInvalidBranchType(t *testing.T) {
 
 // TestStartWithoutInitialization tests the start command without git-flow initialization
 func TestStartWithoutInitialization(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -417,6 +426,7 @@ func TestStartWithoutInitialization(t *testing.T) {
 // 5. Runs 'git flow feature start'
 // 6. Verifies a "Fetching" line, the branch is created, and origin/develop now resolves to NEW
 func TestStartFetchesByDefault(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -495,6 +505,7 @@ func TestStartFetchesByDefault(t *testing.T) {
 
 // TestStartWithFetchFlag tests that the --fetch flag works
 func TestStartWithFetchFlag(t *testing.T) {
+	t.Parallel()
 	// Setup test repo with remote (includes git-flow init)
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -520,6 +531,7 @@ func TestStartWithFetchFlag(t *testing.T) {
 // 4. Verifies a "Fetching" line appears
 // 5. Verifies the feature branch is created
 func TestStartWithFetchConfig(t *testing.T) {
+	t.Parallel()
 	// Setup test repo with remote (includes git-flow init)
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -558,6 +570,7 @@ func TestStartWithFetchConfig(t *testing.T) {
 // 4. Verifies no "Fetching" line appears (flag overrides config)
 // 5. Verifies the feature branch is created
 func TestStartWithNoFetchOverridesConfig(t *testing.T) {
+	t.Parallel()
 	// Setup test repo with remote so absence of fetch reflects the flag, not a missing remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -588,6 +601,7 @@ func TestStartWithNoFetchOverridesConfig(t *testing.T) {
 
 // TestStartWithCustomRemote tests that the custom remote name is used for fetching
 func TestStartWithCustomRemote(t *testing.T) {
+	t.Parallel()
 	// Setup test repo
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -631,6 +645,7 @@ func TestStartWithCustomRemote(t *testing.T) {
 // 3. Verifies that gitflow.branch.feature/test-base-storage.base is set to 'develop'
 // 4. Tests with release branch to verify base is set to 'develop' (start point)
 func TestStartStoresBaseBranch(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -685,6 +700,7 @@ func TestStartStoresBaseBranch(t *testing.T) {
 // 5. Verifies output does NOT contain "does not appear to be a git repository"
 // 6. Verifies feature/no-remote-test branch is created successfully
 func TestStartFeatureBranchNoRemoteFetchSkipped(t *testing.T) {
+	t.Parallel()
 	// Setup test repository without remote
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -733,6 +749,7 @@ func TestStartFeatureBranchNoRemoteFetchSkipped(t *testing.T) {
 // 5. Runs 'git flow feature start'
 // 6. Verifies a "Fetching" line, the branch is created, and origin/develop now resolves to NEW
 func TestStartFetchesAdvancedStartPoint(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -823,6 +840,7 @@ func TestStartFetchesAdvancedStartPoint(t *testing.T) {
 // 3. Runs 'git flow feature start'
 // 4. Verifies the command still succeeds, the combined output contains a Warning, and the branch exists
 func TestStartUnreachableRemoteWarnsAndCreates(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -861,6 +879,7 @@ func TestStartUnreachableRemoteWarnsAndCreates(t *testing.T) {
 // 4. Verifies no "Fetching from" line appears (config false wins over the default)
 // 5. Verifies the feature branch is created
 func TestStartFetchConfigFalseSkipsFetch(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -896,6 +915,7 @@ func TestStartFetchConfigFalseSkipsFetch(t *testing.T) {
 // 3. Verifies no "Fetching from" line appears (flag overrides the default)
 // 4. Verifies the feature branch is created
 func TestStartNoFetchFlagSkipsByDefault(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -925,6 +945,7 @@ func TestStartNoFetchFlagSkipsByDefault(t *testing.T) {
 // 4. Verifies a "Fetching from" line appears (flag beats config false)
 // 5. Verifies the feature branch is created
 func TestStartFetchFlagOverridesConfigFalse(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -960,6 +981,7 @@ func TestStartFetchFlagOverridesConfigFalse(t *testing.T) {
 // 4. Verifies output does NOT contain "does not appear to be a git repository"
 // 5. Verifies the feature branch is created
 func TestStartDefaultNoRemoteFetchSkipped(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1002,6 +1024,7 @@ func TestStartDefaultNoRemoteFetchSkipped(t *testing.T) {
 // 6. Verifies combined output contains the fetch-specific warning
 // 7. Verifies the feature branch is created
 func TestStartDefaultUnreachableRemoteWarnsAndCreates(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)

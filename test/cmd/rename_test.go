@@ -16,6 +16,7 @@ import (
 // 4. Verifies the old branch is deleted
 // 5. Verifies the new branch exists with the same content
 func TestRenameFeature(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -81,6 +82,7 @@ func TestRenameFeature(t *testing.T) {
 // 3. Renames the current feature branch
 // 4. Verifies we're still on the renamed branch
 func TestRenameCurrentFeature(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -116,6 +118,7 @@ func TestRenameCurrentFeature(t *testing.T) {
 // 2. Attempts to rename a non-existent feature branch
 // 3. Verifies the operation fails with appropriate error
 func TestRenameNonExistentFeature(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -140,6 +143,7 @@ func TestRenameNonExistentFeature(t *testing.T) {
 // 3. Attempts to rename the first branch to the name of the second branch
 // 4. Verifies the operation fails with appropriate error
 func TestRenameToExistingFeature(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -175,6 +179,7 @@ func TestRenameToExistingFeature(t *testing.T) {
 // 2. Attempts to rename a branch with an invalid type
 // 3. Verifies the operation fails with appropriate error
 func TestRenameWithInvalidBranchType(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -200,6 +205,7 @@ func TestRenameWithInvalidBranchType(t *testing.T) {
 //  3. Verifies the command fails with the "not initialized" error and exit code,
 //     rather than a misleading "branch does not exist" error
 func TestRenameWithoutInitialization(t *testing.T) {
+	t.Parallel()
 	// Setup: plain repo, git-flow NOT initialized
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

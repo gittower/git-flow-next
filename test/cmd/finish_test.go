@@ -21,6 +21,7 @@ import (
 // 5. Verifies the branch is merged into develop
 // 6. Verifies the feature branch is deleted
 func TestFinishFeatureBranch(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -91,6 +92,7 @@ func TestFinishFeatureBranch(t *testing.T) {
 // 6. Verifies a tag is created
 // 7. Verifies the release branch is deleted
 func TestFinishReleaseBranch(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -196,6 +198,7 @@ func TestFinishReleaseBranch(t *testing.T) {
 // 6. Verifies a tag is created
 // 7. Verifies the hotfix branch is deleted
 func TestFinishHotfixBranch(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -294,6 +297,7 @@ func TestFinishHotfixBranch(t *testing.T) {
 // 5. Verifies the branch is merged into the custom develop branch
 // 6. Verifies the feature branch is deleted
 func TestFinishWithCustomConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -364,6 +368,7 @@ func TestFinishWithCustomConfig(t *testing.T) {
 // 2. Attempts to finish a non-existent branch
 // 3. Verifies the operation fails with appropriate error
 func TestFinishNonExistentBranch(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -394,6 +399,7 @@ func TestFinishNonExistentBranch(t *testing.T) {
 // 4. Attempts to finish the feature branch
 // 5. Verifies the operation fails with merge conflict
 func TestFinishWithMergeConflict(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -487,6 +493,7 @@ func TestFinishWithMergeConflict(t *testing.T) {
 // 5. Aborts the merge when conflict occurs
 // 6. Verifies the branches are in their original state
 func TestFinishWithMergeAbort(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -589,6 +596,7 @@ func TestFinishWithMergeAbort(t *testing.T) {
 // 6. Verifies the stale merge state is cleared
 // 7. Verifies a subsequent unrelated finish succeeds (repo unblocked)
 func TestFinishAbortAfterManualResolve(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -694,6 +702,7 @@ func TestFinishAbortAfterManualResolve(t *testing.T) {
 // 5. Attempts to finish the feature branch with rebase
 // 6. Verifies the operation fails with rebase conflict
 func TestFinishWithRebaseConflict(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -776,6 +785,7 @@ func TestFinishWithRebaseConflict(t *testing.T) {
 // 5. Resolves conflicts and continues the merge
 // 6. Verifies the branch is successfully finished
 func TestFinishWithMergeContinue(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -880,6 +890,7 @@ func TestFinishWithMergeContinue(t *testing.T) {
 // 4. Attempts to finish the feature branch
 // 5. Verifies the operation fails due to child branch
 func TestFinishWithChildBranchConflict(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1038,6 +1049,7 @@ func TestFinishWithChildBranchConflict(t *testing.T) {
 // 5. Resolves conflicts and continues the merge
 // 6. Verifies the release is successfully finished
 func TestFinishReleaseWithMergeContinue(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1152,6 +1164,7 @@ func TestFinishReleaseWithMergeContinue(t *testing.T) {
 // 5. Verifies the branch is merged into develop
 // 6. Verifies the branch is deleted
 func TestFinishNonStandardBranchWithForce(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1213,6 +1226,7 @@ func TestFinishNonStandardBranchWithForce(t *testing.T) {
 // 3. Attempts to finish the branch without force flag
 // 4. Verifies the operation fails with appropriate error
 func TestFinishNonStandardBranchWithoutForce(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1272,6 +1286,7 @@ func TestFinishNonStandardBranchWithoutForce(t *testing.T) {
 // 6. Verifies a tag is created
 // 7. Verifies the branch is deleted
 func TestFinishNonStandardBranchWithTag(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1327,6 +1342,7 @@ func TestFinishNonStandardBranchWithTag(t *testing.T) {
 // 4. Finishes the feature branch
 // 5. Verifies the feature was merged into main (configured parent) not develop (stored base)
 func TestFinishUsesConfiguredParent(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1427,6 +1443,7 @@ func TestFinishUsesConfiguredParent(t *testing.T) {
 // 3. Adds changes and finishes the feature branch
 // 4. Verifies the base branch config is cleaned up after branch deletion
 func TestFinishCleansUpBaseBranch(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1490,6 +1507,7 @@ func TestFinishCleansUpBaseBranch(t *testing.T) {
 //  5. Verifies no cleanup warning is printed, the branch is deleted, and the
 //     commit was merged into develop
 func TestFinishWithMissingBaseConfigNoWarning(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1561,6 +1579,7 @@ func TestFinishWithMissingBaseConfigNoWarning(t *testing.T) {
 // 3. Finishes the feature branch with --keeplocal
 // 4. Verifies the local branch is kept and the base config is preserved
 func TestFinishKeepLocalPreservesBaseConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1622,6 +1641,7 @@ func TestFinishKeepLocalPreservesBaseConfig(t *testing.T) {
 // 4. Finishes the feature branch
 // 5. Verifies the cleanup warning is printed and the branch is still finished
 func TestFinishWithMultiValueBaseConfigWarns(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1682,6 +1702,7 @@ func TestFinishWithMultiValueBaseConfigWarns(t *testing.T) {
 //  3. Verifies the command fails with the "not initialized" error and exit code,
 //     rather than a misleading "branch does not exist" error
 func TestFinishWithoutInitialization(t *testing.T) {
+	t.Parallel()
 	// Setup: plain repo, git-flow NOT initialized
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1718,6 +1739,7 @@ func TestFinishWithoutInitialization(t *testing.T) {
 //  3. Verifies the command fails with the "not initialized" error and exit code,
 //     confirming the gate fires before any merge-state handling
 func TestFinishAbortWithoutInitialization(t *testing.T) {
+	t.Parallel()
 	// Setup: plain repo, git-flow NOT initialized
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1751,6 +1773,7 @@ func TestFinishAbortWithoutInitialization(t *testing.T) {
 //  3. Verifies the command fails with the "not initialized" error and exit code,
 //     confirming the gate fires before any merge-state handling
 func TestFinishContinueWithoutInitialization(t *testing.T) {
+	t.Parallel()
 	// Setup: plain repo, git-flow NOT initialized
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1783,6 +1806,7 @@ func TestFinishContinueWithoutInitialization(t *testing.T) {
 // 2. Attempts to finish a release branch
 // 3. Verifies the command fails with the "not initialized" error and exit code
 func TestFinishReleaseWithoutInitialization(t *testing.T) {
+	t.Parallel()
 	// Setup: plain repo, git-flow NOT initialized
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1812,6 +1836,7 @@ func TestFinishReleaseWithoutInitialization(t *testing.T) {
 // --messagefile argument is resolved against the invocation directory, not the
 // work-tree root, when git-flow finish creates the release tag.
 func TestFinishTagMessageFileRelativePathCli(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1864,6 +1889,7 @@ func TestFinishTagMessageFileRelativePathCli(t *testing.T) {
 // resolution when the message file comes from Layer-2 config
 // (gitflow.release.finish.messagefile) rather than the CLI flag.
 func TestFinishTagMessageFileRelativePathFromConfig(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 

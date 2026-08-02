@@ -10,6 +10,7 @@ import (
 
 // TestFinishStatePersistsChildStrategies tests that child branch strategies are persisted in state
 func TestFinishStatePersistsChildStrategies(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -104,6 +105,7 @@ func TestFinishStatePersistsChildStrategies(t *testing.T) {
 
 // TestFinishStateTracksCurrentChild tests that CurrentChildBranch is set during child updates
 func TestFinishStateTracksCurrentChild(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -180,6 +182,7 @@ func TestFinishStateTracksCurrentChild(t *testing.T) {
 
 // TestFinishChildRebaseContinuation tests that child branch with rebase strategy continues correctly
 func TestFinishChildRebaseContinuation(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -256,6 +259,7 @@ func TestFinishChildRebaseContinuation(t *testing.T) {
 
 // TestFinishStateBackwardCompatibility tests that state without new fields still works
 func TestFinishStateBackwardCompatibility(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -299,6 +303,7 @@ func TestFinishStateBackwardCompatibility(t *testing.T) {
 // 3. Creates and finishes a feature branch normally
 // 4. Verifies the stale state was cleared and finish succeeded
 func TestFinishDetectsStaleStateEmptyFields(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -349,6 +354,7 @@ func TestFinishDetectsStaleStateEmptyFields(t *testing.T) {
 // 3. Runs feature finish which checks for merge in progress
 // 4. Verifies stale state is cleared and a new finish can proceed
 func TestFinishDetectsStaleStateMergeStepNoConflict(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -401,6 +407,7 @@ func TestFinishDetectsStaleStateMergeStepNoConflict(t *testing.T) {
 // 3. Runs feature finish to verify stale state is cleared
 // 4. Verifies a new finish can proceed normally
 func TestFinishDetectsStaleStateDeleteStepBranchGone(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -453,6 +460,7 @@ func TestFinishDetectsStaleStateDeleteStepBranchGone(t *testing.T) {
 // 3. Attempts to finish (produces merge conflict, creating valid state)
 // 4. Verifies the merge state is preserved (not cleared as stale)
 func TestFinishValidStateMergeStepWithConflict(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -530,6 +538,7 @@ func TestFinishValidStateMergeStepWithConflict(t *testing.T) {
 // 5. Verifies the state is stale: MERGE_HEAD is gone, state file still present
 // 6. Re-runs finish and verifies it completes: state cleared, tag created, branch deleted
 func TestFinishAfterManualConflictResolution(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -646,6 +655,7 @@ func TestFinishAfterManualConflictResolution(t *testing.T) {
 // 4. Verifies the state is stale: MERGE_HEAD is gone, state file still present
 // 5. Runs finish --abort and verifies the state file is gone afterwards
 func TestAbortClearsStaleMergeState(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -731,6 +741,7 @@ func TestAbortClearsStaleMergeState(t *testing.T) {
 // 3. Runs 'git flow feature finish --abort x'
 // 4. Verifies exit 0, no error, and no merge-state file created
 func TestFinishAbortNoOpWhenNothingInProgress(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {

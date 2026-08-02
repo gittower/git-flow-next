@@ -21,6 +21,7 @@ import (
 //     gone, state cleared, HEAD on feature/x, exit 0.
 //  5. Verifies exactly one completion: no tag, develop tip unchanged, feature/x kept.
 func TestUpdateMergeConflictThenContinue(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	setupUpdateInProgressMerge(t, dir)
@@ -67,6 +68,7 @@ func TestUpdateMergeConflictThenContinue(t *testing.T) {
 //  3. Verifies MERGE_HEAD gone, feature/x and develop restored, state cleared,
 //     HEAD on feature/x, clean working tree, exit 0.
 func TestUpdateMergeConflictThenAbort(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	setupUpdateInProgressMerge(t, dir)
@@ -107,6 +109,7 @@ func TestUpdateMergeConflictThenAbort(t *testing.T) {
 //  3. Verifies rebase completes, rebase-merge gone, develop is an ancestor of
 //     feature/x, state cleared, HEAD on feature/x, exit 0.
 func TestUpdateRebaseConflictThenContinue(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	setupUpdateInProgressRebase(t, dir)
@@ -148,6 +151,7 @@ func TestUpdateRebaseConflictThenContinue(t *testing.T) {
 //  4. Verifies --continue reports unresolved conflicts (exit 3), the state file
 //     bytes are unchanged, and rebase-merge is still present (resumable).
 func TestUpdateRebaseReconflictStaysResumable(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
@@ -196,6 +200,7 @@ func TestUpdateRebaseReconflictStaysResumable(t *testing.T) {
 //  3. Verifies rebase-merge gone, feature/x restored, state cleared, HEAD on
 //     feature/x, exit 0.
 func TestUpdateRebaseConflictThenAbort(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	setupUpdateInProgressRebase(t, dir)
@@ -248,6 +253,7 @@ func setupBaseUpdateInProgress(t *testing.T, dir string) {
 // 2. Resolves c.txt, stages, runs 'git flow update --continue'.
 // 3. Verifies the merge completes, develop updated from main, state cleared, exit 0.
 func TestTopLevelUpdateBaseBranchContinue(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	setupBaseUpdateInProgress(t, dir)
@@ -281,6 +287,7 @@ func TestTopLevelUpdateBaseBranchContinue(t *testing.T) {
 // 2. Runs 'git flow update --abort'.
 // 3. Verifies MERGE_HEAD gone, develop restored, state cleared, HEAD on develop, exit 0.
 func TestTopLevelUpdateBaseBranchAbort(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	setupBaseUpdateInProgress(t, dir)
