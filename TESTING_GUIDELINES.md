@@ -427,9 +427,11 @@ func TestExample(t *testing.T) {
 
 `git.Open` resolves the work tree, git dir, and common git dir to absolute
 paths, so accessors like `repo.GitDir()` are always absolute (never the bare
-`.git`). Feed `repo.GitDir()` to the hooks/filters helpers
-(`hooks.RunPreHook(repo.GitDir(), …)`). Because nothing depends on the process
-working directory, these tests are safe to run with `t.Parallel()`.
+`.git`). Pass the handle itself to the hooks/filters helpers
+(`hooks.RunPreHook(repo, …)`); they read `repo.WorkTree()` and
+`repo.CommonGitDir()` so hooks resolve against the active worktree. Because
+nothing depends on the process working directory, these tests are safe to run
+with `t.Parallel()`.
 
 ### Migration Note: `os.Chdir()` Eliminated
 

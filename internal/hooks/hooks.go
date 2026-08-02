@@ -11,8 +11,8 @@ import (
 
 // RunPreHook executes a pre-hook script. Returns an error if the hook fails (non-zero exit).
 // If the hook does not exist or is not executable, it returns nil (no error).
-func RunPreHook(gitDir string, branchType string, action HookAction, ctx HookContext) error {
-	result := runHook(gitDir, HookPre, branchType, action, ctx)
+func RunPreHook(repo *git.Repo, branchType string, action HookAction, ctx HookContext) error {
+	result := runHook(repo, HookPre, branchType, action, ctx)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -30,8 +30,8 @@ func RunPreHook(gitDir string, branchType string, action HookAction, ctx HookCon
 // RunPostHook executes a post-hook script. The result is returned but errors do not
 // cause the operation to fail. If the hook does not exist or is not executable,
 // it returns a result with Executed=false.
-func RunPostHook(gitDir string, branchType string, action HookAction, ctx HookContext) HookResult {
-	return runHook(gitDir, HookPost, branchType, action, ctx)
+func RunPostHook(repo *git.Repo, branchType string, action HookAction, ctx HookContext) HookResult {
+	return runHook(repo, HookPost, branchType, action, ctx)
 }
 
 // configLookup reads a single git config value for the repository rooted at dir.
@@ -58,45 +58,25 @@ func resolveHooksPath(hooksPath, repoRoot string) string {
 // Resolution follows three-level precedence:
 //  1. gitflow.path.hooks - git-flow-specific override (avh compatibility)
 //  2. core.hooksPath - Git's native hooks path configuration
-//  3. .git/hooks - default location (worktree-aware)
-func getHooksDir(gitDir string) string {
-	commonDir := getCommonGitDir(gitDir)
-	repoRoot := filepath.Dir(commonDir)
-
+//  3. <commonGitDir>/hooks - default location
+//
+// Relative paths (levels 1 and 2) and the configLookup base are resolved
+// against worktreeRoot, the active worktree, so a linked worktree resolves them
+// against its own checkout rather than the main one. The default location stays
+// anchored to the common git dir, which linked worktrees legitimately share.
+func getHooksDir(worktreeRoot, commonGitDir string) string {
 	// 1. git-flow-specific override (avh compatibility)
-	if hooksPath, err := configLookup(repoRoot, "gitflow.path.hooks"); err == nil && hooksPath != "" {
-		return resolveHooksPath(hooksPath, repoRoot)
+	if hooksPath, err := configLookup(worktreeRoot, "gitflow.path.hooks"); err == nil && hooksPath != "" {
+		return resolveHooksPath(hooksPath, worktreeRoot)
 	}
 
 	// 2. Git's core.hooksPath
-	if hooksPath, err := configLookup(repoRoot, "core.hooksPath"); err == nil && hooksPath != "" {
-		return resolveHooksPath(hooksPath, repoRoot)
+	if hooksPath, err := configLookup(worktreeRoot, "core.hooksPath"); err == nil && hooksPath != "" {
+		return resolveHooksPath(hooksPath, worktreeRoot)
 	}
 
-	// 3. Default: .git/hooks (worktree-aware)
-	return filepath.Join(commonDir, "hooks")
-}
-
-// getCommonGitDir returns the common git directory from a git directory path.
-// For regular repositories, this returns the gitDir unchanged.
-// For worktrees (where gitDir is like /repo/.git/worktrees/<name>), this returns /repo/.git
-func getCommonGitDir(gitDir string) string {
-	// Normalize the path
-	gitDir = filepath.Clean(gitDir)
-
-	// Check if this looks like a worktree git dir
-	// Pattern: .../worktrees/<worktree-name>
-	parent := filepath.Dir(gitDir)
-	parentBase := filepath.Base(parent)
-
-	if parentBase == "worktrees" {
-		// This is a worktree git directory
-		// Go up two levels: worktrees/<name> -> .git
-		return filepath.Dir(parent)
-	}
-
-	// Not a worktree, return as-is
-	return gitDir
+	// 3. Default: <commonGitDir>/hooks (shared across linked worktrees)
+	return filepath.Join(commonGitDir, "hooks")
 }
 
 // BuildHookArgs constructs the positional arguments for a hook based on the action.
@@ -123,9 +103,9 @@ func BuildHookArgs(action HookAction, ctx HookContext) []string {
 }
 
 // runHook executes a hook script and returns the result.
-func runHook(gitDir string, phase HookPhase, branchType string, action HookAction, ctx HookContext) HookResult {
+func runHook(repo *git.Repo, phase HookPhase, branchType string, action HookAction, ctx HookContext) HookResult {
 	hookName := fmt.Sprintf("%s-flow-%s-%s", phase, branchType, action)
-	hooksDir := getHooksDir(gitDir)
+	hooksDir := getHooksDir(repo.WorkTree(), repo.CommonGitDir())
 	hookPath := filepath.Join(hooksDir, hookName)
 
 	// Check if hook exists and is executable
@@ -149,7 +129,7 @@ func runHook(gitDir string, phase HookPhase, branchType string, action HookActio
 	// Execute hook with arguments
 	cmd := scriptCommand(hookPath, args...)
 	cmd.Env = env
-	cmd.Dir = filepath.Dir(gitDir) // Repository root
+	cmd.Dir = repo.WorkTree() // Active worktree root
 
 	output, err := cmd.CombinedOutput()
 
@@ -202,9 +182,9 @@ func buildHookEnv(ctx HookContext, phase HookPhase) []string {
 // The pre-hook is run before the operation. If it fails, the operation is not executed.
 // The post-hook is run after the operation, regardless of success or failure.
 // The context's ExitCode is set based on the operation result before running the post-hook.
-func WithHooks(gitDir string, branchType string, action HookAction, ctx HookContext, operation func() error) error {
+func WithHooks(repo *git.Repo, branchType string, action HookAction, ctx HookContext, operation func() error) error {
 	// Run pre-hook
-	if err := RunPreHook(gitDir, branchType, action, ctx); err != nil {
+	if err := RunPreHook(repo, branchType, action, ctx); err != nil {
 		return err
 	}
 
@@ -219,7 +199,7 @@ func WithHooks(gitDir string, branchType string, action HookAction, ctx HookCont
 	}
 
 	// Run post-hook (ignore errors from post-hook)
-	result := RunPostHook(gitDir, branchType, action, ctx)
+	result := RunPostHook(repo, branchType, action, ctx)
 	if result.Executed && result.Output != "" {
 		// Print post-hook output for visibility
 		fmt.Print(result.Output)

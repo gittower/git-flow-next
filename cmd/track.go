@@ -76,9 +76,6 @@ func track(repo *git.Repo, branchType string, name string) error {
 		return &errors.RemoteNotConfiguredError{Remote: remote, Operation: "track branch"}
 	}
 
-	// Get git directory for hooks
-	gitDir := repo.GitDir()
-
 	// Build hook context
 	hookCtx := hooks.HookContext{
 		BranchType: branchType,
@@ -92,7 +89,7 @@ func track(repo *git.Repo, branchType string, name string) error {
 	}
 
 	// Run track operation wrapped with hooks
-	return hooks.WithHooks(gitDir, branchType, hooks.HookActionTrack, hookCtx, func() error {
+	return hooks.WithHooks(repo, branchType, hooks.HookActionTrack, hookCtx, func() error {
 		return executeTrack(repo, fullBranchName, remote)
 	})
 }

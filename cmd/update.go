@@ -201,9 +201,6 @@ func executeUpdate(repo *git.Repo, branchType string, name string, useRebase, co
 
 	// If we detected a branch type, run with hooks
 	if detectedBranchType != "" {
-		// Get git directory for hooks
-		gitDir := repo.GitDir()
-
 		// Get remote name from config
 		remoteName := cfg.Remote
 
@@ -220,7 +217,7 @@ func executeUpdate(repo *git.Repo, branchType string, name string, useRebase, co
 		}
 
 		// Run update operation wrapped with hooks
-		return hooks.WithHooks(gitDir, detectedBranchType, hooks.HookActionUpdate, hookCtx, func() error {
+		return hooks.WithHooks(repo, detectedBranchType, hooks.HookActionUpdate, hookCtx, func() error {
 			return update.UpdateBranchFromParent(repo, branchName, parentBranch, strategy, true, state)
 		})
 	}
