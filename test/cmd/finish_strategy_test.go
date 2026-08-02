@@ -15,6 +15,7 @@ import (
 // 4. Finishes the feature branch with --rebase flag
 // 5. Verifies the branch was rebased before merging
 func TestFinishWithRebaseFlag(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -89,6 +90,7 @@ func TestFinishWithRebaseFlag(t *testing.T) {
 // 3. Finishes the feature branch with --squash flag
 // 4. Verifies the commits were squashed into a single commit
 func TestFinishWithSquashFlag(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -168,6 +170,7 @@ func TestFinishWithSquashFlag(t *testing.T) {
 // 3. Finishes the feature branch with --no-ff flag
 // 4. Verifies a merge commit was created even for fast-forward case
 func TestFinishWithNoFFFlag(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -233,6 +236,7 @@ func TestFinishWithNoFFFlag(t *testing.T) {
 // 4. Finishes with --rebase flag to override config
 // 5. Verifies rebase strategy was used instead of configured merge
 func TestMergeStrategyFlagOverridesConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -304,6 +308,7 @@ func TestMergeStrategyFlagOverridesConfig(t *testing.T) {
 // 3. Finishes the feature branch with --squash and --squash-message flags
 // 4. Verifies the custom commit message was used
 func TestFinishWithSquashMessageFlag(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -377,6 +382,7 @@ func TestFinishWithSquashMessageFlag(t *testing.T) {
 // 3. Finishes with --squash-message but WITHOUT --squash flag
 // 4. Verifies the commit message is NOT the custom squash message (uses merge commit message instead)
 func TestSquashMessageIgnoredWithoutSquashStrategy(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -447,6 +453,7 @@ func TestSquashMessageIgnoredWithoutSquashStrategy(t *testing.T) {
 // 4. Resolves conflict and continues WITHOUT --squash-message
 // 5. Verifies the original custom squash message was used (preserved from state)
 func TestSquashMessagePreservedAfterConflict(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -538,6 +545,7 @@ func TestSquashMessagePreservedAfterConflict(t *testing.T) {
 // 4. Resolves conflict and continues WITH a different --squash-message
 // 5. Verifies the new message was used (overriding the preserved one)
 func TestSquashMessageOverrideOnContinue(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -621,6 +629,7 @@ func TestSquashMessageOverrideOnContinue(t *testing.T) {
 // 4. Verifies the merge commit message matches the custom message
 // 5. Verifies the feature branch is deleted
 func TestFinishFeatureBranchWithMergeMessage(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -704,6 +713,7 @@ func TestFinishFeatureBranchWithMergeMessage(t *testing.T) {
 // 4. Verifies the release merges into main successfully
 // 5. Verifies the develop branch update uses the custom message
 func TestFinishReleaseBranchWithUpdateMessage(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -780,6 +790,7 @@ func TestFinishReleaseBranchWithUpdateMessage(t *testing.T) {
 // 7. Runs finish --continue
 // 8. Verifies the final merge commit uses the custom message
 func TestFinishWithMergeMessagePersistsThroughConflict(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -867,6 +878,7 @@ func TestFinishWithMergeMessagePersistsThroughConflict(t *testing.T) {
 // 4. Finishes with --rebase --merge-message "custom: rebase merge"
 // 5. Verifies the final merge commit (after rebase) uses the custom message
 func TestFinishWithMergeMessageUsedAfterRebaseStrategy(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -944,6 +956,7 @@ func TestFinishWithMergeMessageUsedAfterRebaseStrategy(t *testing.T) {
 // 2. Creates and finishes a feature branch without --merge-message (using --no-ff to force merge commit)
 // 3. Verifies the merge commit uses the default "Merge branch 'feature/...' into develop" format
 func TestFinishWithoutMergeMessageUsesDefault(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1018,6 +1031,7 @@ func TestFinishWithoutMergeMessageUsesDefault(t *testing.T) {
 // 4. Verifies the merge state file contains both messages
 // 5. Aborts the finish operation to clean up
 func TestFinishMergeMessageStatePersistence(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1092,6 +1106,7 @@ func TestFinishMergeMessageStatePersistence(t *testing.T) {
 // 4. Finishes without any flags
 // 5. Verifies rebase strategy from config was used
 func TestMergeStrategyConfigUsedByDefault(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1172,6 +1187,7 @@ func TestMergeStrategyConfigUsedByDefault(t *testing.T) {
 // 3. Finishes with --merge-message "Merge %b into %p" (uses placeholders)
 // 4. Verifies the merge commit message has expanded placeholders
 func TestFinishWithMergeMessagePlaceholders(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1244,6 +1260,7 @@ func TestFinishWithMergeMessagePlaceholders(t *testing.T) {
 // 3. Finishes with --update-message "chore: sync %b from %p" (uses placeholders)
 // 4. Verifies the develop update commit message has expanded placeholders
 func TestFinishWithUpdateMessagePlaceholders(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1303,6 +1320,7 @@ func TestFinishWithUpdateMessagePlaceholders(t *testing.T) {
 // 3. Finishes with --merge-message "100%% complete: %b" (escaped percent)
 // 4. Verifies the merge commit message has literal % and expanded %b
 func TestFinishMessagePlaceholderEscaping(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1379,6 +1397,7 @@ func TestFinishMessagePlaceholderEscaping(t *testing.T) {
 // 6. Verifies the merge commit message is "chore: merge feature/config-test into develop"
 // 7. Verifies the feature branch is deleted
 func TestFinishWithMergeMessageFromConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1459,6 +1478,7 @@ func TestFinishWithMergeMessageFromConfig(t *testing.T) {
 // 5. Finishes the feature branch WITH --merge-message "cli: override"
 // 6. Verifies the merge commit uses "cli: override", not the config message
 func TestFinishMergeMessageCLIOverridesConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1533,6 +1553,7 @@ func TestFinishMergeMessageCLIOverridesConfig(t *testing.T) {
 // 4. Finishes the release branch without --update-message flag
 // 5. Verifies the develop update merge commit uses the configured message
 func TestFinishWithUpdateMessageFromConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1599,6 +1620,7 @@ func TestFinishWithUpdateMessageFromConfig(t *testing.T) {
 // 4. Finishes the release branch WITH --update-message "cli: update override"
 // 5. Verifies the develop update uses the CLI message, not config
 func TestFinishUpdateMessageCLIOverridesConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

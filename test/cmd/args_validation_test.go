@@ -27,6 +27,7 @@ func assertCommandRejectsExtraArgs(t *testing.T, expected string, args ...string
 // 1. Runs the top-level update command with two positional arguments
 // 2. Verifies Cobra rejects the second argument before command execution
 func TestShorthandUpdateRejectsExtraArgs(t *testing.T) {
+	t.Parallel()
 	assertCommandRejectsExtraArgs(t, "accepts at most 1 arg(s), received 2", "update", "main", "develop")
 }
 
@@ -35,6 +36,7 @@ func TestShorthandUpdateRejectsExtraArgs(t *testing.T) {
 // 1. Runs the top-level rebase command with two positional arguments
 // 2. Verifies Cobra rejects the second argument before command execution
 func TestShorthandRebaseRejectsExtraArgs(t *testing.T) {
+	t.Parallel()
 	assertCommandRejectsExtraArgs(t, "accepts at most 1 arg(s), received 2", "rebase", "main", "develop")
 }
 
@@ -43,6 +45,7 @@ func TestShorthandRebaseRejectsExtraArgs(t *testing.T) {
 // 1. Runs the top-level publish command with an unexpected positional argument
 // 2. Verifies Cobra rejects the argument before command execution
 func TestShorthandPublishRejectsExtraArgs(t *testing.T) {
+	t.Parallel()
 	assertCommandRejectsExtraArgs(t, `unknown command "extra"`, "publish", "extra")
 }
 
@@ -51,6 +54,7 @@ func TestShorthandPublishRejectsExtraArgs(t *testing.T) {
 // 1. Runs the top-level finish command with an unexpected positional argument
 // 2. Verifies Cobra rejects the argument before command execution
 func TestShorthandFinishRejectsExtraArgs(t *testing.T) {
+	t.Parallel()
 	assertCommandRejectsExtraArgs(t, `unknown command "extra"`, "finish", "extra")
 }
 
@@ -59,6 +63,7 @@ func TestShorthandFinishRejectsExtraArgs(t *testing.T) {
 // 1. Runs the init command with an unexpected positional argument
 // 2. Verifies Cobra rejects the argument before initialization
 func TestInitRejectsExtraArgs(t *testing.T) {
+	t.Parallel()
 	assertCommandRejectsExtraArgs(t, `unknown command "extra"`, "init", "extra")
 }
 
@@ -67,6 +72,7 @@ func TestInitRejectsExtraArgs(t *testing.T) {
 // 1. Runs the overview command with an unexpected positional argument
 // 2. Verifies Cobra rejects the argument before generating output
 func TestOverviewRejectsExtraArgs(t *testing.T) {
+	t.Parallel()
 	assertCommandRejectsExtraArgs(t, `unknown command "extra"`, "overview", "extra")
 }
 
@@ -75,6 +81,7 @@ func TestOverviewRejectsExtraArgs(t *testing.T) {
 // 1. Runs the version command with an unexpected positional argument
 // 2. Verifies Cobra rejects the argument before printing version information
 func TestVersionRejectsExtraArgs(t *testing.T) {
+	t.Parallel()
 	assertCommandRejectsExtraArgs(t, `unknown command "extra"`, "version", "extra")
 }
 
@@ -83,5 +90,6 @@ func TestVersionRejectsExtraArgs(t *testing.T) {
 // 1. Runs the config list command with an unexpected positional argument
 // 2. Verifies Cobra rejects the argument before reading configuration
 func TestConfigListRejectsExtraArgs(t *testing.T) {
+	t.Parallel()
 	assertCommandRejectsExtraArgs(t, `unknown command "extra"`, "config", "list", "extra")
 }

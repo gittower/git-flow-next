@@ -10,6 +10,7 @@ import (
 
 // TestBasicCommandDetection verifies shorthand redirects correctly
 func TestBasicCommandDetection(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -41,6 +42,7 @@ func TestBasicCommandDetection(t *testing.T) {
 
 // TestBranchNameParsing checks standard and non-standard names
 func TestBranchNameParsing(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults")
@@ -63,6 +65,7 @@ func TestBranchNameParsing(t *testing.T) {
 
 // TestCommandOptionsPassthrough verifies flags are passed
 func TestCommandOptionsPassthrough(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults")
@@ -77,6 +80,7 @@ func TestCommandOptionsPassthrough(t *testing.T) {
 
 // TestNonTopicBranchErrorHandling checks errors on non-topic
 func TestNonTopicBranchErrorHandling(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults")
@@ -97,6 +101,7 @@ func TestNonTopicBranchErrorHandling(t *testing.T) {
 
 // TestAmbiguousBranchDetection checks prompt/error for ambiguity
 func TestAmbiguousBranchDetection(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults", "--feature", "feat/", "--hotfix", "feat/") // Force overlap
@@ -109,6 +114,7 @@ func TestAmbiguousBranchDetection(t *testing.T) {
 }
 
 func TestShorthandUpdateStopsOnAmbiguousBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults", "--feature", "feat/", "--hotfix", "feat/")
@@ -121,6 +127,7 @@ func TestShorthandUpdateStopsOnAmbiguousBranch(t *testing.T) {
 }
 
 func TestShorthandRebaseStopsOnAmbiguousBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults", "--feature", "feat/", "--hotfix", "feat/")
@@ -134,6 +141,7 @@ func TestShorthandRebaseStopsOnAmbiguousBranch(t *testing.T) {
 
 // Command-Specific Tests
 func TestDeleteAlias(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults")
@@ -146,6 +154,7 @@ func TestDeleteAlias(t *testing.T) {
 }
 
 func TestUpdateAlias(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults")
@@ -167,6 +176,7 @@ func TestUpdateAlias(t *testing.T) {
 }
 
 func TestRenameAlias(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults")
@@ -179,6 +189,7 @@ func TestRenameAlias(t *testing.T) {
 }
 
 func TestFinishAlias(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults")
@@ -198,6 +209,7 @@ func TestFinishAlias(t *testing.T) {
 
 // TestIntegrationWithExistingConfig checks custom config
 func TestIntegrationWithExistingConfig(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults", "--feature", "feat/")
@@ -210,6 +222,7 @@ func TestIntegrationWithExistingConfig(t *testing.T) {
 
 // TestExitCodePropagation checks failure codes
 func TestExitCodePropagation(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	testutil.RunGitFlow(t, dir, "init", "--defaults")
@@ -239,6 +252,7 @@ func TestExitCodePropagation(t *testing.T) {
 // TestRebaseAlias tests the git flow rebase shorthand command
 // which should redirect to git flow <type> update --rebase
 func TestRebaseAlias(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -295,6 +309,7 @@ func TestRebaseAlias(t *testing.T) {
 // Since our rebase command is a simple shorthand for "update --rebase",
 // it doesn't accept additional rebase-specific options
 func TestRebaseOptionPassthrough(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -315,6 +330,7 @@ func TestRebaseOptionPassthrough(t *testing.T) {
 // TestRebaseNonTopicBranchErrorHandling tests that the rebase command works
 // on non-topic branches since it delegates to executeUpdate which handles all branches
 func TestRebaseNonTopicBranchErrorHandling(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -352,6 +368,7 @@ func TestRebaseNonTopicBranchErrorHandling(t *testing.T) {
 // TestRebaseConflictHandling tests that the rebase command works correctly
 // This test avoids creating actual conflicts to prevent hanging issues
 func TestRebaseConflictHandling(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -387,6 +404,7 @@ func TestRebaseConflictHandling(t *testing.T) {
 // TestRebaseWithCustomBranchTypes tests rebase with non-standard
 // branch types defined in configuration
 func TestRebaseWithCustomBranchTypes(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -420,6 +438,7 @@ func TestRebaseWithCustomBranchTypes(t *testing.T) {
 // shorthand entry point (which reaches finish via FinishCommand, bypassing the
 // topic-branch command handler) against the misleading branch-resolution error.
 func TestShorthandFinishWithoutInitialization(t *testing.T) {
+	t.Parallel()
 	// Setup: plain repo, git-flow NOT initialized
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

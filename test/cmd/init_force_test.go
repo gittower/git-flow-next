@@ -14,6 +14,7 @@ import (
 // 2. Runs 'git flow init --defaults'
 // 3. Verifies initialization succeeds and config is created
 func TestInitFreshRepo(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -47,6 +48,7 @@ func TestInitFreshRepo(t *testing.T) {
 // 2. Attempts to run 'git flow init --defaults' again without --force
 // 3. Verifies the operation fails with "already initialized" error
 func TestInitWithoutForceFailsWhenAlreadyInitialized(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -79,6 +81,7 @@ func TestInitWithoutForceFailsWhenAlreadyInitialized(t *testing.T) {
 // 2. Runs 'git flow init --defaults --force'
 // 3. Verifies the operation succeeds and shows reconfiguration message
 func TestInitWithForceSucceedsWhenAlreadyInitialized(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -113,6 +116,7 @@ func TestInitWithForceSucceedsWhenAlreadyInitialized(t *testing.T) {
 // 2. Runs 'git flow init' interactively with 'y' response to reconfigure prompt
 // 3. Verifies the operation proceeds after confirmation
 func TestInitInteractiveReconfirmYes(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -152,6 +156,7 @@ func TestInitInteractiveReconfirmYes(t *testing.T) {
 // 2. Runs 'git flow init' interactively with 'n' response to reconfigure prompt
 // 3. Verifies the operation is cancelled
 func TestInitInteractiveReconfirmNo(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -190,6 +195,7 @@ func TestInitInteractiveReconfirmNo(t *testing.T) {
 // 2. Runs 'git flow init --preset github --force'
 // 3. Verifies the configuration is updated to GitHub preset
 func TestInitForceWithPresetChange(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -225,6 +231,7 @@ func TestInitForceWithPresetChange(t *testing.T) {
 // 2. Runs 'git flow init --force --feature feat/'
 // 3. Verifies the feature prefix is updated
 func TestInitForceWithCustomPrefix(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -260,6 +267,7 @@ func TestInitForceWithCustomPrefix(t *testing.T) {
 // 2. Attempts to run 'git flow init --preset github' without --force
 // 3. Verifies the operation fails
 func TestInitWithPresetFailsWithoutForce(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -288,6 +296,7 @@ func TestInitWithPresetFailsWithoutForce(t *testing.T) {
 // 2. Attempts to run 'git flow init --feature feat/' without --force
 // 3. Verifies the operation fails
 func TestInitWithCustomFlagFailsWithoutForce(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -318,6 +327,7 @@ func TestInitWithCustomFlagFailsWithoutForce(t *testing.T) {
 // 2. Runs 'git flow init' without --force
 // 3. Verifies the operation succeeds and imports AVH config
 func TestAVHConfigDoesNotRequireForce(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -363,6 +373,7 @@ func TestAVHConfigDoesNotRequireForce(t *testing.T) {
 // 2. Runs 'git flow init --defaults --force'
 // 3. Verifies the operation succeeds
 func TestInitForceOnFreshRepo(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

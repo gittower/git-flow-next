@@ -24,6 +24,7 @@ import (
 // correct relationship annotations, and topic types still resolve their
 // dotted parents. Presence and relationship are asserted, not line order.
 func TestOverviewDottedBaseBranches(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -59,6 +60,7 @@ func TestOverviewDottedBaseBranches(t *testing.T) {
 // finished merges into the dotted develop branch without a missing-base or
 // unknown-branch-type failure.
 func TestFinishFeatureIntoDottedDevelop(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -102,6 +104,7 @@ func TestFinishFeatureIntoDottedDevelop(t *testing.T) {
 // dotted base branch names with their original dots and the correct
 // relationship, with no phantom single-segment entry.
 func TestConfigListDottedNames(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -135,6 +138,7 @@ func TestConfigListDottedNames(t *testing.T) {
 // `git check-ref-format`, so a mid-name dot is accepted while git-invalid
 // names are still rejected.
 func TestConfigAddAndRenameDottedName(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 

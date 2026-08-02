@@ -11,6 +11,7 @@ import (
 
 // TestFinishSingleConflictMergeStrategy tests finishing with a single conflict using merge strategy
 func TestFinishSingleConflictMergeStrategy(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -101,6 +102,7 @@ func TestFinishSingleConflictMergeStrategy(t *testing.T) {
 
 // TestFinishSingleConflictRebaseStrategy tests finishing with a single conflict using rebase strategy
 func TestFinishSingleConflictRebaseStrategy(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -177,6 +179,7 @@ func TestFinishSingleConflictRebaseStrategy(t *testing.T) {
 
 // TestFinishSingleConflictSquashStrategy tests finishing with a single conflict using squash strategy
 func TestFinishSingleConflictSquashStrategy(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -265,6 +268,7 @@ func TestFinishSingleConflictSquashStrategy(t *testing.T) {
 
 // TestFinishMultipleConflictsInSeparateCommits tests rebase with conflicts in multiple commits
 func TestFinishMultipleConflictsInSeparateCommits(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -349,6 +353,7 @@ func TestFinishMultipleConflictsInSeparateCommits(t *testing.T) {
 
 // TestFinishChildBranchConflictDifferentStrategies tests child branch updates with different merge strategies
 func TestFinishChildBranchConflictDifferentStrategies(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -427,6 +432,7 @@ func TestFinishChildBranchConflictDifferentStrategies(t *testing.T) {
 
 // TestFinishMultipleChildrenWithConflicts tests multiple child branches each with conflicts
 func TestFinishMultipleChildrenWithConflicts(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -516,6 +522,7 @@ func TestFinishMultipleChildrenWithConflicts(t *testing.T) {
 
 // TestFinishMultipleChildrenDifferentStrategiesNoConflict tests that different strategies are applied correctly
 func TestFinishMultipleChildrenDifferentStrategiesNoConflict(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -627,6 +634,7 @@ func TestFinishMultipleChildrenDifferentStrategiesNoConflict(t *testing.T) {
 // 6. Resolve conflict and continue - should fail with auto-update conflict (develop vs main)
 // 7. Resolve second conflict and continue - should complete successfully
 func TestFinishWithConsecutiveConflicts(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

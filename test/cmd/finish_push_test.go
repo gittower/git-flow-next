@@ -90,6 +90,7 @@ func createTopicCommit(t *testing.T, dir, branchType, name, file, content string
 // 4. Verifies exit 0 and that main is ahead of origin (not pushed)
 // 5. Verifies output contains no "Pushing to remote" header
 func TestFinishPushDefaultDoesNotPush(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := setupSingleTrackWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -119,6 +120,7 @@ func TestFinishPushDefaultDoesNotPush(t *testing.T) {
 // 5. Verifies output shows the push header and the main push line
 // 6. Verifies the finished topic branch is NOT pushed to origin
 func TestFinishPushSingleTrackFeature(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := setupSingleTrackWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -160,6 +162,7 @@ func TestFinishPushSingleTrackFeature(t *testing.T) {
 // 5. Verifies the release tag 1.0.0 exists on origin
 // 6. Verifies output shows main, develop, and tag push lines
 func TestFinishPushClassicReleaseBranchesAndTag(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -201,6 +204,7 @@ func TestFinishPushClassicReleaseBranchesAndTag(t *testing.T) {
 // 5. Verifies exit 0 and main up to date with origin (config alone triggers push)
 // 6. Verifies output contains the main push line
 func TestFinishPushConfigEnablesPush(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := setupSingleTrackWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -234,6 +238,7 @@ func TestFinishPushConfigEnablesPush(t *testing.T) {
 // 5. Verifies exit 0 and main ahead of origin (nothing pushed)
 // 6. Verifies output contains no "Pushing to remote" header
 func TestFinishPushNoPushFlagOverridesConfig(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := setupSingleTrackWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -267,6 +272,7 @@ func TestFinishPushNoPushFlagOverridesConfig(t *testing.T) {
 // 5. Verifies tag 1.0.0 is NOT on origin
 // 6. Verifies output shows branch lines but no (tag) line
 func TestFinishPushBranchesNotTag(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -305,6 +311,7 @@ func TestFinishPushBranchesNotTag(t *testing.T) {
 // 5. Verifies main and develop are ahead of origin (branches not pushed)
 // 6. Verifies output shows the tag line but no branch push lines
 func TestFinishPushTagOnlyViaFlag(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -343,6 +350,7 @@ func TestFinishPushTagOnlyViaFlag(t *testing.T) {
 // 5. Verifies exit 0 and main and develop up to date with origin
 // 6. Verifies tag 1.0.0 is NOT on origin (tag suppressed)
 func TestFinishPushConfigBranchesTagSuppressed(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -382,6 +390,7 @@ func TestFinishPushConfigBranchesTagSuppressed(t *testing.T) {
 // 5. Verifies exit 0 and tag 1.0.0 exists on origin
 // 6. Verifies main and develop are ahead of origin (branches not pushed)
 func TestFinishPushConfigTagOnly(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -418,6 +427,7 @@ func TestFinishPushConfigTagOnly(t *testing.T) {
 // 5. Verifies exit 0 and tag 1.0.0 exists on origin (flag overrides config)
 // 6. Verifies main and develop are ahead of origin (--pushtag alone does not imply --push)
 func TestFinishPushTagFlagOverridesConfigFalse(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -453,6 +463,7 @@ func TestFinishPushTagFlagOverridesConfigFalse(t *testing.T) {
 // 4. Runs 'git flow release finish 1.0.0 --no-push --no-fetch'
 // 5. Verifies exit 0, main and develop ahead of origin, and tag 1.0.0 NOT on origin
 func TestFinishPushNoPushSuppressesInheritedTag(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -488,6 +499,7 @@ func TestFinishPushNoPushSuppressesInheritedTag(t *testing.T) {
 // 4. Verifies exit 0 (no error over absent tag) and main up to date with origin
 // 5. Verifies output shows the main push line and no (tag) line
 func TestFinishPushTagNoopWhenNoTag(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := setupSingleTrackWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -519,6 +531,7 @@ func TestFinishPushTagNoopWhenNoTag(t *testing.T) {
 // 4. Verifies exit 0 and main and develop up to date with origin
 // 5. Verifies hotfix tag 1.0.1 exists on origin
 func TestFinishPushClassicHotfix(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -553,6 +566,7 @@ func TestFinishPushClassicHotfix(t *testing.T) {
 // 6. Verifies main and develop are ahead of origin (hotfix pushes nothing)
 // 7. Verifies hotfix tag 1.0.1 is NOT on origin and no push header in hotfix output
 func TestFinishPushPerBranchTypeIndependence(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -603,6 +617,7 @@ func TestFinishPushPerBranchTypeIndependence(t *testing.T) {
 // 4. Verifies exit 0 and the finish completes (feature branch deleted, main has merge)
 // 5. Verifies output notes the push was skipped and contains no hard error
 func TestFinishPushNoRemoteSkips(t *testing.T) {
+	t.Parallel()
 	dir := setupSingleTrackNoRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -639,6 +654,7 @@ func TestFinishPushNoRemoteSkips(t *testing.T) {
 // 5. Resolves the conflict and runs 'git flow release finish --continue 1.0.0'
 // 6. Verifies exit 0, main and develop up to date with origin, and tag 1.0.0 on origin
 func TestFinishPushRunsAfterContinue(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -743,6 +759,7 @@ func TestFinishPushRunsAfterContinue(t *testing.T) {
 // 5. Verifies non-zero exit and the error reports the rejected push (not the preflight)
 // 6. Verifies the local finish is complete (feature deleted, main has merge, no merge state)
 func TestFinishPushRejectedNonFastForward(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := setupSingleTrackWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -815,6 +832,7 @@ func TestFinishPushRejectedNonFastForward(t *testing.T) {
 // 4. Runs 'git flow release finish 1.0.0 --no-fetch'
 // 5. Verifies exit 0, main and develop up to date with origin, and tag 1.0.0 on origin
 func TestFinishPushConfigPushInheritsTag(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -850,6 +868,7 @@ func TestFinishPushConfigPushInheritsTag(t *testing.T) {
 // 4. Verifies main push line precedes develop push line, which precedes the tag line
 // 5. Verifies the exact main push line appears exactly once (dedupe)
 func TestFinishPushOrderingParentThenChildren(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -889,6 +908,7 @@ func TestFinishPushOrderingParentThenChildren(t *testing.T) {
 // 4. Verifies main is up to date with origin (the flag was forwarded)
 // 5. Verifies output shows the push header and the main push line
 func TestFinishPushShorthandForwardsFlag(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := setupSingleTrackWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -921,6 +941,7 @@ func TestFinishPushShorthandForwardsFlag(t *testing.T) {
 //  5. Verifies the fetch message appears, proving the flag was forwarded and
 //     overrode the config
 func TestFinishFetchShorthandForwardsFlag(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := setupSingleTrackWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)

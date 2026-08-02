@@ -17,6 +17,7 @@ import (
 // 6. Verifies the operation fails with BranchBehindRemoteError
 // 7. Verifies the error message contains resolution suggestions
 func TestFinishFeatureBranchBehindRemote(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -134,6 +135,7 @@ func TestFinishFeatureBranchBehindRemote(t *testing.T) {
 // 6. Verifies the operation succeeds with an "ahead" note including the commit count
 // 7. Verifies the merge happened (develop advanced, branch deleted, local commit merged)
 func TestFinishFeatureBranchAheadOfRemote(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -240,6 +242,7 @@ func TestFinishFeatureBranchAheadOfRemote(t *testing.T) {
 // 7. Verifies the operation fails with a diverged-specific message (not "behind")
 // 8. Verifies the merge did not happen (develop unchanged, branch still exists)
 func TestFinishFeatureBranchDivergedFromRemote(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -356,6 +359,7 @@ func TestFinishFeatureBranchDivergedFromRemote(t *testing.T) {
 // 4. Finishes the feature branch
 // 5. Verifies the operation succeeds (no remote check needed)
 func TestFinishFeatureBranchNoTrackingBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -414,6 +418,7 @@ func TestFinishFeatureBranchNoTrackingBranch(t *testing.T) {
 // 6. Verifies the operation succeeds despite being behind
 // 7. Verifies the branch is deleted and changes merged
 func TestFinishFeatureBranchForceBypassesRemoteCheck(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -511,6 +516,7 @@ func TestFinishFeatureBranchForceBypassesRemoteCheck(t *testing.T) {
 // 6. Resolves the conflict and runs --continue
 // 7. Verifies continue completes without fetching or a transport abort, and clears the merge state
 func TestFinishContinueSkipsRemoteCheck(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -641,6 +647,7 @@ func TestFinishContinueSkipsRemoteCheck(t *testing.T) {
 // 4. Verifies the operation succeeds
 // 5. Verifies no warning about being ahead/behind
 func TestFinishFeatureBranchEqualToRemote(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -714,6 +721,7 @@ func TestFinishFeatureBranchEqualToRemote(t *testing.T) {
 // 6. Verifies no fetch occurred but the sync check still aborts with "behind"
 // 7. Verifies the merge did not happen (develop unchanged, branch still exists)
 func TestFinishNoFetchStillRunsSyncCheck(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -792,6 +800,7 @@ func TestFinishNoFetchStillRunsSyncCheck(t *testing.T) {
 //  4. Finishes with --no-fetch (so the corrupt ref is not repaired by a fetch)
 //  5. Verifies finish fails, names the sync-status determination, and does not merge
 func TestFinishCompareErrorAborts(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)

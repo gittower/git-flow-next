@@ -17,6 +17,7 @@ import (
 //  2. Run: git flow integrate develop --tag v2.0.0.
 //  3. Assert main advanced to C and annotated tag v2.0.0 points at main's tip.
 func TestIntegrateWithTag(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -56,6 +57,7 @@ func TestIntegrateWithTag(t *testing.T) {
 //  2. Run: git flow integrate develop --tag v2.0.0 --sign.
 //  3. Assert v2.0.0 is a signed annotated tag on main's tip.
 func TestIntegrateSignedTag(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("gpg"); err != nil {
 		t.Skip("gpg not available; skipping signed tag test")
 	}
@@ -116,6 +118,7 @@ func TestIntegrateSignedTag(t *testing.T) {
 //  2. Run: git flow integrate develop --notag.
 //  3. Assert main advanced to C but no tag was created.
 func TestIntegrateNotagOverridesConfig(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -148,6 +151,7 @@ func TestIntegrateNotagOverridesConfig(t *testing.T) {
 //  2. Run: git flow integrate develop.
 //  3. Assert non-zero exit, main unchanged, no tag created.
 func TestIntegrateTagEnabledNoNameErrors(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -180,6 +184,7 @@ func TestIntegrateTagEnabledNoNameErrors(t *testing.T) {
 //     --messagefile msg.txt.
 //  3. Assert the tag message comes from msg.txt, not "inline".
 func TestIntegrateMessagefileWinsOverMessage(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -217,6 +222,7 @@ func TestIntegrateMessagefileWinsOverMessage(t *testing.T) {
 //  2. Run: git flow integrate develop.
 //  3. Assert annotated tag v3.0.0 on main's tip.
 func TestIntegrateLayer2TagCreatesConfiguredTag(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -253,6 +259,7 @@ func TestIntegrateLayer2TagCreatesConfiguredTag(t *testing.T) {
 //  2. Run: git flow integrate develop --tag v4.0.0.
 //  3. Assert v4.0.0 exists on main and configured v3.0.0 does not.
 func TestIntegrateCliTagNameOverridesConfig(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -287,6 +294,7 @@ func TestIntegrateCliTagNameOverridesConfig(t *testing.T) {
 //  2. Run: git flow integrate develop --tag v2.0.0 --message "integrate note".
 //  3. Assert the tag message contains "integrate note".
 func TestIntegrateMessageSetsTagMessage(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 

@@ -18,6 +18,7 @@ import (
 // 2. Runs 'git flow feature update --abort x'.
 // 3. Verifies exit 0, no error, and no merge-state file created.
 func TestUpdateAbortNoOpWhenNothingInProgress(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
@@ -43,6 +44,7 @@ func TestUpdateAbortNoOpWhenNothingInProgress(t *testing.T) {
 // 2. Runs 'git flow feature update --continue x'.
 // 3. Verifies "no merge in progress" and exit 3.
 func TestUpdateContinueNoMergeInProgress(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
@@ -73,6 +75,7 @@ func TestUpdateContinueNoMergeInProgress(t *testing.T) {
 //  3. Verifies Action=update, BranchType=feature, FullBranchName=feature/x,
 //     ParentBranch=develop, MergeStrategy=merge, CurrentStep=merge.
 func TestUpdateStateIsSelfDescribing(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	setupUpdateInProgressMerge(t, dir)
@@ -109,6 +112,7 @@ func TestUpdateStateIsSelfDescribing(t *testing.T) {
 //  3. Verifies Action=update, BranchType=develop, FullBranchName=develop,
 //     ParentBranch=main, CurrentStep=merge.
 func TestBaseUpdateStateIsSelfDescribing(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	setupBaseUpdateInProgress(t, dir)
@@ -141,6 +145,7 @@ func TestBaseUpdateStateIsSelfDescribing(t *testing.T) {
 // 2. Runs 'git flow feature update --continue --abort x'.
 // 3. Verifies the merge is aborted, feature/x restored, state cleared, exit 0.
 func TestUpdateContinueAndAbortAbortWins(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	setupUpdateInProgressMerge(t, dir)
@@ -170,6 +175,7 @@ func TestUpdateContinueAndAbortAbortWins(t *testing.T) {
 // 2. Runs 'git flow feature update x' (no continue/abort flags).
 // 3. Verifies exit 3, the message names update, and the merge is untouched.
 func TestPlainUpdateDuringOwnUpdateReportsInProgress(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	setupUpdateInProgressMerge(t, dir)

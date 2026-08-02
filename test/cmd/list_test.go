@@ -14,6 +14,7 @@ import (
 // 3. Lists feature branches
 // 4. Verifies the output contains all created feature branches
 func TestListFeatureBranches(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -63,6 +64,7 @@ func TestListFeatureBranches(t *testing.T) {
 // 3. Lists release and hotfix branches separately
 // 4. Verifies the output contains the created branches
 func TestListReleaseAndHotfixBranches(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -123,6 +125,7 @@ func TestListReleaseAndHotfixBranches(t *testing.T) {
 // 3. Lists feature branches
 // 4. Verifies the output contains the branch with custom prefix
 func TestListWithCustomConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -162,6 +165,7 @@ func TestListWithCustomConfig(t *testing.T) {
 // 2. Lists feature branches without creating any
 // 3. Verifies the output indicates no branches found
 func TestListEmptyBranches(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

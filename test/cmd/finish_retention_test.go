@@ -17,6 +17,7 @@ import (
 // 4. Finishes the feature branch
 // 5. Verifies the local branch is deleted
 func TestFinishFeatureBranchDefaultLocalDeletion(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -67,6 +68,7 @@ func TestFinishFeatureBranchDefaultLocalDeletion(t *testing.T) {
 // 5. Finishes the feature branch
 // 6. Verifies both local and remote branches are deleted
 func TestFinishFeatureBranchDefaultRemoteDeletion(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -139,6 +141,7 @@ func TestFinishFeatureBranchDefaultRemoteDeletion(t *testing.T) {
 // 5. Verifies the branch is merged into develop
 // 6. Verifies the local feature branch is preserved
 func TestFinishFeatureBranchKeepLocal(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -223,6 +226,7 @@ func TestFinishFeatureBranchKeepLocal(t *testing.T) {
 // 7. Verifies the local feature branch is deleted
 // 8. Verifies the remote feature branch is preserved
 func TestFinishFeatureBranchKeepRemote(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -332,6 +336,7 @@ func TestFinishFeatureBranchKeepRemote(t *testing.T) {
 // 7. Verifies the remote branch is deleted from "upstream"
 // 8. Verifies finish completes successfully
 func TestFinishDeleteBranchUsesConfiguredRemote(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -423,6 +428,7 @@ func TestFinishDeleteBranchUsesConfiguredRemote(t *testing.T) {
 // 5. Verifies the merge state file does not exist (cleared despite deletion error)
 // 6. Verifies the merge completed successfully (changes are on develop)
 func TestFinishClearsMergeStateWhenBranchDeletionFails(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 

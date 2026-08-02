@@ -19,6 +19,7 @@ import (
 // 4. Verifies the base branch relationships (develop -> main -> root)
 // 5. Verifies the merge strategy information for base branches
 func TestOverviewWithDefaultConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -79,6 +80,7 @@ func TestOverviewWithDefaultConfig(t *testing.T) {
 //
 // 5. Verifies the branch types and names are correctly displayed
 func TestOverviewWithActiveBranches(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -129,6 +131,7 @@ func TestOverviewWithActiveBranches(t *testing.T) {
 // 4. Verifies the output contains all custom topic branch prefixes
 // 5. Verifies the branch relationships reflect the custom configuration
 func TestOverviewWithCustomConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -188,6 +191,7 @@ func TestOverviewWithCustomConfig(t *testing.T) {
 // 4. Verifies the current branch is marked with an asterisk (*)
 // 5. Verifies the branch information is correct and complete
 func TestOverviewWithCurrentBranch(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -224,6 +228,7 @@ func TestOverviewWithCurrentBranch(t *testing.T) {
 // 4. Verifies the output correctly interprets the git-flow-avh config
 // 5. Verifies all branch types and prefixes are correctly displayed
 func TestOverviewWithAVHConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

@@ -94,6 +94,7 @@ func assertFeatureMerged(t *testing.T, dir, branch, featureSha, developBefore st
 
 // Scenario 1: Parent in sync — finish proceeds and merges.
 func TestFinishParentInSyncProceeds(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -113,6 +114,7 @@ func TestFinishParentInSyncProceeds(t *testing.T) {
 
 // Scenario 2: Parent behind its remote — abort; merge does not happen.
 func TestFinishParentBehindRemoteAborts(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -150,6 +152,7 @@ func TestFinishParentBehindRemoteAborts(t *testing.T) {
 
 // Scenario 3: Parent diverged from its remote — abort; merge does not happen.
 func TestFinishParentDivergedAborts(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -185,6 +188,7 @@ func TestFinishParentDivergedAborts(t *testing.T) {
 
 // Scenario 4: Parent ahead of its remote — proceeds (the key divergence from the topic rule).
 func TestFinishParentAheadProceeds(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -209,6 +213,7 @@ func TestFinishParentAheadProceeds(t *testing.T) {
 // Scenario 5: Topic in sync but parent behind — aborts on the parent check (runs independently of
 // the topic check).
 func TestFinishTopicInSyncParentBehindAborts(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -243,6 +248,7 @@ func TestFinishTopicInSyncParentBehindAborts(t *testing.T) {
 
 // Scenario 6: Parent behind, --force — the parent check is skipped; finish completes.
 func TestFinishParentBehindForceSkipsCheck(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -267,6 +273,7 @@ func TestFinishParentBehindForceSkipsCheck(t *testing.T) {
 // still exists locally, but develop's upstream is unset so HasTrackingBranch(develop) is false. This
 // isolates the no-tracking gate from the benign missing-ref path (Scenario 9).
 func TestFinishParentNoTrackingBranchSkips(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -297,6 +304,7 @@ func TestFinishParentNoTrackingBranchSkips(t *testing.T) {
 
 // Scenario 8: No remote configured — no fetch and no parent check; finish completes.
 func TestFinishNoRemoteParentCheckSkipped(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	if _, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
@@ -334,6 +342,7 @@ func TestFinishNoRemoteParentCheckSkipped(t *testing.T) {
 // without --force. The stale ref deliberately points at a *different* commit than local develop, so
 // a broken implementation that compared it would abort.
 func TestFinishParentStaleTrackingRefProceeds(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -380,6 +389,7 @@ func TestFinishParentStaleTrackingRefProceeds(t *testing.T) {
 // Scenario 10: Parent behind in the cached tracking ref, run with --no-fetch — the fetch is skipped
 // but the parent check still runs against cached data and aborts (mirrors the topic --no-fetch rule).
 func TestFinishParentBehindNoFetchStillChecks(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -419,6 +429,7 @@ func TestFinishParentBehindNoFetchStillChecks(t *testing.T) {
 // is corrupted so develop@{upstream} still resolves (HasTrackingBranch stays true) but the sync
 // comparison cannot walk it. --no-fetch prevents a fetch from repairing the ref first.
 func TestFinishParentCompareErrorAborts(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)

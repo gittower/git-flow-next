@@ -9,6 +9,7 @@ import (
 
 // TestFinishAutoUpdateFiltering tests that only branches with autoUpdate=true are updated
 func TestFinishAutoUpdateFiltering(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -110,6 +111,7 @@ func TestFinishAutoUpdateFiltering(t *testing.T) {
 
 // TestFinishMultipleChildrenMixedAutoUpdate tests multiple children with mixed autoUpdate settings
 func TestFinishMultipleChildrenMixedAutoUpdate(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -199,6 +201,7 @@ func TestFinishMultipleChildrenMixedAutoUpdate(t *testing.T) {
 
 // TestFinishNoChildrenWithAutoUpdate tests that finish works when no children have autoUpdate=true
 func TestFinishNoChildrenWithAutoUpdate(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

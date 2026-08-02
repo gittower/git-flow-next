@@ -18,6 +18,7 @@ import (
 // 5. Deletes with force flag
 // 6. Verifies the branch is deleted
 func TestDeleteFeature(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -71,6 +72,7 @@ func TestDeleteFeature(t *testing.T) {
 // 4. Verifies we're automatically switched to develop branch
 // 5. Verifies the feature branch is deleted
 func TestDeleteCurrentFeature(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -113,6 +115,7 @@ func TestDeleteCurrentFeature(t *testing.T) {
 //     not the "not initialized" error — proving the uninitialized gate does not
 //     over-trigger in an initialized repository
 func TestDeleteNonExistentFeature(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -153,6 +156,7 @@ func TestDeleteNonExistentFeature(t *testing.T) {
 // 5. Attempts to delete the merged branch
 // 6. Verifies the operation fails with appropriate error
 func TestDeleteMergedFeature(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -199,6 +203,7 @@ func TestDeleteMergedFeature(t *testing.T) {
 // 2. Attempts to delete a branch using an invalid branch type
 // 3. Verifies the operation fails with appropriate error
 func TestDeleteWithInvalidBranchType(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -225,6 +230,7 @@ func TestDeleteWithInvalidBranchType(t *testing.T) {
 // 5. Deletes the branch with --remote flag
 // 6. Verifies the branch is deleted both locally and remotely
 func TestDeleteFeatureWithRemote(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -281,6 +287,7 @@ func TestDeleteFeatureWithRemote(t *testing.T) {
 // 6. Deletes the branch without --remote flag (should use config)
 // 7. Verifies the branch is deleted both locally and remotely
 func TestDeleteFeatureWithConfigEnabled(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -343,6 +350,7 @@ func TestDeleteFeatureWithConfigEnabled(t *testing.T) {
 // 6. Deletes the branch without --remote flag
 // 7. Verifies the branch is deleted locally but remains on remote
 func TestDeleteFeatureWithConfigDisabled(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -405,6 +413,7 @@ func TestDeleteFeatureWithConfigDisabled(t *testing.T) {
 // 6. Deletes the branch with --remote flag (should override config)
 // 7. Verifies the branch is deleted both locally and remotely
 func TestDeleteFeatureWithCommandLineOverride(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -466,6 +475,7 @@ func TestDeleteFeatureWithCommandLineOverride(t *testing.T) {
 // 5. Verifies the branch is deleted locally
 // 6. Verifies no error occurs when trying to delete the non-existent remote branch
 func TestDeleteFeatureWithNonExistentRemote(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -517,6 +527,7 @@ func TestDeleteFeatureWithNonExistentRemote(t *testing.T) {
 // 6. Deletes the branch with --remote flag
 // 7. Verifies the branch is deleted both locally and remotely
 func TestDeleteFeatureWithCustomRemote(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -580,6 +591,7 @@ func TestDeleteFeatureWithCustomRemote(t *testing.T) {
 // 6. Deletes the branch with --no-remote flag (should override config)
 // 7. Verifies the branch is deleted locally but remains on remote
 func TestDeleteFeatureWithNoRemoteOverride(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -640,6 +652,7 @@ func TestDeleteFeatureWithNoRemoteOverride(t *testing.T) {
 // 4. Deletes the feature branch
 // 5. Verifies the base branch config is cleaned up after deletion
 func TestDeleteCleansUpBaseBranchConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -688,6 +701,7 @@ func TestDeleteCleansUpBaseBranchConfig(t *testing.T) {
 // 4. Deletes without --force flag (should succeed due to config)
 // 5. Verifies the branch is deleted
 func TestDeleteForceWithConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -741,6 +755,7 @@ func TestDeleteForceWithConfig(t *testing.T) {
 // 4. Deletes with --no-force flag (should fail despite config)
 // 5. Verifies the branch still exists
 func TestDeleteNoForceOverridesConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -794,6 +809,7 @@ func TestDeleteNoForceOverridesConfig(t *testing.T) {
 // 4. Deletes without --force flag (should succeed due to config)
 // 5. Verifies the branch is deleted
 func TestDeleteForceConfigAcrossBranchTypes(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -849,6 +865,7 @@ func TestDeleteForceConfigAcrossBranchTypes(t *testing.T) {
 // 6. Verifies the error message mentions the missing remote (contains "No remote")
 // 7. Verifies the feature branch still exists locally (not deleted despite the error)
 func TestDeleteFeatureBranchRemoteNoRemoteError(t *testing.T) {
+	t.Parallel()
 	// Setup test repository without remote
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -910,6 +927,7 @@ func TestDeleteFeatureBranchRemoteNoRemoteError(t *testing.T) {
 // 4. Deletes the feature branch
 // 5. Verifies no cleanup warning is printed and the branch is deleted
 func TestDeleteWithMissingBaseConfigNoWarning(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -960,6 +978,7 @@ func TestDeleteWithMissingBaseConfigNoWarning(t *testing.T) {
 // 4. Deletes the feature branch
 // 5. Verifies the cleanup warning is printed and the branch is still deleted
 func TestDeleteWithMultiValueBaseConfigWarns(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1014,6 +1033,7 @@ func TestDeleteWithMultiValueBaseConfigWarns(t *testing.T) {
 // 6. Deletes the feature branch
 // 7. Verifies no cleanup warning is printed and the branch is deleted
 func TestDeleteWithBaseConfigInNonLocalScopeNoWarning(t *testing.T) {
+	t.Parallel()
 	// Isolate the global config to a temp file so nothing touches the
 	// developer's real global config. The override is passed through each
 	// subprocess env (not the test process env) so it stays scoped to this
@@ -1073,6 +1093,7 @@ func TestDeleteWithBaseConfigInNonLocalScopeNoWarning(t *testing.T) {
 // 4. Verifies output contains "Fetching from remote"
 // 5. Verifies branch is deleted
 func TestDeleteFeatureWithFetchFlag(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1110,6 +1131,7 @@ func TestDeleteFeatureWithFetchFlag(t *testing.T) {
 // 5. Verifies output contains "Fetching from remote"
 // 6. Verifies branch is deleted
 func TestDeleteFeatureWithFetchConfig(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1153,6 +1175,7 @@ func TestDeleteFeatureWithFetchConfig(t *testing.T) {
 // 5. Verifies output does NOT contain "Fetching"
 // 6. Verifies branch is deleted
 func TestDeleteFeatureWithNoFetchOverridesConfig(t *testing.T) {
+	t.Parallel()
 	// Setup test repository with remote
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1196,6 +1219,7 @@ func TestDeleteFeatureWithNoFetchOverridesConfig(t *testing.T) {
 // 5. Verifies no error about missing remote
 // 6. Verifies branch is deleted
 func TestDeleteFeatureNoRemoteFetchSkipped(t *testing.T) {
+	t.Parallel()
 	// Setup test repository without remote
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1296,6 +1320,7 @@ func setupBehindDeleteRepo(t *testing.T, feature string) string {
 // 3. Confirms the error recommends 'git flow feature delete --force' and not 'finish --force'
 // 4. Confirms the branch still exists
 func TestDeleteFeatureBehindRemoteAborts(t *testing.T) {
+	t.Parallel()
 	dir := setupBehindDeleteRepo(t, "behind-del")
 
 	// Delete with --fetch must abort because the local branch is behind its remote
@@ -1325,6 +1350,7 @@ func TestDeleteFeatureBehindRemoteAborts(t *testing.T) {
 // 2. Runs 'git flow feature delete --fetch --force' and expects it to succeed
 // 3. Confirms the branch is deleted
 func TestDeleteFeatureBehindRemoteForceOverrides(t *testing.T) {
+	t.Parallel()
 	dir := setupBehindDeleteRepo(t, "behind-del-force")
 
 	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "behind-del-force", "--fetch", "--force")
@@ -1345,6 +1371,7 @@ func TestDeleteFeatureBehindRemoteForceOverrides(t *testing.T) {
 // 4. Confirms no "Fetching" line was printed (the fetch really was skipped)
 // 5. Confirms the branch still exists
 func TestDeleteFeatureNoFetchStillAbortsWhenBehind(t *testing.T) {
+	t.Parallel()
 	dir := setupBehindDeleteRepo(t, "no-fetch-behind")
 
 	// Update the remote-tracking ref locally without git-flow fetching, so the cached tracking
@@ -1379,6 +1406,7 @@ func TestDeleteFeatureNoFetchStillAbortsWhenBehind(t *testing.T) {
 // 5. Confirms the error recommends 'git flow feature delete --force' and not 'finish --force'
 // 6. Confirms the branch still exists
 func TestDeleteFeatureDivergedRemoteAborts(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -1466,6 +1494,7 @@ func TestDeleteFeatureDivergedRemoteAborts(t *testing.T) {
 //  3. Runs 'git flow feature delete --fetch' and confirms the ahead state is tolerated (a note is
 //     printed) and the sync gate does NOT abort (no delete/finish --force recommendation)
 func TestDeleteFeatureAheadRemoteTolerated(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -1528,6 +1557,7 @@ func TestDeleteFeatureAheadRemoteTolerated(t *testing.T) {
 // 3. Checks out the parent and runs 'git flow feature delete --fetch' (no --force)
 // 4. The fetch fast-forwards develop so `git branch -d` recognizes the branch as merged
 func TestDeleteFeatureMergedRemotely(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -1596,6 +1626,7 @@ func TestDeleteFeatureMergedRemotely(t *testing.T) {
 //  3. Verifies the command fails with the "not initialized" error and exit code,
 //     rather than a misleading "branch does not exist" error
 func TestDeleteWithoutInitialization(t *testing.T) {
+	t.Parallel()
 	// Setup: plain repo, git-flow NOT initialized
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -1639,6 +1670,7 @@ func TestDeleteWithoutInitialization(t *testing.T) {
 // 2. Attempts to delete a hotfix branch
 // 3. Verifies the command fails with the "not initialized" error and exit code
 func TestDeleteHotfixWithoutInitialization(t *testing.T) {
+	t.Parallel()
 	// Setup: plain repo, git-flow NOT initialized
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

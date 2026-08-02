@@ -30,6 +30,7 @@ func createHookScript(t *testing.T, dir, name, content string) {
 
 // TestStartPreHookBlocks tests that a failing pre-hook prevents branch creation.
 func TestStartPreHookBlocks(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -65,6 +66,7 @@ exit 1
 
 // TestFinishPreHookBlocks tests that a failing pre-hook prevents finish operation.
 func TestFinishPreHookBlocks(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -110,6 +112,7 @@ exit 1
 
 // TestDeletePreHookBlocks tests that a failing pre-hook prevents delete operation.
 func TestDeletePreHookBlocks(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -157,6 +160,7 @@ exit 1
 
 // TestStartPostHookRuns tests that post-hook executes after successful branch creation.
 func TestStartPostHookRuns(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -204,6 +208,7 @@ echo "BRANCH_TYPE=$BRANCH_TYPE" >> "` + markerFile + `"
 
 // TestFinishPostHookReceivesExitCode tests that post-hook receives correct exit code.
 func TestFinishPostHookReceivesExitCode(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -255,6 +260,7 @@ echo "EXIT_CODE=$EXIT_CODE" > "` + markerFile + `"
 
 // TestStartVersionFilterModifiesBranchName tests that version filter modifies the branch name.
 func TestStartVersionFilterModifiesBranchName(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -307,6 +313,7 @@ fi
 // 4. Verifies exit 0 and output contains "Created branch 'release/1.4.0' from 'develop'"
 // 5. Verifies branch release/1.4.0 exists (filter-derived name from empty $1)
 func TestStartDerivesVersionFromFilterWhenNameOmitted(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -349,6 +356,7 @@ fi
 // 4. Verifies output contains "branch name cannot be empty" and NOT "accepts between"
 // 5. Verifies no release branch was created (refs/heads/release/ is empty)
 func TestStartNoFilterNoNameReturnsEmptyNameError(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -396,6 +404,7 @@ func TestStartNoFilterNoNameReturnsEmptyNameError(t *testing.T) {
 // 5. Verifies output contains "branch name cannot be empty"
 // 6. Verifies no release branch was created (refs/heads/release/ is empty)
 func TestStartFilterReturnsEmptyReturnsEmptyNameError(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -444,6 +453,7 @@ exit 0
 // 4. Verifies branch release/1.0.0 exists
 // 5. Verifies output does NOT contain "Version filter changed"
 func TestStartExplicitNameNoFilter(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -477,6 +487,7 @@ func TestStartExplicitNameNoFilter(t *testing.T) {
 // 4. Verifies exit 0 and output contains "Created branch 'hotfix/2.0.1' from 'main'"
 // 5. Verifies branch hotfix/2.0.1 exists (derived name, hotfix start point main)
 func TestStartDerivesVersionFromFilterHotfix(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -512,6 +523,7 @@ echo "2.0.1"
 // 4. Verifies output contains "branch name cannot be empty"
 // 5. Verifies no feature branch was created (refs/heads/feature/ is empty)
 func TestStartFeatureNoFilterNoNameReturnsEmptyNameError(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -554,6 +566,7 @@ func TestStartFeatureNoFilterNoNameReturnsEmptyNameError(t *testing.T) {
 // 3. Verifies non-zero exit and output contains "accepts between" (Cobra arg-count error)
 // 4. Verifies no release branch was created (refs/heads/release/ is empty)
 func TestStartTooManyArgsRejected(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -591,6 +604,7 @@ func TestStartTooManyArgsRejected(t *testing.T) {
 // 5. Verifies output contains "version filter" and NOT "branch name cannot be empty"
 // 6. Verifies no release branch was created (refs/heads/release/ is empty)
 func TestStartFilterNonZeroExitReturnsGitError(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -636,6 +650,7 @@ exit 1
 
 // TestVersionFilterPassedToHooks tests that filtered version is passed to hooks.
 func TestVersionFilterPassedToHooks(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -689,6 +704,7 @@ echo "BRANCH_NAME=$BRANCH_NAME" >> "` + markerFile + `"
 
 // TestFinishTagMessageFilterModifiesTag tests that tag message filter modifies the tag message.
 func TestFinishTagMessageFilterModifiesTag(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -747,6 +763,7 @@ echo "Custom Release: $VERSION - Modified by filter"
 
 // TestStartWithHooksInWorktree tests that hooks work when running commands from a worktree.
 func TestStartWithHooksInWorktree(t *testing.T) {
+	t.Parallel()
 	// Setup main repository
 	mainRepo := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, mainRepo)
@@ -820,6 +837,7 @@ echo "BRANCH=$BRANCH" >> "` + markerFile + `"
 
 // TestPublishPreHookBlocks tests that a failing pre-hook prevents publish operation.
 func TestPublishPreHookBlocks(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -856,6 +874,7 @@ exit 1
 
 // TestPublishPostHookRuns tests that post-hook executes after successful publish.
 func TestPublishPostHookRuns(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -908,6 +927,7 @@ echo "ORIGIN=$ORIGIN" >> "` + markerFile + `"
 
 // TestTrackPreHookBlocks tests that a failing pre-hook prevents track operation.
 func TestTrackPreHookBlocks(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -952,6 +972,7 @@ exit 1
 
 // TestTrackPostHookRuns tests that post-hook executes after successful track.
 func TestTrackPostHookRuns(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -1009,6 +1030,7 @@ echo "ORIGIN=$ORIGIN" >> "` + markerFile + `"
 
 // TestDeletePostHookRuns tests that post-hook executes after successful delete.
 func TestDeletePostHookRuns(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1065,6 +1087,7 @@ echo "EXIT_CODE=$EXIT_CODE" >> "` + markerFile + `"
 
 // TestCustomBranchTypePreHookBlocks tests that hooks work with custom branch types.
 func TestCustomBranchTypePreHookBlocks(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1105,6 +1128,7 @@ exit 1
 // TestCustomBranchTypePostHookReceivesCorrectType tests that post-hooks receive the correct branch type.
 // Uses "support" branch type which is a standard git-flow type but configured with custom prefix.
 func TestCustomBranchTypePostHookReceivesCorrectType(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1164,6 +1188,7 @@ echo "BASE_BRANCH=$BASE_BRANCH" >> "` + markerFile + `"
 
 // TestUpdatePreHookBlocks tests that a failing pre-hook prevents update operation.
 func TestUpdatePreHookBlocks(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1213,6 +1238,7 @@ exit 1
 
 // TestUpdatePostHookRuns tests that post-hook executes after successful update.
 func TestUpdatePostHookRuns(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1287,6 +1313,7 @@ echo "EXIT_CODE=$EXIT_CODE" >> "` + markerFile + `"
 
 // TestUpdateShorthandHookRuns tests that hooks work with the shorthand update command.
 func TestUpdateShorthandHookRuns(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1353,6 +1380,7 @@ echo "BRANCH_NAME=$BRANCH_NAME" >> "` + markerFile + `"
 // TestStartHookReceivesPositionalArguments tests that start hooks receive positional arguments
 // matching git-flow-avh convention: $1=name, $2=origin, $3=branch, $4=base.
 func TestStartHookReceivesPositionalArguments(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1413,6 +1441,7 @@ echo "ARG_COUNT=$#" >> "` + markerFile + `"
 // TestFinishHookReceivesPositionalArguments tests that finish hooks receive positional arguments
 // matching git-flow-avh convention: $1=name, $2=origin, $3=branch.
 func TestFinishHookReceivesPositionalArguments(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1478,6 +1507,7 @@ echo "ARG_COUNT=$#" >> "` + markerFile + `"
 // TestUpdateHookReceivesPositionalArguments tests that update hooks receive positional arguments.
 // Update is a git-flow-next extension: $1=name, $2=origin, $3=branch, $4=base.
 func TestUpdateHookReceivesPositionalArguments(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1557,6 +1587,7 @@ echo "ARG_COUNT=$#" >> "` + markerFile + `"
 // TestHookPositionalArgsMatchEnvVars tests that positional arguments match environment variables.
 // This is critical for git-flow-avh compatibility.
 func TestHookPositionalArgsMatchEnvVars(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1611,6 +1642,7 @@ exit 0
 // TestHotfixVersionFilter tests that version filters work with hotfix branch type.
 // This verifies filters work with branch types beyond just release.
 func TestHotfixVersionFilter(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 

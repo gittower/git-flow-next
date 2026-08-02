@@ -16,6 +16,7 @@ import (
 // 3. Verifies branches are created and configuration is saved correctly
 // 4. Tests error conditions like duplicate branches and invalid parents
 func TestConfigAddBase(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
@@ -86,6 +87,7 @@ func TestConfigAddBase(t *testing.T) {
 // 3. Verifies configurations are saved correctly with proper defaults
 // 4. Tests error conditions like invalid parents and duplicate types
 func TestConfigAddTopic(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
@@ -162,6 +164,7 @@ func TestConfigAddTopic(t *testing.T) {
 // 4. Verifies child branch references are updated
 // 5. Tests error conditions like renaming nonexistent branches
 func TestConfigRenameBase(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
@@ -228,6 +231,7 @@ func TestConfigRenameBase(t *testing.T) {
 // 4. Tests deletion of branch without dependents (should succeed)
 // 5. Verifies configuration is removed but Git branch remains
 func TestConfigDeleteBase(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
@@ -283,6 +287,7 @@ func TestConfigDeleteBase(t *testing.T) {
 // 4. Deletes the topic branch type
 // 5. Verifies configuration is removed from both in-memory and git config
 func TestConfigDeleteTopic(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
@@ -370,6 +375,7 @@ func TestConfigDeleteTopic(t *testing.T) {
 // 4. Tests listing configuration with branches and settings
 // 5. Verifies all branch types and hierarchies are displayed correctly
 func TestConfigList(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
@@ -411,6 +417,7 @@ func TestConfigList(t *testing.T) {
 // 3. Verifies that expected branches are configured for each preset
 // 4. Validates that preset-specific configurations are applied correctly
 func TestPresetConfigurations(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name             string
 		preset           string
@@ -457,6 +464,7 @@ func TestPresetConfigurations(t *testing.T) {
 // 4. Verifies that circular dependencies are detected and prevented
 // 5. Ensures the system remains stable after validation failures
 func TestCircularDependencyValidation(t *testing.T) {
+	t.Parallel()
 	// Setup test repository
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
@@ -621,6 +629,7 @@ func assertNoLineContains(t *testing.T, output, substr, context string) {
 // 4. Verifies no lowercase gitflow.branch.v9_release.* variant section exists
 // 5. Verifies refs/heads/V9_Release was created
 func TestConfigAddBaseUppercaseName(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -649,6 +658,7 @@ func TestConfigAddBaseUppercaseName(t *testing.T) {
 // 4. Verifies success (no "does not exist" error) and the stored parent is V9_Release
 // 5. Verifies refs/heads/V10_Release was created
 func TestConfigAddBaseExactCaseParent(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -681,6 +691,7 @@ func TestConfigAddBaseExactCaseParent(t *testing.T) {
 // 4. Verifies stored parent is canonical V9_Release, no v9_release section
 // 5. Verifies refs/heads/V11_Release was created (from the canonical ref)
 func TestConfigAddBaseDifferentCaseParentUsesCanonicalRef(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -712,6 +723,7 @@ func TestConfigAddBaseDifferentCaseParentUsesCanonicalRef(t *testing.T) {
 // 3. Runs 'config add base V12_Release v9_RELEASE'
 // 4. Verifies stored parent is canonical V9_Release, no case-variant section
 func TestConfigAddBaseMixedCaseParentResolves(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -741,6 +753,7 @@ func TestConfigAddBaseMixedCaseParentResolves(t *testing.T) {
 // 3. Runs 'config add topic candidate develop --starting-point v9_release'
 // 4. Verifies the stored start point is canonical V9_Release, no v9_release section
 func TestConfigAddTopicStartingPointResolvesCaseInsensitively(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -771,6 +784,7 @@ func TestConfigAddTopicStartingPointResolvesCaseInsensitively(t *testing.T) {
 // 5. Verifies defaulted start point (== parent) is also canonical V9_Release
 // 6. Verifies no v9_release case-variant section exists
 func TestConfigAddTopicParentResolvesCaseInsensitively(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -801,6 +815,7 @@ func TestConfigAddTopicParentResolvesCaseInsensitively(t *testing.T) {
 // 4. Verifies the command fails with an "already exists" error naming QA_Feature
 // 5. Verifies no qa_feature section written and original QA_Feature prefix unchanged
 func TestConfigAddTopicCaseOnlyReAddRejected(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -833,6 +848,7 @@ func TestConfigAddTopicCaseOnlyReAddRejected(t *testing.T) {
 // 4. Verifies the command fails with an "already exists" error naming V9_Release
 // 5. Verifies no v9_release section and V9_Release still type base with no main parent
 func TestConfigAddBaseCaseOnlyVariantRejected(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -866,6 +882,7 @@ func TestConfigAddBaseCaseOnlyVariantRejected(t *testing.T) {
 // 4. Verifies gitflow.branch.V9_Release.upstreamStrategy reads rebase
 // 5. Verifies no v9_release duplicate section
 func TestConfigEditBaseResolvesCaseInsensitively(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -895,6 +912,7 @@ func TestConfigEditBaseResolvesCaseInsensitively(t *testing.T) {
 // 4. Verifies gitflow.branch.QA_Feature.upstreamStrategy reads rebase
 // 5. Verifies no qa_feature case-variant section
 func TestConfigEditTopicResolvesCaseInsensitively(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -923,6 +941,7 @@ func TestConfigEditTopicResolvesCaseInsensitively(t *testing.T) {
 // 3. Runs 'config delete base v9_release'
 // 4. Verifies the V9_Release section is fully removed (no V9_Release or v9_release lines)
 func TestConfigDeleteBaseResolvesCaseInsensitively(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -953,6 +972,7 @@ func TestConfigDeleteBaseResolvesCaseInsensitively(t *testing.T) {
 // 5. Verifies V10_Release.parent now reads V9_Stable
 // 6. Verifies refs/heads/V9_Stable exists and refs/heads/V9_Release does not
 func TestConfigRenameBaseResolvesAndUpdatesChildren(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -992,6 +1012,7 @@ func TestConfigRenameBaseResolvesAndUpdatesChildren(t *testing.T) {
 // 4. Verifies the command fails with an "already exists" error naming V9_Release
 // 5. Verifies both original sections and both refs are unchanged, no v9_release section
 func TestConfigRenameBaseCaseCollisionRejected(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -1033,6 +1054,7 @@ func TestConfigRenameBaseCaseCollisionRejected(t *testing.T) {
 // 3. Runs 'config rename base V9_Release v9_release'
 // 4. Verifies exactly one section, now v9_release, and no V9_Release section
 func TestConfigRenameBaseCaseOnlySelfRename(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -1069,6 +1091,7 @@ func TestConfigRenameBaseCaseOnlySelfRename(t *testing.T) {
 // 4. Verifies the command fails with a "does not exist" error for NoSuchBranch
 // 5. Verifies no X section and existing V9_Release section intact
 func TestConfigAddBaseAbsentParentErrors(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -1101,6 +1124,7 @@ func TestConfigAddBaseAbsentParentErrors(t *testing.T) {
 // 4. Verifies success and V10_Release created with canonical parent V9_Release
 // 5. Verifies exactly one V9 section and no duplicate v9_release section
 func TestConfigNoDuplicateFromReloadRoundTrip(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -1134,6 +1158,7 @@ func TestConfigNoDuplicateFromReloadRoundTrip(t *testing.T) {
 // 4. Verifies output lists both names in original case
 // 5. Verifies V10's relationship renders as 'V10_Release → V9_Release'
 func TestConfigListShowsCanonicalCase(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -1169,6 +1194,7 @@ func TestConfigListShowsCanonicalCase(t *testing.T) {
 // 4. Runs 'config delete base staging'
 // 5. Verifies each step succeeds; edit sets rebase; delete removes the section
 func TestConfigLowercaseNamesNoRegression(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -1201,6 +1227,7 @@ func TestConfigLowercaseNamesNoRegression(t *testing.T) {
 // 3. Verifies standard main/develop/feature/release/hotfix config is produced
 // 4. Verifies no lowercase-variant duplicate sections appear
 func TestConfigInitDefaultsUnaffected(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -1225,6 +1252,7 @@ func TestConfigInitDefaultsUnaffected(t *testing.T) {
 // 4. Verifies QA_Feature section removed and QA_Regression present with prefix qa/
 // 5. Verifies no qa_feature case-variant section remains
 func TestConfigRenameTopicResolvesCaseInsensitively(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -1254,6 +1282,7 @@ func TestConfigRenameTopicResolvesCaseInsensitively(t *testing.T) {
 // 3. Runs 'config delete topic qa_feature'
 // 4. Verifies the QA_Feature section is fully removed (no QA_Feature or qa_feature lines)
 func TestConfigDeleteTopicResolvesCaseInsensitively(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 
@@ -1282,6 +1311,7 @@ func TestConfigDeleteTopicResolvesCaseInsensitively(t *testing.T) {
 // 3. Runs 'config edit topic QA_Feature --starting-point v9_release'
 // 4. Verifies stored start point is canonical V9_Release, no v9_release section
 func TestConfigEditTopicStartingPointResolvesCaseInsensitively(t *testing.T) {
+	t.Parallel()
 	tempDir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, tempDir)
 

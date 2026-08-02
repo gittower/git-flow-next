@@ -48,6 +48,7 @@ exit 1
 // 7. Verifies the finish operation fails (hook blocked the merge commit)
 // 8. Verifies the feature branch still exists (not deleted)
 func TestFinishFeatureFailsWithRejectingPreCommitHook(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -111,6 +112,7 @@ func TestFinishFeatureFailsWithRejectingPreCommitHook(t *testing.T) {
 // 8. Verifies the feature branch is deleted
 // 9. Verifies changes are merged into develop
 func TestFinishFeatureWithNoVerifyFlagBypassesHook(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -181,6 +183,7 @@ func TestFinishFeatureWithNoVerifyFlagBypassesHook(t *testing.T) {
 // 9. Verifies the feature branch is deleted
 // 10. Verifies changes are merged into develop
 func TestFinishFeatureWithNoVerifyConfig(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -250,6 +253,7 @@ func TestFinishFeatureWithNoVerifyConfig(t *testing.T) {
 // 9. Verifies the feature branch is deleted
 // 10. Verifies changes are merged into develop
 func TestFinishFeatureNoVerifyFlagOverridesConfig(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -321,6 +325,7 @@ func TestFinishFeatureNoVerifyFlagOverridesConfig(t *testing.T) {
 // 11. Verifies the feature branch is deleted
 // 12. Verifies the resolved changes are merged into develop
 func TestFinishFeatureNoVerifyPersistedThroughContinue(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -416,6 +421,7 @@ func TestFinishFeatureNoVerifyPersistedThroughContinue(t *testing.T) {
 // 9. Verifies tag '1.0.0' was created (tag creation is unaffected by --no-verify)
 // 10. Verifies the release branch is deleted
 func TestFinishReleaseWithNoVerifyStillCreatesTag(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -487,6 +493,7 @@ func TestFinishReleaseWithNoVerifyStillCreatesTag(t *testing.T) {
 // 7. Verifies the finish operation fails (hook is active by default)
 // 8. Verifies the feature branch still exists
 func TestFinishFeatureDefaultDoesNotSkipVerify(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -546,6 +553,7 @@ func TestFinishFeatureDefaultDoesNotSkipVerify(t *testing.T) {
 // 8. Verifies the feature branch is deleted
 // 9. Verifies changes are squashed into develop
 func TestFinishFeatureSquashWithNoVerify(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -637,6 +645,7 @@ func TestFinishFeatureSquashWithNoVerify(t *testing.T) {
 // 7. Verifies the finish operation succeeds (hook bypassed)
 // 8. Verifies the feature branch is deleted
 func TestFinishFeatureShorthandWithNoVerify(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -699,6 +708,7 @@ func TestFinishFeatureShorthandWithNoVerify(t *testing.T) {
 // 6. Attempts to finish without --no-verify flag
 // 7. Verifies behavior (invalid config is treated as false, hook blocks merge)
 func TestFinishFeatureInvalidNoVerifyConfig(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 

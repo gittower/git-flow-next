@@ -15,6 +15,7 @@ import (
 //  3. Assert main gains exactly one new commit (not C1/C2 by hash) carrying both
 //     files, with no merge commit.
 func TestIntegrateSquashOverride(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -52,6 +53,7 @@ func TestIntegrateSquashOverride(t *testing.T) {
 //  3. Assert develop's C sits on top of X (X ancestor of develop, C hash changed),
 //     main advanced to include the rebased C, and no merge commit was created.
 func TestIntegrateRebaseOverrideRewritesSource(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -91,6 +93,7 @@ func TestIntegrateRebaseOverrideRewritesSource(t *testing.T) {
 //  3. Run: git flow integrate develop (no strategy flag).
 //  4. Assert a single squashed commit on main.
 func TestIntegrateConfiguredUpstreamStrategy(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -131,6 +134,7 @@ func TestIntegrateConfiguredUpstreamStrategy(t *testing.T) {
 //  3. Add commits C1, C2 to develop; run integrate develop (no flag).
 //  4. Assert a single squashed commit on main (Layer-2 beats Layer-1).
 func TestIntegrateLayer2OverridesLayer1Strategy(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -169,6 +173,7 @@ func TestIntegrateLayer2OverridesLayer1Strategy(t *testing.T) {
 //  4. Assert a normal merge/fast-forward: both C1 and C2 reachable on main by
 //     their original hashes (not squashed).
 func TestIntegrateLayer2SquashOverriddenByFlag(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 

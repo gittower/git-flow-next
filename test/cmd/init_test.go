@@ -161,6 +161,7 @@ func branchExists(t *testing.T, dir string, branch string) bool {
 
 // TestInitWithDefaults tests the init command with --defaults flag
 func TestInitWithDefaults(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -222,6 +223,7 @@ func TestInitWithDefaults(t *testing.T) {
 
 // TestInitWithAVHConfig tests the init command with existing git-flow-avh configuration
 func TestInitWithAVHConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -295,6 +297,7 @@ func TestInitWithAVHConfig(t *testing.T) {
 
 // TestInitInteractive tests the interactive init command
 func TestInitInteractive(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -336,6 +339,7 @@ func TestInitInteractive(t *testing.T) {
 
 // TestInitWithBranchCreation tests the init command with branch creation
 func TestInitWithBranchCreation(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -363,6 +367,7 @@ func TestInitWithBranchCreation(t *testing.T) {
 
 // TestInitInteractiveWithBranchCreation tests the init command with interactive input and branch creation
 func TestInitInteractiveWithBranchCreation(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -395,6 +400,7 @@ func TestInitInteractiveWithBranchCreation(t *testing.T) {
 // 3. Verifies gitflow.branch.release.tagprefix is empty (not written to config)
 // 4. Verifies gitflow.branch.hotfix.tagprefix is empty (not written to config)
 func TestInitInteractiveDefaultTagPrefixIsEmpty(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -428,6 +434,7 @@ func TestInitInteractiveDefaultTagPrefixIsEmpty(t *testing.T) {
 //  3. Verifies gitflow.branch.release.tagprefix is 'v'
 //  4. Verifies gitflow.branch.hotfix.tagprefix is 'v'
 func TestInitInteractiveExplicitTagPrefix(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -454,6 +461,7 @@ func TestInitInteractiveExplicitTagPrefix(t *testing.T) {
 
 // TestInitWithFlags tests the init command with custom branch prefixes
 func TestInitWithFlags(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -534,6 +542,7 @@ func TestInitWithFlags(t *testing.T) {
 
 // TestInitWithFlagsAndBranches tests the init command with custom prefixes and branch creation
 func TestInitWithFlagsAndBranches(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -573,6 +582,7 @@ func TestInitWithFlagsAndBranches(t *testing.T) {
 
 // TestInitWithDefaultsAndOverrides tests initializing with defaults but overriding specific branch configs
 func TestInitWithDefaultsAndOverrides(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -663,6 +673,7 @@ func TestInitWithDefaultsAndOverrides(t *testing.T) {
 // 3. Verifies gitflow.version is stored in local config (.git/config)
 // 4. Verifies gitflow.branch.main.type is stored in local config
 func TestInitWithLocalScope(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -690,6 +701,7 @@ func TestInitWithLocalScope(t *testing.T) {
 // 3. Verifies gitflow.version is stored in global config
 // 4. Verifies gitflow.version is NOT stored in local config
 func TestInitWithGlobalScope(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -723,6 +735,7 @@ func TestInitWithGlobalScope(t *testing.T) {
 // 4. Verifies gitflow.version is stored in the specified file
 // 5. Verifies gitflow.version is NOT stored in local config
 func TestInitWithFileScope(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -753,6 +766,7 @@ func TestInitWithFileScope(t *testing.T) {
 // 3. Verifies the command fails
 // 4. Verifies the error message mentions mutual exclusivity
 func TestInitWithMutuallyExclusiveScopeFlags(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -772,6 +786,7 @@ func TestInitWithMutuallyExclusiveScopeFlags(t *testing.T) {
 // 2. Runs 'git flow init --defaults --file /nonexistent/dir/config'
 // 3. Verifies the command fails with "config file directory does not exist" error
 func TestInitWithFileNonExistentDirectory(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -794,6 +809,7 @@ func TestInitWithFileNonExistentDirectory(t *testing.T) {
 // 2. Runs 'git flow init --defaults' without any scope flag
 // 3. Verifies gitflow.version is stored in local config (.git/config)
 func TestInitDefaultScopeIsLocal(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -816,6 +832,7 @@ func TestInitDefaultScopeIsLocal(t *testing.T) {
 // 3. Runs 'git flow init --defaults --force --global' to reinitialize
 // 4. Verifies the reconfiguration succeeds and config is in global scope
 func TestInitForceWithGlobalScope(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -848,6 +865,7 @@ func TestInitForceWithGlobalScope(t *testing.T) {
 // 3. Verifies gitflow.version is stored in system config
 // 4. Verifies gitflow.version is NOT stored in local config
 func TestInitWithSystemScope(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -881,6 +899,7 @@ func TestInitWithSystemScope(t *testing.T) {
 // 4. Runs 'git flow init --defaults --force --file <path>' to reinitialize
 // 5. Verifies the reconfiguration succeeds and config is in the specified file
 func TestInitForceWithFileScope(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -914,6 +933,7 @@ func TestInitForceWithFileScope(t *testing.T) {
 // 4. Verifies the command succeeds (not "already initialized")
 // 5. Verifies config is now in BOTH local and global scopes
 func TestInitLocalScopeIgnoresGlobalConfig(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -960,6 +980,7 @@ func TestInitLocalScopeIgnoresGlobalConfig(t *testing.T) {
 // 3. Runs 'git flow init --defaults' (no scope flag) in the same repo
 // 4. Verifies the output mentions "global config" and "--local"
 func TestInitDefaultShowsGlobalSourceMessage(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -997,6 +1018,7 @@ func TestInitDefaultShowsGlobalSourceMessage(t *testing.T) {
 // 3. Runs 'git flow init --defaults' (no scope flag)
 // 4. Verifies it reports already initialized (because merged config finds global)
 func TestInitDefaultMergedConfigCheck(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1033,6 +1055,7 @@ func TestInitDefaultMergedConfigCheck(t *testing.T) {
 // 4. Verifies the command succeeds (not "already initialized")
 // 5. Verifies config is now in BOTH local and global scopes
 func TestInitGlobalScopeIgnoresLocalConfig(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1084,6 +1107,7 @@ func TestInitGlobalScopeIgnoresLocalConfig(t *testing.T) {
 // 3. Verifies gitflow.version is stored in the file at the relative path
 // 4. Verifies the file is created in the expected location (repo directory)
 func TestInitWithFileRelativePath(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1121,6 +1145,7 @@ func TestInitWithFileRelativePath(t *testing.T) {
 // 3. Runs 'git flow init --defaults --force --local' to reinitialize
 // 4. Verifies the reconfiguration succeeds and config is in local scope
 func TestInitForceWithLocalScope(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1157,6 +1182,7 @@ func TestInitForceWithLocalScope(t *testing.T) {
 // 3. Verifies exactly one commit exists on main via 'git rev-list --count main'
 // 4. Verifies the commit has no file changes via 'git diff-tree --no-commit-id -r HEAD'
 func TestInitEmptyRepoCreatesEmptyCommit(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupEmptyTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1193,6 +1219,7 @@ func TestInitEmptyRepoCreatesEmptyCommit(t *testing.T) {
 // 3. Verifies 'main' branch exists via branchExists helper
 // 4. Verifies 'develop' branch exists via branchExists helper
 func TestInitEmptyRepoCreatesBranches(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupEmptyTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1220,6 +1247,7 @@ func TestInitEmptyRepoCreatesBranches(t *testing.T) {
 // 2. Runs 'git flow init --defaults'
 // 3. Verifies no README.md file exists in the working directory via os.Stat
 func TestInitEmptyRepoDoesNotCreateReadme(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupEmptyTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -1293,6 +1321,7 @@ func gitflowConfigKeysLocal(t *testing.T, dir string) string {
 // 6. Verifies the output does NOT contain the opaque 'exit status 128'
 // 7. Verifies the output contains 'git user identity is not configured'
 func TestInitFailsWithoutIdentityShowsActionableError(t *testing.T) {
+	t.Parallel()
 	dir := setupPlainRepo(t)
 	env := isolatedConfigEnv()
 
@@ -1333,6 +1362,7 @@ func TestInitFailsWithoutIdentityShowsActionableError(t *testing.T) {
 //  7. Verifies the second run also fails with exit code 6 and the same message,
 //     and never reports 'already initialized'/'already configured'
 func TestInitWithoutIdentityLeavesNoState(t *testing.T) {
+	t.Parallel()
 	dir := setupPlainRepo(t)
 	env := isolatedConfigEnv()
 
@@ -1384,6 +1414,7 @@ func TestInitWithoutIdentityLeavesNoState(t *testing.T) {
 // 4. Verifies the command fails with exit code 6
 // 5. Verifies the output mentions the missing user.email and the identity error
 func TestInitFailsWithOnlyUserNameSet(t *testing.T) {
+	t.Parallel()
 	dir := setupPlainRepo(t)
 	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.name", "A"); err != nil {
 		t.Fatalf("Failed to set local user.name: %v", err)
@@ -1411,6 +1442,7 @@ func TestInitFailsWithOnlyUserNameSet(t *testing.T) {
 // 4. Verifies the command fails with exit code 6
 // 5. Verifies the output mentions the missing user.name and the identity error
 func TestInitFailsWithOnlyUserEmailSet(t *testing.T) {
+	t.Parallel()
 	dir := setupPlainRepo(t)
 	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.email", "a@b.c"); err != nil {
 		t.Fatalf("Failed to set local user.email: %v", err)
@@ -1440,6 +1472,7 @@ func TestInitFailsWithOnlyUserEmailSet(t *testing.T) {
 // 5. Verifies main and develop base branches were created
 // 6. Verifies the repo is marked initialized (gitflow.initialized/version)
 func TestInitSucceedsWithIdentityOnFreshRepo(t *testing.T) {
+	t.Parallel()
 	dir := setupPlainRepo(t)
 
 	globalConfigFile := filepath.Join(t.TempDir(), "gitconfig-global")
@@ -1479,6 +1512,7 @@ func TestInitSucceedsWithIdentityOnFreshRepo(t *testing.T) {
 // 4. Verifies the command succeeds (identity check is skipped when HasCommits)
 // 5. Verifies base branches exist and the repo is marked initialized
 func TestInitSucceedsWithExistingCommitsWithoutIdentity(t *testing.T) {
+	t.Parallel()
 	dir := setupPlainRepo(t)
 	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.name", "Temp"); err != nil {
 		t.Fatalf("Failed to set temp user.name: %v", err)
@@ -1527,6 +1561,7 @@ func TestInitSucceedsWithExistingCommitsWithoutIdentity(t *testing.T) {
 // 4. Verifies the command succeeds (merged-scope identity read sees the local)
 // 5. Verifies base branches exist and the repo is marked initialized
 func TestInitSucceedsWithLocalIdentityOnly(t *testing.T) {
+	t.Parallel()
 	dir := setupPlainRepo(t)
 	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.name", "Local User"); err != nil {
 		t.Fatalf("Failed to set local user.name: %v", err)
@@ -1560,6 +1595,7 @@ func TestInitSucceedsWithLocalIdentityOnly(t *testing.T) {
 // 4. Verifies no base branches (main, develop) were created
 // 5. Verifies configuration was still written (gitflow.version == '1.0')
 func TestInitNoCreateBranchesSkipsIdentityCheck(t *testing.T) {
+	t.Parallel()
 	dir := setupPlainRepo(t)
 	env := isolatedConfigEnv()
 
@@ -1591,6 +1627,7 @@ func TestInitNoCreateBranchesSkipsIdentityCheck(t *testing.T) {
 //  4. Verifies the command fails with exit code 6
 //  5. Verifies the output mentions user.name and the identity error
 func TestInitWithEmptyIdentityValue(t *testing.T) {
+	t.Parallel()
 	dir := setupPlainRepo(t)
 	if _, err := testutil.RunGit(t, dir, "config", "--local", "user.name", "   "); err != nil {
 		t.Fatalf("Failed to set local whitespace user.name: %v", err)
@@ -1619,6 +1656,7 @@ func TestInitWithEmptyIdentityValue(t *testing.T) {
 // (cfgdir/myconfig), cfgdir/ exists under the invocation dir B/sub but not under
 // the work-tree root B/, so only invocation-dir resolution succeeds.
 func TestInitFileRelativePathResolvesAgainstInvocationDir(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 

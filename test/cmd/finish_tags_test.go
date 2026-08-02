@@ -19,6 +19,7 @@ import (
 // 4. Finishes the feature branch with --tag flag
 // 5. Verifies a tag is created for the feature
 func TestFinishFeatureWithTag(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -80,6 +81,7 @@ func TestFinishFeatureWithTag(t *testing.T) {
 // 6. Verifies a tag is created with custom prefix
 // 7. Verifies the release branch is deleted
 func TestFinishReleaseWithCustomTag(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -144,6 +146,7 @@ func TestFinishReleaseWithCustomTag(t *testing.T) {
 // 6. Verifies the commit message matches the custom message
 // 7. Verifies the release branch is deleted
 func TestFinishReleaseWithCustomMessage(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -214,6 +217,7 @@ func TestFinishReleaseWithCustomMessage(t *testing.T) {
 // 6. Verifies no tag is created
 // 7. Verifies the release branch is deleted
 func TestFinishReleaseWithNoTag(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -276,6 +280,7 @@ func TestFinishReleaseWithNoTag(t *testing.T) {
 // 7. Verifies the commit message matches the file content
 // 8. Verifies the release branch is deleted
 func TestFinishReleaseWithMessageFile(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -371,6 +376,7 @@ func TestFinishReleaseWithMessageFile(t *testing.T) {
 // 7. Verifies the commit message matches the config file content
 // 8. Verifies the release branch is deleted
 func TestFinishReleaseWithConfigMessageFile(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -455,6 +461,7 @@ func TestFinishReleaseWithConfigMessageFile(t *testing.T) {
 // 7. Verifies a tag is created according to config
 // 8. Verifies the branch is deleted
 func TestFinishTagFromBranchConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -522,6 +529,7 @@ func TestFinishTagFromBranchConfig(t *testing.T) {
 // 7. Verifies no tag is created despite config
 // 8. Verifies the branch is deleted
 func TestFinishNotagFromCLI(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -598,6 +606,7 @@ func TestFinishNotagFromCLI(t *testing.T) {
 // 7. Verifies no tag is created
 // 8. Verifies the branch is deleted
 func TestFinishNotagFromConfig(t *testing.T) {
+	t.Parallel()
 	// Setup
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)

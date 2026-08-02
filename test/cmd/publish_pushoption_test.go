@@ -74,6 +74,7 @@ cat  # drain stdin so push doesn't fail
 // 4. Reads captured push options from the remote hook output file
 // 5. Verifies exactly one push option "ci.skip" was received
 func TestPublishWithPushOption(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -107,6 +108,7 @@ func TestPublishWithPushOption(t *testing.T) {
 // 4. Reads captured push options from the remote hook output file
 // 5. Verifies both "ci.skip" and "merge_request.create" were received in order
 func TestPublishWithMultiplePushOptions(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -140,6 +142,7 @@ func TestPublishWithMultiplePushOptions(t *testing.T) {
 // 4. Runs 'git flow feature publish my-feature' (no CLI push options)
 // 5. Reads captured push options and verifies config defaults were sent
 func TestPublishWithConfigPushOptions(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -183,6 +186,7 @@ func TestPublishWithConfigPushOptions(t *testing.T) {
 // 4. Runs 'git flow feature publish my-feature --no-push-option'
 // 5. Reads captured push options and verifies none were sent (count is 0)
 func TestPublishWithNoPushOption(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -219,6 +223,7 @@ func TestPublishWithNoPushOption(t *testing.T) {
 // 4. Runs 'git flow feature publish my-feature --push-option merge_request.create'
 // 5. Reads captured push options and verifies both "ci.skip" and "merge_request.create" received
 func TestPublishWithConfigAndCliPushOptions(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)
@@ -258,6 +263,7 @@ func TestPublishWithConfigAndCliPushOptions(t *testing.T) {
 // 3. Runs 'git flow feature publish my-feature'
 // 4. Reads captured push options and verifies count is 0 or hook file shows no options
 func TestPublishWithoutPushOptions(t *testing.T) {
+	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer testutil.CleanupTestRepo(t, remoteDir)

@@ -34,6 +34,7 @@ func integSetupConflict(t *testing.T, dir, file string) (xCommit, cCommit string
 //  4. Resolve + stage, then git flow integrate --continue.
 //  5. Assert the merge completes, tag is created, children updated, state cleared.
 func TestIntegrateMergeConflictThenContinue(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -106,6 +107,7 @@ func TestIntegrateMergeConflictThenContinue(t *testing.T) {
 //  4. Assert MERGE_HEAD gone, main/develop restored, no tag, state cleared,
 //     HEAD on develop, working tree clean.
 func TestIntegrateMergeConflictThenAbort(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -157,6 +159,7 @@ func TestIntegrateMergeConflictThenAbort(t *testing.T) {
 //  5. Assert rebase-merge gone, develop rewritten onto X, main advanced, no merge
 //     commit, state cleared, HEAD on main.
 func TestIntegrateRebaseConflictThenContinue(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -227,6 +230,7 @@ func TestIntegrateRebaseConflictThenContinue(t *testing.T) {
 //  4. Assert rebase aborted, main/develop restored, no tag, state cleared,
 //     HEAD on develop.
 func TestIntegrateRebaseConflictThenAbort(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -278,6 +282,7 @@ func TestIntegrateRebaseConflictThenAbort(t *testing.T) {
 //  5. Assert main tip and tag object unchanged, no duplicate merge on main,
 //     staging carries main's content, state cleared.
 func TestIntegrateChildUpdateConflictThenContinue(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -357,6 +362,7 @@ func TestIntegrateChildUpdateConflictThenContinue(t *testing.T) {
 //  6. Assert merge + tag preserved, early untouched, rebase-merge gone (proving
 //     child-strategy-aware abort), state cleared.
 func TestIntegrateChildUpdateConflictThenAbort(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -458,6 +464,7 @@ func TestIntegrateChildUpdateConflictThenAbort(t *testing.T) {
 //  2. Run: git flow integrate --continue.
 //  3. Assert non-zero exit and the finish state remains (Action still finish).
 func TestIntegrateContinueRejectsFinishState(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -498,6 +505,7 @@ func TestIntegrateContinueRejectsFinishState(t *testing.T) {
 //  2. Run: git flow integrate --continue.
 //  3. Assert non-zero exit and the update state remains (Action still update).
 func TestIntegrateContinueRejectsUpdateState(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -541,6 +549,7 @@ func TestIntegrateContinueRejectsUpdateState(t *testing.T) {
 //  2. Run: git flow integrate --abort.
 //  3. Assert non-zero exit, finish MERGE_HEAD and state remain.
 func TestIntegrateAbortRejectsFinishState(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -583,6 +592,7 @@ func TestIntegrateAbortRejectsFinishState(t *testing.T) {
 //  2. Run: git flow integrate --abort.
 //  3. Assert exit 0 and nothing mutated.
 func TestIntegrateAbortNoOp(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 

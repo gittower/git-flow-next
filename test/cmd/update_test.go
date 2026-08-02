@@ -16,6 +16,7 @@ import (
 // 4. Updates the feature branch
 // 5. Verifies the changes from develop are in the feature branch
 func TestUpdateFeatureBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -63,6 +64,7 @@ func TestUpdateFeatureBranch(t *testing.T) {
 // 4. Attempts to update the feature branch
 // 5. Verifies the operation fails with merge conflict
 func TestUpdateWithMergeConflict(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -115,6 +117,7 @@ func TestUpdateWithMergeConflict(t *testing.T) {
 // 2. Attempts to update a non-existent branch
 // 3. Verifies the operation fails with appropriate error
 func TestUpdateNonExistentBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -138,6 +141,7 @@ func TestUpdateNonExistentBranch(t *testing.T) {
 // 5. Updates the branch without specifying its name
 // 6. Verifies the changes from develop are in the feature branch
 func TestUpdateCurrentBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -185,6 +189,7 @@ func TestUpdateCurrentBranch(t *testing.T) {
 // 4. Verifies the changes from main are in develop
 // 5. Verifies we're still on the develop branch
 func TestUpdateBaseBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -242,6 +247,7 @@ func TestUpdateBaseBranch(t *testing.T) {
 // TestUpdateWithRebaseFlag tests that the --rebase flag overrides the configured strategy
 // and forces the use of rebase instead of merge
 func TestUpdateWithRebaseFlag(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -307,6 +313,7 @@ func TestUpdateWithRebaseFlag(t *testing.T) {
 // TestUpdateWithRebaseFlagOnMergeBranch tests that --rebase flag overrides
 // merge strategy even when branch is configured to use merge
 func TestUpdateWithRebaseFlagOnMergeBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -377,6 +384,7 @@ func TestUpdateWithRebaseFlagOnMergeBranch(t *testing.T) {
 // TestUpdateWithRebaseFlagAndConflict tests that --rebase flag works correctly
 // This test avoids creating actual conflicts to prevent hanging issues
 func TestUpdateWithRebaseFlagAndConflict(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -437,6 +445,7 @@ func TestUpdateWithRebaseFlagAndConflict(t *testing.T) {
 // TestUpdateWithRebaseFlagOnCurrentBranch tests that --rebase flag works
 // when updating the current branch (no branch name specified)
 func TestUpdateWithRebaseFlagOnCurrentBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -490,6 +499,7 @@ func TestUpdateWithRebaseFlagOnCurrentBranch(t *testing.T) {
 
 // TestUpdateWithRebaseFlagOnReleaseBranch tests --rebase flag on release branches
 func TestUpdateWithRebaseFlagOnReleaseBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -543,6 +553,7 @@ func TestUpdateWithRebaseFlagOnReleaseBranch(t *testing.T) {
 
 // TestUpdateWithRebaseFlagOnHotfixBranch tests --rebase flag on hotfix branches
 func TestUpdateWithRebaseFlagOnHotfixBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -597,6 +608,7 @@ func TestUpdateWithRebaseFlagOnHotfixBranch(t *testing.T) {
 // TestUpdateWithRebaseFlagInvalidBranch tests that --rebase flag fails
 // appropriately on invalid branches
 func TestUpdateWithRebaseFlagInvalidBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -614,6 +626,7 @@ func TestUpdateWithRebaseFlagInvalidBranch(t *testing.T) {
 // TestUpdateWithRebaseFlagOnBaseBranch tests that --rebase flag works
 // on base branches like develop
 func TestUpdateWithRebaseFlagOnBaseBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -670,6 +683,7 @@ func TestUpdateWithRebaseFlagOnBaseBranch(t *testing.T) {
 // 5. Updates the feature branch
 // 6. Verifies the branch is updated from main (config parent) not develop (stored base)
 func TestUpdateDoesNotUseStoredBaseBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
