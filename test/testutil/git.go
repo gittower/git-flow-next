@@ -102,10 +102,12 @@ func RunGit(t *testing.T, dir string, args ...string) (string, error) {
 func RunGitWithEnv(t *testing.T, dir string, env []string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	// Set GIT_EDITOR to colon (:) to prevent interactive editor from opening
-	// The colon is a shell builtin that does nothing and returns success
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=:")
-	cmd.Env = append(cmd.Env, env...)
+	cmd.Env = append(os.Environ(), env...)
+	// Set GIT_EDITOR to colon (:) to prevent interactive editor from opening.
+	// The colon is a shell builtin that does nothing and returns success.
+	// Appended last so it always wins over any caller-supplied GIT_EDITOR
+	// (exec dedups env keeping the final value), keeping git non-interactive.
+	cmd.Env = append(cmd.Env, "GIT_EDITOR=:")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(output), fmt.Errorf("git command failed: %w\nOutput: %s", err, output)
