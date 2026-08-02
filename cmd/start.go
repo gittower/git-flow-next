@@ -38,13 +38,10 @@ func start(repo *git.Repo, branchType string, name string, base string, shouldFe
 		return &errors.NotInitializedError{}
 	}
 
-	// Get git directory for hooks and filters
-	gitDir := repo.GitDir()
-
 	// Apply version filter for any branch type. The filter script
 	// (filter-flow-{branchType}-start-version) decides what to do; when no name
 	// was provided, it runs with an empty version argument and may supply one.
-	filteredName, err := hooks.RunVersionFilter(gitDir, branchType, name)
+	filteredName, err := hooks.RunVersionFilter(repo, branchType, name)
 	if err != nil {
 		return &errors.GitError{Operation: "run version filter", Err: err}
 	}
@@ -103,7 +100,7 @@ func start(repo *git.Repo, branchType string, name string, base string, shouldFe
 	}
 
 	// Run start operation wrapped with hooks
-	return hooks.WithHooks(gitDir, branchType, hooks.HookActionStart, hookCtx, func() error {
+	return hooks.WithHooks(repo, branchType, hooks.HookActionStart, hookCtx, func() error {
 		return executeStart(repo, branchType, name, base, shouldFetch, cfg, branchConfig, fullBranchName, startPoint)
 	})
 }

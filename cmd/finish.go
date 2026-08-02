@@ -295,8 +295,6 @@ func finishBranch(repo *git.Repo, cfg *config.Config, branchType string, name st
 	resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
 
 	// Run pre-hook before starting finish operation
-	gitDir := repo.GitDir()
-
 	hookCtx := hooks.HookContext{
 		BranchType: branchType,
 		BranchName: shortName,
@@ -309,7 +307,7 @@ func finishBranch(repo *git.Repo, cfg *config.Config, branchType string, name st
 		hookCtx.Version = shortName
 	}
 
-	if err := hooks.RunPreHook(gitDir, branchType, hooks.HookActionFinish, hookCtx); err != nil {
+	if err := hooks.RunPreHook(repo, branchType, hooks.HookActionFinish, hookCtx); err != nil {
 		return err
 	}
 
@@ -692,8 +690,6 @@ func handleCreateTagStep(repo *git.Repo, cfg *config.Config, state *mergestate.M
 	if resolvedOptions.ShouldTag {
 		// Apply tag message filter for any branch type configured with tagging
 		// The filter script (filter-flow-{branchType}-finish-tag-message) decides what to do
-		gitDir := repo.GitDir()
-
 		remote := cfg.Remote
 
 		ctx := hooks.FilterContext{
@@ -706,7 +702,7 @@ func handleCreateTagStep(repo *git.Repo, cfg *config.Config, state *mergestate.M
 			Origin:     remote,
 		}
 
-		filteredMessage, err := hooks.RunTagMessageFilter(gitDir, state.BranchType, ctx)
+		filteredMessage, err := hooks.RunTagMessageFilter(repo, state.BranchType, ctx)
 		if err != nil {
 			return &errors.GitError{Operation: "run tag message filter", Err: err}
 		}
@@ -812,7 +808,6 @@ func handleDeleteBranchStep(repo *git.Repo, cfg *config.Config, state *mergestat
 	fmt.Printf("Successfully finished branch '%s' and updated %d child base branches\n", state.FullBranchName, len(state.UpdatedBranches))
 
 	// Run post-hook after successful completion
-	gitDir := repo.GitDir()
 	hookCtx := hooks.HookContext{
 		BranchType: state.BranchType,
 		BranchName: state.BranchName,
@@ -826,7 +821,7 @@ func handleDeleteBranchStep(repo *git.Repo, cfg *config.Config, state *mergestat
 		hookCtx.Version = state.BranchName
 	}
 
-	result := hooks.RunPostHook(gitDir, state.BranchType, hooks.HookActionFinish, hookCtx)
+	result := hooks.RunPostHook(repo, state.BranchType, hooks.HookActionFinish, hookCtx)
 	if result.Executed && result.Output != "" {
 		fmt.Print(result.Output)
 	}

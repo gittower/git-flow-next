@@ -97,9 +97,6 @@ func publish(repo *git.Repo, branchType string, name string, cliPushOptions []st
 		return &errors.RemoteNotConfiguredError{Remote: remote, Operation: "publish branch"}
 	}
 
-	// Get git directory for hooks
-	gitDir := repo.GitDir()
-
 	// Build hook context
 	hookCtx := hooks.HookContext{
 		BranchType: branchType,
@@ -120,7 +117,7 @@ func publish(repo *git.Repo, branchType string, name string, cliPushOptions []st
 	pushOptions := resolvePushOptions(repo, cfg, branchType, cliPushOptions, noPushOption)
 
 	// Run publish operation wrapped with hooks
-	return hooks.WithHooks(gitDir, branchType, hooks.HookActionPublish, hookCtx, func() error {
+	return hooks.WithHooks(repo, branchType, hooks.HookActionPublish, hookCtx, func() error {
 		return executePublish(repo, fullBranchName, shortName, branchType, remote, pushOptions)
 	})
 }

@@ -62,9 +62,6 @@ func executeDelete(repo *git.Repo, branchType string, name string, force *bool, 
 		return &errors.BranchNotFoundError{BranchName: fullBranchName}
 	}
 
-	// Get git directory for hooks
-	gitDir := repo.GitDir()
-
 	// Get remote name from config
 	remoteName := cfg.Remote
 
@@ -81,7 +78,7 @@ func executeDelete(repo *git.Repo, branchType string, name string, force *bool, 
 	}
 
 	// Run delete operation wrapped with hooks
-	return hooks.WithHooks(gitDir, branchType, hooks.HookActionDelete, hookCtx, func() error {
+	return hooks.WithHooks(repo, branchType, hooks.HookActionDelete, hookCtx, func() error {
 		return performDelete(repo, branchType, name, fullBranchName, branchConfig, force, remote, fetch, cfg)
 	})
 }
