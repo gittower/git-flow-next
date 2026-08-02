@@ -25,7 +25,8 @@ import (
 // forces exit 1) is what makes the top-level surface exit 3 for merge-in-progress,
 // no-merge, and unresolved-conflict conditions, consistent with finish/integrate.
 func UpdateCommand(branchType string, name string, useRebase, continueOp, abortOp bool) {
-	if err := executeUpdate(branchType, name, useRebase, continueOp, abortOp); err != nil {
+	repo := mustOpenRepo()
+	if err := executeUpdate(repo, branchType, name, useRebase, continueOp, abortOp); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -40,9 +41,9 @@ func UpdateCommand(branchType string, name string, useRebase, continueOp, abortO
 // executeUpdate updates a branch with changes from its parent branch. It owns the
 // resumable dispatch for update: a foreign-operation guard, its own
 // --continue/--abort handling, and the initial update attempt.
-func executeUpdate(branchType string, name string, useRebase, continueOp, abortOp bool) error {
+func executeUpdate(repo *git.Repo, branchType string, name string, useRebase, continueOp, abortOp bool) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -51,7 +52,7 @@ func executeUpdate(branchType string, name string, useRebase, continueOp, abortO
 	}
 
 	// Get configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -59,13 +60,13 @@ func executeUpdate(branchType string, name string, useRebase, continueOp, abortO
 	// Foreign-operation guard (#143): refuse a foreign in-progress finish/integrate
 	// (or an unknown-Action state) before dispatch, so update never resumes or
 	// aborts an operation it does not own.
-	if err := refuseIfForeignOperation(cfg, "update"); err != nil {
+	if err := refuseIfForeignOperation(repo, cfg, "update"); err != nil {
 		return err
 	}
 
 	// Own-state dispatch: resume/abort an update we own.
-	if mergestate.IsMergeInProgress() {
-		state, err := mergestate.LoadMergeState()
+	if mergestate.IsMergeInProgress(repo) {
+		state, err := mergestate.LoadMergeState(repo)
 		if err != nil {
 			return &errors.GitError{Operation: "load merge state", Err: err}
 		}
@@ -74,10 +75,10 @@ func executeUpdate(branchType string, name string, useRebase, continueOp, abortO
 			return &errors.MergeInProgressError{Action: state.Action, BranchName: state.FullBranchName, BranchType: topicTypeOrEmpty(cfg, state.BranchType)}
 		}
 		if abortOp {
-			return handleAbort(state)
+			return handleAbort(repo, state)
 		}
 		if continueOp {
-			return handleUpdateContinue(state)
+			return handleUpdateContinue(repo, state)
 		}
 		// Plain invocation over our own in-progress update: report it rather than
 		// silently restarting.
@@ -102,7 +103,7 @@ func executeUpdate(branchType string, name string, useRebase, continueOp, abortO
 		// If branch type is specified, construct full branch name
 		if name == "" {
 			// If no name provided, try to get current branch and verify it's of the correct type
-			currentBranch, err := git.GetCurrentBranch()
+			currentBranch, err := repo.GetCurrentBranch()
 			if err != nil {
 				return &errors.GitError{Operation: "get current branch", Err: err}
 			}
@@ -127,7 +128,7 @@ func executeUpdate(branchType string, name string, useRebase, continueOp, abortO
 	} else {
 		// No branch type specified, use provided branch name or current branch
 		if name == "" {
-			currentBranch, err := git.GetCurrentBranch()
+			currentBranch, err := repo.GetCurrentBranch()
 			if err != nil {
 				return &errors.GitError{Operation: "get current branch", Err: err}
 			}
@@ -140,7 +141,7 @@ func executeUpdate(branchType string, name string, useRebase, continueOp, abortO
 	}
 
 	// Check if branch exists
-	if err := git.BranchExists(branchName); err != nil {
+	if err := repo.BranchExists(branchName); err != nil {
 		return &errors.BranchNotFoundError{BranchName: branchName}
 	}
 
@@ -151,7 +152,7 @@ func executeUpdate(branchType string, name string, useRebase, continueOp, abortO
 	}
 
 	// Check if parent branch exists
-	if err := git.BranchExists(parentBranch); err != nil {
+	if err := repo.BranchExists(parentBranch); err != nil {
 		return &errors.BranchNotFoundError{BranchName: parentBranch}
 	}
 
@@ -201,10 +202,7 @@ func executeUpdate(branchType string, name string, useRebase, continueOp, abortO
 	// If we detected a branch type, run with hooks
 	if detectedBranchType != "" {
 		// Get git directory for hooks
-		gitDir, err := git.GetGitDir()
-		if err != nil {
-			return &errors.GitError{Operation: "get git directory", Err: err}
-		}
+		gitDir := repo.GitDir()
 
 		// Get remote name from config
 		remoteName := cfg.Remote
@@ -223,26 +221,26 @@ func executeUpdate(branchType string, name string, useRebase, continueOp, abortO
 
 		// Run update operation wrapped with hooks
 		return hooks.WithHooks(gitDir, detectedBranchType, hooks.HookActionUpdate, hookCtx, func() error {
-			return update.UpdateBranchFromParent(branchName, parentBranch, strategy, true, state)
+			return update.UpdateBranchFromParent(repo, branchName, parentBranch, strategy, true, state)
 		})
 	}
 
 	// No branch type detected, run without hooks
-	return update.UpdateBranchFromParent(branchName, parentBranch, strategy, true, state)
+	return update.UpdateBranchFromParent(repo, branchName, parentBranch, strategy, true, state)
 }
 
 // handleUpdateContinue completes an in-progress update after conflict resolution.
 // Unlike finish, it completes ONLY the merge/rebase — no tag, no child update, no
 // branch deletion — then clears the merge state. A rebase that re-conflicts on a
 // later replayed commit stays resumable (UnresolvedConflictsError, state kept).
-func handleUpdateContinue(state *mergestate.MergeState) error {
-	if git.HasConflicts() {
+func handleUpdateContinue(repo *git.Repo, state *mergestate.MergeState) error {
+	if repo.HasConflicts() {
 		return &errors.UnresolvedConflictsError{}
 	}
 
 	switch state.MergeStrategy {
 	case strategyRebase:
-		err := git.RebaseContinue()
+		err := repo.RebaseContinue()
 		if err != nil {
 			if strings.Contains(err.Error(), "conflict") {
 				// A later replayed commit conflicts: stay resumable.
@@ -261,12 +259,12 @@ func handleUpdateContinue(state *mergestate.MergeState) error {
 
 	default: // merge
 		mergeMsg := fmt.Sprintf("Merge branch '%s' into %s", state.ParentBranch, state.FullBranchName)
-		if err := git.Commit(mergeMsg, state.NoVerify); err != nil {
+		if err := repo.Commit(mergeMsg, state.NoVerify); err != nil {
 			return &errors.GitError{Operation: "commit merge", Err: err}
 		}
 	}
 
-	if err := mergestate.ClearMergeState(); err != nil {
+	if err := mergestate.ClearMergeState(repo); err != nil {
 		return &errors.GitError{Operation: "clear merge state", Err: err}
 	}
 

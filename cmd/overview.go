@@ -25,7 +25,8 @@ This command displays the current git-flow configuration and lists all active to
 
 // OverviewCommand is the implementation of the overview command
 func OverviewCommand() {
-	if err := overview(); err != nil {
+	repo := mustOpenRepo()
+	if err := overview(repo); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -38,9 +39,9 @@ func OverviewCommand() {
 }
 
 // overview performs the actual overview logic and returns any errors
-func overview() error {
+func overview(repo *git.Repo) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -49,7 +50,7 @@ func overview() error {
 	}
 
 	// Get configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -128,13 +129,13 @@ func overview() error {
 	}
 
 	// Get all branches for active topic branches section
-	branches, err := git.ListBranches()
+	branches, err := repo.ListBranches()
 	if err != nil {
 		return &errors.GitError{Operation: "list branches", Err: err}
 	}
 
 	// Get current branch
-	currentBranch, err := git.GetCurrentBranch()
+	currentBranch, err := repo.GetCurrentBranch()
 	if err != nil {
 		return &errors.GitError{Operation: "get current branch", Err: err}
 	}

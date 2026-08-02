@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/gittower/git-flow-next/internal/config"
-	"github.com/gittower/git-flow-next/internal/git"
 	"github.com/spf13/cobra"
 )
 
@@ -268,11 +267,15 @@ func runShorthandUpdate(useRebase, continueOp, abortOp bool, args []string) erro
 
 // detectBranchTypeAndName detects type and name from current branch
 func detectBranchTypeAndName() (string, string, error) {
-	cfg, err := config.LoadConfig()
+	repo, err := openRepo()
 	if err != nil {
 		return "", "", err
 	}
-	currentBranch, err := git.GetCurrentBranch()
+	cfg, err := config.Load(repo)
+	if err != nil {
+		return "", "", err
+	}
+	currentBranch, err := repo.GetCurrentBranch()
 	if err != nil {
 		return "", "", err
 	}
@@ -314,7 +317,11 @@ func detectBranchTypeAndName() (string, string, error) {
 
 // detectBranchTypeAndNameFromString detects from a given string (for delete [name])
 func detectBranchTypeAndNameFromString(branch string) (string, string, error) {
-	cfg, err := config.LoadConfig()
+	repo, err := openRepo()
+	if err != nil {
+		return "", "", err
+	}
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return "", "", err
 	}

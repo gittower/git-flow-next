@@ -12,7 +12,8 @@ import (
 
 // CheckoutCommand handles checking out a topic branch
 func CheckoutCommand(branchType string, nameOrPrefix string, showCommands bool) {
-	if err := executeCheckout(branchType, nameOrPrefix, showCommands); err != nil {
+	repo := mustOpenRepo()
+	if err := executeCheckout(repo, branchType, nameOrPrefix, showCommands); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -25,9 +26,9 @@ func CheckoutCommand(branchType string, nameOrPrefix string, showCommands bool) 
 }
 
 // executeCheckout performs the actual branch checkout logic and returns any errors
-func executeCheckout(branchType string, nameOrPrefix string, showCommands bool) error {
+func executeCheckout(repo *git.Repo, branchType string, nameOrPrefix string, showCommands bool) error {
 	// Load configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -40,7 +41,7 @@ func executeCheckout(branchType string, nameOrPrefix string, showCommands bool) 
 
 	// If no name/prefix provided, list available branches and return
 	if nameOrPrefix == "" {
-		branches, err := git.ListBranches()
+		branches, err := repo.ListBranches()
 		if err != nil {
 			return &errors.GitError{Operation: "list branches", Err: err}
 		}
@@ -67,10 +68,10 @@ func executeCheckout(branchType string, nameOrPrefix string, showCommands bool) 
 	}
 
 	// Check if branch exists
-	err = git.BranchExists(fullBranchName)
+	err = repo.BranchExists(fullBranchName)
 	if err != nil {
 		// If exact match not found, try prefix match
-		branches, err := git.ListBranches()
+		branches, err := repo.ListBranches()
 		if err != nil {
 			return &errors.GitError{Operation: "list branches", Err: err}
 		}
@@ -99,7 +100,7 @@ func executeCheckout(branchType string, nameOrPrefix string, showCommands bool) 
 	}
 
 	// Checkout the branch
-	err = git.Checkout(fullBranchName)
+	err = repo.Checkout(fullBranchName)
 	if err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("checkout branch '%s'", fullBranchName), Err: err}
 	}

@@ -7,41 +7,30 @@ import (
 
 	"github.com/gittower/git-flow-next/internal/config"
 	"github.com/gittower/git-flow-next/internal/git"
+	"github.com/gittower/git-flow-next/test/testutil"
 	"github.com/stretchr/testify/assert"
 )
 
+// setupTestRepo creates a temporary git repository and returns its path. Unlike
+// the previous helper, it does not change the process working directory: tests
+// open a git.Repo handle for the returned dir instead.
 func setupTestRepo(t *testing.T) string {
-	// Create a temporary directory
+	t.Helper()
 	dir, err := os.MkdirTemp("", "git-flow-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 
-	// Change to the temporary directory
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("Failed to change to temp dir: %v", err)
+	run := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("git %v failed: %v", args, err)
+		}
 	}
-
-	// Initialize git repo
-	cmd := exec.Command("git", "init")
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to initialize git repo: %v", err)
-	}
-
-	// Configure git user
-	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to configure git user name: %v", err)
-	}
-
-	cmd = exec.Command("git", "config", "user.email", "test@example.com")
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to configure git user email: %v", err)
-	}
-
+	run("init")
+	run("config", "user.name", "Test User")
+	run("config", "user.email", "test@example.com")
 	return dir
 }
 
@@ -51,49 +40,52 @@ func cleanupTestRepo(t *testing.T, dir string) {
 	}
 }
 
+// setConfig sets a git config value in dir.
+func setConfig(t *testing.T, dir, key, value string) {
+	t.Helper()
+	cmd := exec.Command("git", "config", key, value)
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to set git config %s: %v", key, err)
+	}
+}
+
+func openRepo(t *testing.T, dir string) *git.Repo {
+	t.Helper()
+	repo, err := git.Open(dir)
+	if err != nil {
+		t.Fatalf("git.Open(%q) failed: %v", dir, err)
+	}
+	return repo
+}
+
+// TestLoadConfigCaseInsensitive verifies that branch property keys are matched
+// case-insensitively when loading configuration.
+// Steps:
+// 1. Sets up a test repository
+// 2. Sets startPoint keys with mixed casing (startPoint, StartPoint, STARTPOINT)
+// 3. Loads config through a git.Repo handle for the repository
+// 4. Verifies each branch's start point resolves regardless of key case
 func TestLoadConfigCaseInsensitive(t *testing.T) {
-	// Setup
+	t.Parallel()
 	dir := setupTestRepo(t)
 	defer cleanupTestRepo(t, dir)
 
-	// Set config values with different cases
-	testCases := []struct {
-		key   string
-		value string
-	}{
-		{"gitflow.branch.feature.startPoint", "develop"},
-		{"gitflow.branch.release.StartPoint", "develop"},
-		{"gitflow.branch.hotfix.STARTPOINT", "main"},
-	}
+	setConfig(t, dir, "gitflow.branch.feature.startPoint", "develop")
+	setConfig(t, dir, "gitflow.branch.release.StartPoint", "develop")
+	setConfig(t, dir, "gitflow.branch.hotfix.STARTPOINT", "main")
+	setConfig(t, dir, "gitflow.version", "1.0")
 
-	for _, tc := range testCases {
-		cmd := exec.Command("git", "config", tc.key, tc.value)
-		cmd.Dir = dir
-		if err := cmd.Run(); err != nil {
-			t.Fatalf("Failed to set git config %s: %v", tc.key, err)
-		}
-	}
-
-	// Set version to mark as initialized
-	cmd := exec.Command("git", "config", "gitflow.version", "1.0")
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to set gitflow version: %v", err)
-	}
-
-	// Load config
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(openRepo(t, dir))
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Verify all start points are loaded correctly regardless of case
 	expectedStartPoints := map[string]string{
 		"feature": "develop",
 		"release": "develop",
 		"hotfix":  "main",
 	}
-
 	for branch, expected := range expectedStartPoints {
 		if actual := cfg.Branches[branch].StartPoint; actual != expected {
 			t.Errorf("Branch %s: expected start point %s, got %s", branch, expected, actual)
@@ -101,46 +93,31 @@ func TestLoadConfigCaseInsensitive(t *testing.T) {
 	}
 }
 
+// TestLoadConfigWithMixedCaseProperties verifies that all branch config
+// properties are parsed regardless of the casing used in their config keys.
+// Steps:
+// 1. Sets up a test repository
+// 2. Sets the full set of feature branch properties with mixed-case keys
+// 3. Loads config through a git.Repo handle for the repository
+// 4. Verifies each parsed feature property matches the expected value
 func TestLoadConfigWithMixedCaseProperties(t *testing.T) {
-	// Setup
+	t.Parallel()
 	dir := setupTestRepo(t)
 	defer cleanupTestRepo(t, dir)
 
-	// Set config values with mixed case for different properties
-	configs := []struct {
-		key   string
-		value string
-	}{
-		{"gitflow.branch.feature.Type", "topic"},
-		{"gitflow.branch.feature.parent", "develop"},
-		{"gitflow.branch.feature.UpstreamStrategy", "rebase"},
-		{"gitflow.branch.feature.downstreamStrategy", "squash"},
-		{"gitflow.branch.feature.PREFIX", "feature/"},
-		{"gitflow.branch.feature.AutoUpdate", "true"},
-	}
+	setConfig(t, dir, "gitflow.branch.feature.Type", "topic")
+	setConfig(t, dir, "gitflow.branch.feature.parent", "develop")
+	setConfig(t, dir, "gitflow.branch.feature.UpstreamStrategy", "rebase")
+	setConfig(t, dir, "gitflow.branch.feature.downstreamStrategy", "squash")
+	setConfig(t, dir, "gitflow.branch.feature.PREFIX", "feature/")
+	setConfig(t, dir, "gitflow.branch.feature.AutoUpdate", "true")
+	setConfig(t, dir, "gitflow.version", "1.0")
 
-	for _, cfg := range configs {
-		cmd := exec.Command("git", "config", cfg.key, cfg.value)
-		cmd.Dir = dir
-		if err := cmd.Run(); err != nil {
-			t.Fatalf("Failed to set git config %s: %v", cfg.key, err)
-		}
-	}
-
-	// Set version to mark as initialized
-	cmd := exec.Command("git", "config", "gitflow.version", "1.0")
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to set gitflow version: %v", err)
-	}
-
-	// Load config
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(openRepo(t, dir))
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Verify all properties are loaded correctly regardless of case
 	feature := cfg.Branches["feature"]
 	expected := config.BranchConfig{
 		Type:               "topic",
@@ -150,7 +127,6 @@ func TestLoadConfigWithMixedCaseProperties(t *testing.T) {
 		Prefix:             "feature/",
 		AutoUpdate:         true,
 	}
-
 	if feature.Type != expected.Type {
 		t.Errorf("Expected Type %s, got %s", expected.Type, feature.Type)
 	}
@@ -171,46 +147,47 @@ func TestLoadConfigWithMixedCaseProperties(t *testing.T) {
 	}
 }
 
+// TestApplyOverrides_NoOverrides verifies that applying empty overrides leaves
+// the default branch configuration intact.
+// Steps:
+// 1. Builds a default config
+// 2. Applies an empty ConfigOverrides
+// 3. Verifies all default branches retain their types, parents, and start points
 func TestApplyOverrides_NoOverrides(t *testing.T) {
+	t.Parallel()
 	cfg := config.DefaultConfig()
 	cfg = config.ApplyOverrides(cfg, config.ConfigOverrides{})
 
-	// Check main branch (base branch)
 	mainConfig, exists := cfg.Branches["main"]
 	assert.True(t, exists)
 	assert.Equal(t, string(config.BranchTypeBase), mainConfig.Type)
 	assert.Equal(t, "", mainConfig.Parent)
 	assert.Equal(t, "", mainConfig.StartPoint)
 
-	// Check develop branch (base branch)
 	developConfig, exists := cfg.Branches["develop"]
 	assert.True(t, exists)
 	assert.Equal(t, string(config.BranchTypeBase), developConfig.Type)
 	assert.Equal(t, "main", developConfig.Parent)
 	assert.Equal(t, "", developConfig.StartPoint)
 
-	// Check feature branch
 	featureConfig, exists := cfg.Branches["feature"]
 	assert.True(t, exists)
 	assert.Equal(t, "feature/", featureConfig.Prefix)
 	assert.Equal(t, "develop", featureConfig.Parent)
 	assert.Equal(t, "develop", featureConfig.StartPoint)
 
-	// Check release branch
 	releaseConfig, exists := cfg.Branches["release"]
 	assert.True(t, exists)
 	assert.Equal(t, "release/", releaseConfig.Prefix)
 	assert.Equal(t, "main", releaseConfig.Parent)
 	assert.Equal(t, "develop", releaseConfig.StartPoint)
 
-	// Check hotfix branch
 	hotfixConfig, exists := cfg.Branches["hotfix"]
 	assert.True(t, exists)
 	assert.Equal(t, "hotfix/", hotfixConfig.Prefix)
 	assert.Equal(t, "main", hotfixConfig.Parent)
 	assert.Equal(t, "main", hotfixConfig.StartPoint)
 
-	// Check support branch
 	supportConfig, exists := cfg.Branches["support"]
 	assert.True(t, exists)
 	assert.Equal(t, "support/", supportConfig.Prefix)
@@ -218,59 +195,69 @@ func TestApplyOverrides_NoOverrides(t *testing.T) {
 	assert.Equal(t, "main", supportConfig.StartPoint)
 }
 
+// TestApplyOverrides_CustomBranchNames verifies that overriding the main and
+// develop branch names rekeys the branches and updates dependent parents.
+// Steps:
+// 1. Builds a default config
+// 2. Applies overrides setting custom main and develop branch names
+// 3. Verifies the custom-named base branches exist with correct parents
+// 4. Verifies feature/release/hotfix/support parents point at the custom names
+// 5. Verifies the original "main" and "develop" keys no longer exist
 func TestApplyOverrides_CustomBranchNames(t *testing.T) {
+	t.Parallel()
 	cfg := config.DefaultConfig()
 	cfg = config.ApplyOverrides(cfg, config.ConfigOverrides{
 		MainBranch:    "custom-main",
 		DevelopBranch: "custom-dev",
 	})
 
-	// Check main branch (base branch)
 	mainConfig, exists := cfg.Branches["custom-main"]
 	assert.True(t, exists)
 	assert.Equal(t, string(config.BranchTypeBase), mainConfig.Type)
 	assert.Equal(t, "", mainConfig.Parent)
 	assert.Equal(t, "", mainConfig.StartPoint)
 
-	// Check develop branch (base branch)
 	developConfig, exists := cfg.Branches["custom-dev"]
 	assert.True(t, exists)
 	assert.Equal(t, string(config.BranchTypeBase), developConfig.Type)
 	assert.Equal(t, "custom-main", developConfig.Parent)
 	assert.Equal(t, "", developConfig.StartPoint)
 
-	// Check feature branch parent and start point
 	featureConfig, exists := cfg.Branches["feature"]
 	assert.True(t, exists)
 	assert.Equal(t, "custom-dev", featureConfig.Parent)
 	assert.Equal(t, "custom-dev", featureConfig.StartPoint)
 
-	// Check release branch parent and start point
 	releaseConfig, exists := cfg.Branches["release"]
 	assert.True(t, exists)
 	assert.Equal(t, "custom-main", releaseConfig.Parent)
 	assert.Equal(t, "custom-dev", releaseConfig.StartPoint)
 
-	// Check hotfix branch parent and start point
 	hotfixConfig, exists := cfg.Branches["hotfix"]
 	assert.True(t, exists)
 	assert.Equal(t, "custom-main", hotfixConfig.Parent)
 	assert.Equal(t, "custom-main", hotfixConfig.StartPoint)
 
-	// Check support branch parent and start point
 	supportConfig, exists := cfg.Branches["support"]
 	assert.True(t, exists)
 	assert.Equal(t, "custom-main", supportConfig.Parent)
 	assert.Equal(t, "custom-main", supportConfig.StartPoint)
 
-	// Check old names don't exist
 	_, exists = cfg.Branches["main"]
 	assert.False(t, exists)
 	_, exists = cfg.Branches["develop"]
 	assert.False(t, exists)
 }
 
+// TestApplyOverrides_CustomPrefixes verifies that custom branch prefix overrides
+// are applied without altering parents or start points.
+// Steps:
+// 1. Builds a default config
+// 2. Applies overrides setting custom feature/release/hotfix/support prefixes
+// 3. Verifies each branch adopts its custom prefix
+// 4. Verifies each branch retains its default parent and start point
 func TestApplyOverrides_CustomPrefixes(t *testing.T) {
+	t.Parallel()
 	cfg := config.DefaultConfig()
 	cfg = config.ApplyOverrides(cfg, config.ConfigOverrides{
 		FeaturePrefix: "f/",
@@ -279,7 +266,6 @@ func TestApplyOverrides_CustomPrefixes(t *testing.T) {
 		SupportPrefix: "s/",
 	})
 
-	// Check prefixes while verifying parents and start points remain unchanged
 	featureConfig := cfg.Branches["feature"]
 	assert.Equal(t, "f/", featureConfig.Prefix)
 	assert.Equal(t, "develop", featureConfig.Parent)
@@ -301,13 +287,20 @@ func TestApplyOverrides_CustomPrefixes(t *testing.T) {
 	assert.Equal(t, "main", supportConfig.StartPoint)
 }
 
+// TestApplyOverrides_CustomTagPrefix verifies that a custom tag prefix override
+// is applied to the tagging branches.
+// Steps:
+// 1. Builds a default config
+// 2. Applies an override setting a custom tag prefix
+// 3. Verifies the release and hotfix branches adopt the custom tag prefix
+// 4. Verifies their parents and start points are unchanged
 func TestApplyOverrides_CustomTagPrefix(t *testing.T) {
+	t.Parallel()
 	cfg := config.DefaultConfig()
 	cfg = config.ApplyOverrides(cfg, config.ConfigOverrides{
 		TagPrefix: "v",
 	})
 
-	// Check tag prefixes while verifying parents and start points remain unchanged
 	releaseConfig := cfg.Branches["release"]
 	assert.Equal(t, "v", releaseConfig.TagPrefix)
 	assert.Equal(t, "main", releaseConfig.Parent)
@@ -319,7 +312,16 @@ func TestApplyOverrides_CustomTagPrefix(t *testing.T) {
 	assert.Equal(t, "main", hotfixConfig.StartPoint)
 }
 
+// TestApplyOverrides_AllOverrides verifies that applying the full set of
+// overrides together produces a consistent, fully customized config.
+// Steps:
+// 1. Builds a default config
+// 2. Applies custom branch names, prefixes, and tag prefix together
+// 3. Verifies the custom-named base branches exist with correct parents
+// 4. Verifies feature/release/hotfix/support prefixes, parents, and start points
+// 5. Verifies the custom tag prefix on release and hotfix branches
 func TestApplyOverrides_AllOverrides(t *testing.T) {
+	t.Parallel()
 	cfg := config.DefaultConfig()
 	cfg = config.ApplyOverrides(cfg, config.ConfigOverrides{
 		MainBranch:    "custom-main",
@@ -331,182 +333,103 @@ func TestApplyOverrides_AllOverrides(t *testing.T) {
 		TagPrefix:     "v",
 	})
 
-	// Check main branch (base branch)
 	mainConfig, exists := cfg.Branches["custom-main"]
 	assert.True(t, exists)
 	assert.Equal(t, string(config.BranchTypeBase), mainConfig.Type)
 	assert.Equal(t, "", mainConfig.Parent)
 	assert.Equal(t, "", mainConfig.StartPoint)
 
-	// Check develop branch (base branch)
 	developConfig, exists := cfg.Branches["custom-dev"]
 	assert.True(t, exists)
 	assert.Equal(t, string(config.BranchTypeBase), developConfig.Type)
 	assert.Equal(t, "custom-main", developConfig.Parent)
 	assert.Equal(t, "", developConfig.StartPoint)
 
-	// Check feature branch
 	featureConfig := cfg.Branches["feature"]
 	assert.Equal(t, "f/", featureConfig.Prefix)
 	assert.Equal(t, "custom-dev", featureConfig.Parent)
 	assert.Equal(t, "custom-dev", featureConfig.StartPoint)
 
-	// Check release branch
 	releaseConfig := cfg.Branches["release"]
 	assert.Equal(t, "r/", releaseConfig.Prefix)
 	assert.Equal(t, "custom-main", releaseConfig.Parent)
 	assert.Equal(t, "custom-dev", releaseConfig.StartPoint)
 	assert.Equal(t, "v", releaseConfig.TagPrefix)
 
-	// Check hotfix branch
 	hotfixConfig := cfg.Branches["hotfix"]
 	assert.Equal(t, "h/", hotfixConfig.Prefix)
 	assert.Equal(t, "custom-main", hotfixConfig.Parent)
 	assert.Equal(t, "custom-main", hotfixConfig.StartPoint)
 	assert.Equal(t, "v", hotfixConfig.TagPrefix)
 
-	// Check support branch
 	supportConfig := cfg.Branches["support"]
 	assert.Equal(t, "s/", supportConfig.Prefix)
 	assert.Equal(t, "custom-main", supportConfig.Parent)
 	assert.Equal(t, "custom-main", supportConfig.StartPoint)
 }
 
-// TestDefaultRemoteConfiguration tests that "origin" is used as the default remote name
+// TestDefaultRemoteConfiguration verifies that the remote defaults to "origin"
+// when no remote is configured.
+// Steps:
+// 1. Sets up a test repository and marks it git-flow-initialized
+// 2. Loads config through a git.Repo handle for the repository
+// 3. Verifies the loaded remote is "origin"
 func TestDefaultRemoteConfiguration(t *testing.T) {
-	// Setup
+	t.Parallel()
 	dir := setupTestRepo(t)
 	defer cleanupTestRepo(t, dir)
 
-	// Initialize git-flow
-	cmd := exec.Command("git", "config", "gitflow.version", "1.0")
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to set gitflow version: %v", err)
-	}
+	setConfig(t, dir, "gitflow.version", "1.0")
 
-	// Load config without setting gitflow.origin
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(openRepo(t, dir))
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
-
-	// Verify default remote is "origin"
 	assert.Equal(t, "origin", cfg.Remote, "Default remote should be 'origin'")
 }
 
-// TestCustomRemoteConfiguration tests that a custom remote name is used when gitflow.origin is set
-func TestCustomRemoteConfiguration(t *testing.T) {
-	// Setup
-	dir := setupTestRepo(t)
-	defer cleanupTestRepo(t, dir)
-
-	// Initialize git-flow
-	cmd := exec.Command("git", "config", "gitflow.version", "1.0")
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to set gitflow version: %v", err)
-	}
-
-	// Set custom remote
-	customRemote := "myremote"
-	cmd = exec.Command("git", "config", "gitflow.origin", customRemote)
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to set custom remote: %v", err)
-	}
-
-	// Debug: Print git config
-	cmd = exec.Command("git", "config", "--get", "gitflow.origin")
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		t.Logf("Failed to get gitflow.origin config: %v", err)
-	} else {
-		t.Logf("gitflow.origin from git config: %s", string(out))
-	}
-
-	// We need to manually create a config to test with the specific repository
-	cfg := config.DefaultConfig()
-
-	// Override with our custom remote
-	remote, err := git.GetConfigInDir(dir, "gitflow.origin")
-	if err == nil && remote != "" {
-		cfg.Remote = remote
-	}
-
-	// Verify custom remote is used
-	assert.Equal(t, customRemote, cfg.Remote, "Custom remote should be used")
-}
-
-// TestGitFlowAVHRemoteImport tests that git-flow-avh remote configuration is imported correctly
+// TestGitFlowAVHRemoteImport verifies that the remote is imported from the
+// git-flow-avh gitflow.origin key.
+// Steps:
+// 1. Sets up a test repository and sets gitflow.origin to a custom remote
+// 2. Imports git-flow-avh config through a git.Repo handle
+// 3. Verifies the imported config's remote matches the avh value
 func TestGitFlowAVHRemoteImport(t *testing.T) {
-	// Setup
+	t.Parallel()
 	dir := setupTestRepo(t)
 	defer cleanupTestRepo(t, dir)
 
-	// Set git-flow-avh config
-	cmd := exec.Command("git", "config", "gitflow.origin", "avh-remote")
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to set git-flow-avh remote: %v", err)
-	}
+	setConfig(t, dir, "gitflow.origin", "avh-remote")
 
-	// Import git-flow-avh config
-	cfg, err := config.ImportGitFlowAVHConfig()
+	cfg, err := config.ImportGitFlowAVHConfig(openRepo(t, dir))
 	if err != nil {
 		t.Fatalf("Failed to import git-flow-avh config: %v", err)
 	}
-
-	// Verify git-flow-avh remote is imported
 	assert.Equal(t, "avh-remote", cfg.Remote, "git-flow-avh remote should be imported")
 }
 
-// TestLoadConfigPreservesBranchNameCase verifies LoadConfig keeps the original
-// branch-name case as the canonical key and resolves lookups case-insensitively.
+// TestLoadConfigPreservesBranchNameCase verifies that the canonical casing of a
+// branch name is preserved and remains case-insensitively resolvable.
 // Steps:
-//  1. Sets up a test repository
-//  2. Writes gitflow.branch.V9_Release.* config with a mixed-case subsection name
-//  3. Calls config.LoadConfig()
-//  4. Verifies the loaded config keys the branch by its exact case (V9_Release),
-//     not a lowercased variant (v9_release)
-//  5. Verifies ResolveBranchName resolves a lowercase lookup to the canonical key
-//  6. Verifies property-name lowercasing still parses (Type/UpstreamStrategy)
+// 1. Sets up a test repository with a mixed-case branch name (V9_Release)
+// 2. Loads config through a git.Repo handle for the repository
+// 3. Verifies the canonical key 'V9_Release' is preserved and not lowercased
+// 4. Verifies ResolveBranchName resolves a lowercased query to the canonical key
+// 5. Verifies the branch's parsed Type and UpstreamStrategy
 func TestLoadConfigPreservesBranchNameCase(t *testing.T) {
-	// Setup
+	t.Parallel()
 	dir := setupTestRepo(t)
 	defer cleanupTestRepo(t, dir)
 
-	// Write a mixed-case branch subsection plus a mixed-case property name
-	configs := []struct {
-		key   string
-		value string
-	}{
-		{"gitflow.branch.V9_Release.type", "base"},
-		{"gitflow.branch.V9_Release.upstreamStrategy", "merge"},
-	}
-	for _, c := range configs {
-		cmd := exec.Command("git", "config", c.key, c.value)
-		cmd.Dir = dir
-		if err := cmd.Run(); err != nil {
-			t.Fatalf("Failed to set git config %s: %v", c.key, err)
-		}
-	}
+	setConfig(t, dir, "gitflow.branch.V9_Release.type", "base")
+	setConfig(t, dir, "gitflow.branch.V9_Release.upstreamStrategy", "merge")
+	setConfig(t, dir, "gitflow.version", "1.0")
 
-	// Set version to mark as initialized
-	cmd := exec.Command("git", "config", "gitflow.version", "1.0")
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to set gitflow version: %v", err)
-	}
-
-	// Load config
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(openRepo(t, dir))
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	// The canonical key must be the exact original case, not lowercased
 	if _, exists := cfg.Branches["V9_Release"]; !exists {
 		t.Errorf("Expected canonical branch key 'V9_Release' to be preserved; branches: %v", keysOf(cfg.Branches))
 	}
@@ -514,7 +437,6 @@ func TestLoadConfigPreservesBranchNameCase(t *testing.T) {
 		t.Errorf("Did not expect a lowercased branch key 'v9_release'; branches: %v", keysOf(cfg.Branches))
 	}
 
-	// A case-insensitive lookup for a lowercase variant must resolve to the canonical key
 	canonical, found := cfg.ResolveBranchName("v9_release")
 	if !found {
 		t.Fatalf("Expected ResolveBranchName(\"v9_release\") to resolve, got not found")
@@ -523,13 +445,187 @@ func TestLoadConfigPreservesBranchNameCase(t *testing.T) {
 		t.Errorf("Expected resolved canonical name 'V9_Release', got '%s'", canonical)
 	}
 
-	// Property-name lowercasing must still parse the values
 	branch := cfg.Branches[canonical]
 	if branch.Type != "base" {
 		t.Errorf("Expected Type 'base', got '%s'", branch.Type)
 	}
 	if branch.UpstreamStrategy != "merge" {
 		t.Errorf("Expected UpstreamStrategy 'merge', got '%s'", branch.UpstreamStrategy)
+	}
+}
+
+// --- Scenario 6: config read off-CWD ---
+
+// TestLoadConfigReflectsTargetRepoOffCwd verifies config.Load reads from the
+// target repository, not the process working directory.
+// Steps:
+// 1. Sets up a test repository B and initializes git-flow in it
+// 2. Sets a custom feature prefix (feat/) in B
+// 3. Loads config through a git.Repo handle for B
+// 4. Verifies the loaded feature prefix is 'feat/' from B
+func TestLoadConfigReflectsTargetRepoOffCwd(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if _, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to init git-flow: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.branch.feature.prefix", "feat/"); err != nil {
+		t.Fatalf("Failed to set feature prefix: %v", err)
+	}
+
+	cfg, err := config.Load(openRepo(t, dir))
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+	if got := cfg.Branches["feature"].Prefix; got != "feat/" {
+		t.Errorf("Expected feature prefix 'feat/' from B, got %q", got)
+	}
+}
+
+// TestLoadConfigUninitializedReturnsDefaults verifies config.Load returns
+// defaults for a repository that has not been git-flow-initialized.
+// Steps:
+// 1. Sets up a test repository B without initializing git-flow
+// 2. Loads config through a git.Repo handle for B
+// 3. Verifies no error is returned
+// 4. Verifies the default feature prefix ('feature/') and default remote ('origin')
+func TestLoadConfigUninitializedReturnsDefaults(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	cfg, err := config.Load(openRepo(t, dir))
+	if err != nil {
+		t.Fatalf("Expected no error for uninitialized repo, got %v", err)
+	}
+	// Falls back to defaults: default feature prefix, default remote.
+	if got := cfg.Branches["feature"].Prefix; got != "feature/" {
+		t.Errorf("Expected default feature prefix 'feature/', got %q", got)
+	}
+	if cfg.Remote != "origin" {
+		t.Errorf("Expected default remote 'origin', got %q", cfg.Remote)
+	}
+}
+
+// TestLoadConfigImportsAvhOffCwd verifies config.Load imports git-flow-avh
+// configuration from the target repository when no gitflow.version is present.
+// Steps:
+// 1. Sets up a test repository B with distinctive git-flow-avh keys and no version
+// 2. Loads config through a git.Repo handle for B
+// 3. Verifies the AVH master rename ('production') is imported and 'main' is gone
+// 4. Verifies the imported feature prefix is 'feat/'
+func TestLoadConfigImportsAvhOffCwd(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// git-flow-avh keys with distinctive non-default values, no gitflow.version.
+	setConfig(t, dir, "gitflow.branch.master", "production")
+	setConfig(t, dir, "gitflow.prefix.feature", "feat/")
+	setConfig(t, dir, "gitflow.prefix.hotfix", "hf/")
+
+	cfg, err := config.Load(openRepo(t, dir))
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	if _, exists := cfg.Branches["production"]; !exists {
+		t.Errorf("Expected AVH master 'production' imported; branches: %v", keysOf(cfg.Branches))
+	}
+	if _, exists := cfg.Branches["main"]; exists {
+		t.Errorf("Did not expect default 'main' after AVH import renamed it to 'production'")
+	}
+	if got := cfg.Branches["feature"].Prefix; got != "feat/" {
+		t.Errorf("Expected imported feature prefix 'feat/', got %q", got)
+	}
+}
+
+// --- Scenario 7: config mutation off-CWD ---
+
+// TestConfigSetIsolatedToTargetRepo verifies that a config write through one
+// repository's handle affects only that repository.
+// Steps:
+// 1. Sets up and initializes two test repositories A and B
+// 2. Sets a custom feature prefix ('xb/') through B's handle
+// 3. Verifies B's loaded config reflects the new prefix
+// 4. Verifies A's loaded config retains the default 'feature/' prefix
+func TestConfigSetIsolatedToTargetRepo(t *testing.T) {
+	t.Parallel()
+	dirA := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dirA)
+	dirB := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dirB)
+
+	if _, err := testutil.RunGitFlow(t, dirA, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to init A: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, dirB, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to init B: %v", err)
+	}
+
+	repoB := openRepo(t, dirB)
+	if err := repoB.SetConfig("gitflow.branch.feature.prefix", "xb/"); err != nil {
+		t.Fatalf("SetConfig on B failed: %v", err)
+	}
+
+	cfgB, err := config.Load(repoB)
+	if err != nil {
+		t.Fatalf("Failed to load B config: %v", err)
+	}
+	if got := cfgB.Branches["feature"].Prefix; got != "xb/" {
+		t.Errorf("Expected B feature prefix 'xb/', got %q", got)
+	}
+
+	cfgA, err := config.Load(openRepo(t, dirA))
+	if err != nil {
+		t.Fatalf("Failed to load A config: %v", err)
+	}
+	if got := cfgA.Branches["feature"].Prefix; got != "feature/" {
+		t.Errorf("Expected A feature prefix to retain default 'feature/', got %q", got)
+	}
+}
+
+// TestConfigClearIsolatedToTargetRepo verifies that clearing config through one
+// repository's handle affects only that repository.
+// Steps:
+// 1. Sets up and initializes two test repositories A and B
+// 2. Clears gitflow config through B's handle
+// 3. Verifies B's gitflow.branch.feature.prefix is removed
+// 4. Verifies A's gitflow.branch.feature.prefix remains 'feature/'
+func TestConfigClearIsolatedToTargetRepo(t *testing.T) {
+	t.Parallel()
+	dirA := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dirA)
+	dirB := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dirB)
+
+	if _, err := testutil.RunGitFlow(t, dirA, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to init A: %v", err)
+	}
+	if _, err := testutil.RunGitFlow(t, dirB, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to init B: %v", err)
+	}
+
+	repoB := openRepo(t, dirB)
+	if err := config.ClearConfig(repoB); err != nil {
+		t.Fatalf("ClearConfig on B failed: %v", err)
+	}
+
+	// B's gitflow config is gone.
+	if _, err := repoB.GetConfig("gitflow.branch.feature.prefix"); err == nil {
+		t.Error("Expected B's gitflow.branch.feature.prefix to be removed")
+	}
+
+	// A's gitflow config is intact.
+	repoA := openRepo(t, dirA)
+	got, err := repoA.GetConfig("gitflow.branch.feature.prefix")
+	if err != nil {
+		t.Fatalf("Expected A's gitflow.branch.feature.prefix intact, got err: %v", err)
+	}
+	if got != "feature/" {
+		t.Errorf("Expected A feature prefix 'feature/', got %q", got)
 	}
 }
 

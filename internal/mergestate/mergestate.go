@@ -14,23 +14,15 @@ const (
 	stateFile    = "merge.json"
 )
 
-// getStateDir returns the path to the state directory, resolving the git directory
-// correctly for both regular repos and worktrees.
-func getStateDir() (string, error) {
-	gitDir, err := git.GetGitDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(gitDir, stateDirName), nil
+// getStateDir returns the path to the state directory under the repository's
+// absolute git directory (worktree-aware).
+func getStateDir(repo *git.Repo) string {
+	return filepath.Join(repo.GitDir(), stateDirName)
 }
 
 // getStatePath returns the full path to the state file.
-func getStatePath() (string, error) {
-	stateDir, err := getStateDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(stateDir, stateFile), nil
+func getStatePath(repo *git.Repo) string {
+	return filepath.Join(getStateDir(repo), stateFile)
 }
 
 // MergeState represents the state of a merge operation
@@ -71,12 +63,9 @@ type MergeState struct {
 }
 
 // SaveMergeState saves the current merge state to a file
-func SaveMergeState(state *MergeState) error {
+func SaveMergeState(repo *git.Repo, state *MergeState) error {
 	// Get the state directory path (handles worktrees correctly)
-	stateDir, err := getStateDir()
-	if err != nil {
-		return fmt.Errorf("failed to determine state directory: %w", err)
-	}
+	stateDir := getStateDir(repo)
 
 	// Create state directory if it doesn't exist
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
@@ -99,11 +88,8 @@ func SaveMergeState(state *MergeState) error {
 }
 
 // LoadMergeState loads the current merge state from file
-func LoadMergeState() (*MergeState, error) {
-	statePath, err := getStatePath()
-	if err != nil {
-		return nil, fmt.Errorf("failed to determine state path: %w", err)
-	}
+func LoadMergeState(repo *git.Repo) (*MergeState, error) {
+	statePath := getStatePath(repo)
 
 	data, err := os.ReadFile(statePath)
 	if err != nil {
@@ -122,13 +108,10 @@ func LoadMergeState() (*MergeState, error) {
 }
 
 // ClearMergeState removes the merge state file
-func ClearMergeState() error {
-	statePath, err := getStatePath()
-	if err != nil {
-		return fmt.Errorf("failed to determine state path: %w", err)
-	}
+func ClearMergeState(repo *git.Repo) error {
+	statePath := getStatePath(repo)
 
-	err = os.Remove(statePath)
+	err := os.Remove(statePath)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove state file: %w", err)
 	}
@@ -146,7 +129,7 @@ func ClearMergeState() error {
 // guard (refuseIfForeignOperation) reads the raw state directly and refuses an
 // unknown/empty Action before IsMergeInProgress ever runs, so that case never
 // reaches the auto-clear path.
-func isStateValid(state *MergeState) bool {
+func isStateValid(repo *git.Repo, state *MergeState) bool {
 	// Critical fields must be non-empty
 	if state.BranchType == "" || state.FullBranchName == "" || state.CurrentStep == "" {
 		return false
@@ -155,10 +138,10 @@ func isStateValid(state *MergeState) bool {
 	switch state.CurrentStep {
 	case "merge", "update_children":
 		// Git must actually be in a merge, rebase, or squash merge state
-		return git.IsGitMergeInProgress() || git.IsGitRebaseInProgress() || git.IsGitSquashMergeInProgress()
+		return repo.IsGitMergeInProgress() || repo.IsGitRebaseInProgress() || repo.IsGitSquashMergeInProgress()
 	case "create_tag", "delete_branch":
 		// The topic branch must still exist
-		return git.BranchExists(state.FullBranchName) == nil
+		return repo.BranchExists(state.FullBranchName) == nil
 	default:
 		return false
 	}
@@ -167,11 +150,11 @@ func isStateValid(state *MergeState) bool {
 // IsMergeInProgress checks if there's a valid merge in progress. If a state
 // file exists but is stale (e.g., manual resolution, crash, or missing branch),
 // it is automatically cleared and false is returned.
-func IsMergeInProgress() bool {
-	state, err := LoadMergeState()
+func IsMergeInProgress(repo *git.Repo) bool {
+	state, err := LoadMergeState(repo)
 	if err != nil {
 		// Corrupted or unreadable state file — clear it
-		if clearErr := ClearMergeState(); clearErr != nil {
+		if clearErr := ClearMergeState(repo); clearErr != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Failed to clear stale merge state: %v\n", clearErr)
 		} else {
 			fmt.Fprintf(os.Stderr, "Note: Cleared stale merge state from a previous operation\n")
@@ -181,8 +164,8 @@ func IsMergeInProgress() bool {
 	if state == nil {
 		return false
 	}
-	if !isStateValid(state) {
-		if err := ClearMergeState(); err != nil {
+	if !isStateValid(repo, state) {
+		if err := ClearMergeState(repo); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Failed to clear stale merge state: %v\n", err)
 		} else {
 			fmt.Fprintf(os.Stderr, "Note: Cleared stale merge state from a previous operation\n")

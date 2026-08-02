@@ -10,291 +10,230 @@ import (
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
-// withGitRepo changes to the provided directory, runs the testFunc, and changes back to the original directory after the test function is done
-func withGitRepo(t *testing.T, dir string, testFunc func()) {
-	// Save current directory
-	oldDir, err := os.Getwd()
+// openRepo opens a git.Repo handle for dir, failing the test on error. It is the
+// CWD-independent replacement for the old withGitRepo(os.Chdir) helper.
+func openRepo(t *testing.T, dir string) *git.Repo {
+	t.Helper()
+	repo, err := git.Open(dir)
 	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
+		t.Fatalf("git.Open(%q) failed: %v", dir, err)
 	}
+	return repo
+}
 
-	// Change to the test directory
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("Failed to change to test directory: %v", err)
+// setupConflictingBranches seeds conflict.txt on the base, then has a feature
+// branch and the diverging main branch each modify it differently, producing a
+// modify/modify (UU) conflict per GIT_TEST_SCENARIOS.md. It leaves the repo
+// checked out on main.
+func setupConflictingBranches(t *testing.T, dir string) {
+	t.Helper()
+	// Seed the file on the base (main) so both sides modify a common ancestor
+	// version, yielding a UU (both-modified) conflict rather than AA (add/add).
+	testutil.WriteFile(t, dir, "conflict.txt", "base content")
+	if _, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to add base file: %v", err)
 	}
-
-	// Ensure we change back to the original directory when done
-	defer func() {
-		if err := os.Chdir(oldDir); err != nil {
-			t.Fatalf("Failed to change back to original directory: %v", err)
-		}
-	}()
-
-	// Run the test function
-	testFunc()
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Base conflict file"); err != nil {
+		t.Fatalf("Failed to commit base file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "checkout", "-b", "feature"); err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "feature content")
+	if _, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Feature commit"); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+	testutil.WriteFile(t, dir, "conflict.txt", "main content")
+	if _, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Main commit"); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
 }
 
 func TestRemoteBranchExists_ExistingBranch(t *testing.T) {
-	// Setup test repo
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	// Add a remote
-	remoteDir, err := testutil.AddRemote(t, dir, "origin", false) // Don't push all branches yet
+	remoteDir, err := testutil.AddRemote(t, dir, "origin", false)
 	if err != nil {
 		t.Fatalf("Failed to add remote: %v", err)
 	}
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Create and push a feature branch
-	_, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test"); err != nil {
 		t.Fatalf("Failed to create branch: %v", err)
 	}
-
-	// Create a test file and commit it
 	testutil.WriteFile(t, dir, "test.txt", "test content")
-	_, err = testutil.RunGit(t, dir, "add", "test.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "add", "test.txt"); err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "test commit")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "test commit"); err != nil {
 		t.Fatalf("Failed to commit: %v", err)
 	}
-
-	// Push the branch with --set-upstream
-	_, err = testutil.RunGit(t, dir, "push", "-u", "origin", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "push", "-u", "origin", "feature/test"); err != nil {
 		t.Fatalf("Failed to push branch: %v", err)
 	}
-
-	// Fetch to update remote tracking branches
-	_, err = testutil.RunGit(t, dir, "fetch", "origin")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "fetch", "origin"); err != nil {
 		t.Fatalf("Failed to fetch from remote: %v", err)
 	}
 
-	// Use our helper to change to the test directory and run the test
-	withGitRepo(t, dir, func() {
-		// Check if the branch exists
-		exists := git.RemoteBranchExists("origin", "feature/test")
-		if !exists {
-			t.Error("Expected RemoteBranchExists to return true for existing branch")
-		}
-	})
+	repo := openRepo(t, dir)
+	if !repo.RemoteBranchExists("origin", "feature/test") {
+		t.Error("Expected RemoteBranchExists to return true for existing branch")
+	}
 }
 
 func TestRemoteBranchExists_NonExistentBranch(t *testing.T) {
-	// Setup test repo
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	// Add a remote
 	remoteDir, err := testutil.AddRemote(t, dir, "origin", true)
 	if err != nil {
 		t.Fatalf("Failed to add remote: %v", err)
 	}
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Fetch to update remote tracking branches
-	_, err = testutil.RunGit(t, dir, "fetch", "origin")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "fetch", "origin"); err != nil {
 		t.Fatalf("Failed to fetch from remote: %v", err)
 	}
 
-	// Use our helper to change to the test directory and run the test
-	withGitRepo(t, dir, func() {
-		// Check if a non-existent branch exists
-		exists := git.RemoteBranchExists("origin", "feature/non-existent")
-		if exists {
-			t.Error("Expected RemoteBranchExists to return false for non-existent branch")
-		}
-	})
+	repo := openRepo(t, dir)
+	if repo.RemoteBranchExists("origin", "feature/non-existent") {
+		t.Error("Expected RemoteBranchExists to return false for non-existent branch")
+	}
 }
 
 func TestDeleteNonExistentRemoteBranch(t *testing.T) {
-	// Setup test repo
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	// Add a remote
 	remoteDir, err := testutil.AddRemote(t, dir, "origin", true)
 	if err != nil {
 		t.Fatalf("Failed to add remote: %v", err)
 	}
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Use our helper to change to the test directory and run the test
-	withGitRepo(t, dir, func() {
-		// Try to delete a non-existent branch
-		err = git.DeleteRemoteBranch("origin", "feature/non-existent")
-		if err == nil {
-			t.Error("Expected an error when deleting non-existent remote branch, got nil")
-		}
-	})
+	repo := openRepo(t, dir)
+	if err := repo.DeleteRemoteBranch("origin", "feature/non-existent"); err == nil {
+		t.Error("Expected an error when deleting non-existent remote branch, got nil")
+	}
 }
 
 func TestDeleteExistingRemoteBranch(t *testing.T) {
-	// Setup test repo
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	// Add a remote
 	remoteDir, err := testutil.AddRemote(t, dir, "origin", true)
 	if err != nil {
 		t.Fatalf("Failed to add remote: %v", err)
 	}
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Create and push a feature branch
-	_, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test"); err != nil {
 		t.Fatalf("Failed to create branch: %v", err)
 	}
-
-	// Create a test file and commit it
 	testutil.WriteFile(t, dir, "test.txt", "test content")
-	_, err = testutil.RunGit(t, dir, "add", "test.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "add", "test.txt"); err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "test commit")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "test commit"); err != nil {
 		t.Fatalf("Failed to commit: %v", err)
 	}
-
-	// Push the branch
-	_, err = testutil.RunGit(t, dir, "push", "origin", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "push", "origin", "feature/test"); err != nil {
 		t.Fatalf("Failed to push branch: %v", err)
 	}
-
-	// Fetch to update remote tracking branches
-	_, err = testutil.RunGit(t, dir, "fetch", "origin")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "fetch", "origin"); err != nil {
 		t.Fatalf("Failed to fetch from remote: %v", err)
 	}
 
-	// Use our helper to change to the test directory and run the test
-	withGitRepo(t, dir, func() {
-		// Delete the remote branch
-		err = git.DeleteRemoteBranch("origin", "feature/test")
-		if err != nil {
-			t.Errorf("Expected no error when deleting existing remote branch, got: %v", err)
-		}
-	})
-
-	// Fetch from remote to update refs
-	_, err = testutil.RunGit(t, dir, "fetch", "origin", "--prune")
-	if err != nil {
-		t.Fatalf("Failed to fetch from remote: %v", err)
+	repo := openRepo(t, dir)
+	if err := repo.DeleteRemoteBranch("origin", "feature/test"); err != nil {
+		t.Errorf("Expected no error when deleting existing remote branch, got: %v", err)
 	}
 
-	// Verify branch was deleted by checking the remote tracking branch
-	_, err = testutil.RunGit(t, dir, "rev-parse", "--verify", "refs/remotes/origin/feature/test")
-	if err == nil {
+	if _, err = testutil.RunGit(t, dir, "fetch", "origin", "--prune"); err != nil {
+		t.Fatalf("Failed to fetch from remote: %v", err)
+	}
+	if _, err = testutil.RunGit(t, dir, "rev-parse", "--verify", "refs/remotes/origin/feature/test"); err == nil {
 		t.Error("Expected remote tracking branch to be deleted")
 	}
 }
 
 func TestDeleteBranchFromNonExistentRemote(t *testing.T) {
-	// Setup test repo
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	// Use our helper to change to the test directory and run the test
-	withGitRepo(t, dir, func() {
-		// Try to delete a branch from a non-existent remote
-		err := git.DeleteRemoteBranch("non-existent-remote", "feature/test")
-		if err == nil {
-			t.Error("Expected an error when deleting from non-existent remote, got nil")
-		}
-	})
+	repo := openRepo(t, dir)
+	if err := repo.DeleteRemoteBranch("non-existent-remote", "feature/test"); err == nil {
+		t.Error("Expected an error when deleting from non-existent remote, got nil")
+	}
 }
 
-// TestGetTrackingBranch tests that the tracking branch is correctly identified.
-// Steps:
-// 1. Sets up a test repository with a remote
-// 2. Creates a feature branch and pushes it with tracking
-// 3. Calls GetTrackingBranch on the feature branch
-// 4. Verifies the correct remote tracking branch is returned (origin/feature/test)
 func TestGetTrackingBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	// Add a remote
 	remoteDir, err := testutil.AddRemote(t, dir, "origin", false)
 	if err != nil {
 		t.Fatalf("Failed to add remote: %v", err)
 	}
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Create and push a feature branch with tracking
-	_, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test"); err != nil {
 		t.Fatalf("Failed to create branch: %v", err)
 	}
-
 	testutil.WriteFile(t, dir, "test.txt", "test content")
-	_, err = testutil.RunGit(t, dir, "add", "test.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "add", "test.txt"); err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "test commit")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "test commit"); err != nil {
 		t.Fatalf("Failed to commit: %v", err)
 	}
-
-	// Push with --set-upstream to establish tracking
-	_, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test"); err != nil {
 		t.Fatalf("Failed to push branch: %v", err)
 	}
 
-	withGitRepo(t, dir, func() {
-		trackingBranch, err := git.GetTrackingBranch("feature/test")
-		if err != nil {
-			t.Fatalf("GetTrackingBranch returned unexpected error: %v", err)
-		}
-		expected := "origin/feature/test"
-		if trackingBranch != expected {
-			t.Errorf("Expected tracking branch '%s', got '%s'", expected, trackingBranch)
-		}
-	})
+	repo := openRepo(t, dir)
+	trackingBranch, err := repo.GetTrackingBranch("feature/test")
+	if err != nil {
+		t.Fatalf("GetTrackingBranch returned unexpected error: %v", err)
+	}
+	if trackingBranch != "origin/feature/test" {
+		t.Errorf("Expected tracking branch 'origin/feature/test', got '%s'", trackingBranch)
+	}
 }
 
-// TestGetTrackingBranchNoTracking tests behavior when branch has no tracking branch.
-// Steps:
-// 1. Sets up a test repository
-// 2. Creates a local-only branch without pushing
-// 3. Calls GetTrackingBranch on the local branch
-// 4. Verifies an appropriate error is returned
 func TestGetTrackingBranchNoTracking(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	// Create a local-only branch (no remote, no tracking)
-	_, err := testutil.RunGit(t, dir, "checkout", "-b", "feature/local-only")
-	if err != nil {
+	if _, err := testutil.RunGit(t, dir, "checkout", "-b", "feature/local-only"); err != nil {
 		t.Fatalf("Failed to create branch: %v", err)
 	}
 
-	withGitRepo(t, dir, func() {
-		_, err := git.GetTrackingBranch("feature/local-only")
-		if err == nil {
-			t.Error("Expected error for branch without tracking, got nil")
-		}
-	})
+	repo := openRepo(t, dir)
+	if _, err := repo.GetTrackingBranch("feature/local-only"); err == nil {
+		t.Error("Expected error for branch without tracking, got nil")
+	}
 }
 
-// TestCompareBranchWithRemoteEqual tests comparison when local equals remote.
-// Steps:
-// 1. Sets up a test repository with a remote
-// 2. Creates and pushes a feature branch with tracking
-// 3. Calls CompareBranchWithRemote (no changes made after push)
-// 4. Verifies SyncStatusEqual is returned with 0 commits difference
 func TestCompareBranchWithRemoteEqual(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -304,49 +243,35 @@ func TestCompareBranchWithRemoteEqual(t *testing.T) {
 	}
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Create and push a feature branch
-	_, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test"); err != nil {
 		t.Fatalf("Failed to create branch: %v", err)
 	}
-
 	testutil.WriteFile(t, dir, "test.txt", "test content")
-	_, err = testutil.RunGit(t, dir, "add", "test.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "add", "test.txt"); err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "test commit")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "test commit"); err != nil {
 		t.Fatalf("Failed to commit: %v", err)
 	}
-
-	_, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test"); err != nil {
 		t.Fatalf("Failed to push branch: %v", err)
 	}
 
-	withGitRepo(t, dir, func() {
-		status, count, err := git.CompareBranchWithRemote("feature/test")
-		if err != nil {
-			t.Fatalf("CompareBranchWithRemote returned unexpected error: %v", err)
-		}
-		if status != git.SyncStatusEqual {
-			t.Errorf("Expected status SyncStatusEqual, got %s", status)
-		}
-		if count != 0 {
-			t.Errorf("Expected count 0, got %d", count)
-		}
-	})
+	repo := openRepo(t, dir)
+	status, count, err := repo.CompareBranchWithRemote("feature/test")
+	if err != nil {
+		t.Fatalf("CompareBranchWithRemote returned unexpected error: %v", err)
+	}
+	if status != git.SyncStatusEqual {
+		t.Errorf("Expected status SyncStatusEqual, got %s", status)
+	}
+	if count != 0 {
+		t.Errorf("Expected count 0, got %d", count)
+	}
 }
 
-// TestCompareBranchWithRemoteAhead tests comparison when local is ahead of remote.
-// Steps:
-// 1. Sets up a test repository with a remote
-// 2. Creates and pushes a feature branch with tracking
-// 3. Adds a new commit locally without pushing
-// 4. Calls CompareBranchWithRemote
-// 5. Verifies SyncStatusAhead is returned with correct commit count
 func TestCompareBranchWithRemoteAhead(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -356,61 +281,42 @@ func TestCompareBranchWithRemoteAhead(t *testing.T) {
 	}
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Create and push a feature branch
-	_, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test"); err != nil {
 		t.Fatalf("Failed to create branch: %v", err)
 	}
-
 	testutil.WriteFile(t, dir, "test.txt", "test content")
-	_, err = testutil.RunGit(t, dir, "add", "test.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "add", "test.txt"); err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "test commit")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "test commit"); err != nil {
 		t.Fatalf("Failed to commit: %v", err)
 	}
-
-	_, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test"); err != nil {
 		t.Fatalf("Failed to push branch: %v", err)
 	}
-
-	// Add another commit locally without pushing
 	testutil.WriteFile(t, dir, "local.txt", "local content")
-	_, err = testutil.RunGit(t, dir, "add", "local.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "add", "local.txt"); err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "local commit")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "local commit"); err != nil {
 		t.Fatalf("Failed to commit: %v", err)
 	}
 
-	withGitRepo(t, dir, func() {
-		status, count, err := git.CompareBranchWithRemote("feature/test")
-		if err != nil {
-			t.Fatalf("CompareBranchWithRemote returned unexpected error: %v", err)
-		}
-		if status != git.SyncStatusAhead {
-			t.Errorf("Expected status SyncStatusAhead, got %s", status)
-		}
-		if count != 1 {
-			t.Errorf("Expected count 1, got %d", count)
-		}
-	})
+	repo := openRepo(t, dir)
+	status, count, err := repo.CompareBranchWithRemote("feature/test")
+	if err != nil {
+		t.Fatalf("CompareBranchWithRemote returned unexpected error: %v", err)
+	}
+	if status != git.SyncStatusAhead {
+		t.Errorf("Expected status SyncStatusAhead, got %s", status)
+	}
+	if count != 1 {
+		t.Errorf("Expected count 1, got %d", count)
+	}
 }
 
-// TestCompareBranchWithRemoteBehind tests comparison when local is behind remote.
-// Steps:
-// 1. Sets up a test repository with a remote
-// 2. Creates and pushes a feature branch with tracking
-// 3. Clones to second repo, adds commit, pushes to remote
-// 4. Fetches in original repo to update remote refs
-// 5. Calls CompareBranchWithRemote on original repo
-// 6. Verifies SyncStatusBehind is returned with correct commit count
 func TestCompareBranchWithRemoteBehind(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -420,84 +326,57 @@ func TestCompareBranchWithRemoteBehind(t *testing.T) {
 	}
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Create and push a feature branch
-	_, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test"); err != nil {
 		t.Fatalf("Failed to create branch: %v", err)
 	}
-
 	testutil.WriteFile(t, dir, "test.txt", "test content")
-	_, err = testutil.RunGit(t, dir, "add", "test.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "add", "test.txt"); err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "test commit")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "test commit"); err != nil {
 		t.Fatalf("Failed to commit: %v", err)
 	}
-
-	_, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test"); err != nil {
 		t.Fatalf("Failed to push branch: %v", err)
 	}
 
-	// Clone to a second working copy and make changes
 	secondDir := t.TempDir()
-	_, err = testutil.RunGit(t, secondDir, "clone", remoteDir, ".")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "clone", remoteDir, "."); err != nil {
 		t.Fatalf("Failed to clone: %v", err)
 	}
 	testutil.ConfigureGitIdentity(t, secondDir)
-
-	_, err = testutil.RunGit(t, secondDir, "checkout", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "checkout", "feature/test"); err != nil {
 		t.Fatalf("Failed to checkout feature branch in second repo: %v", err)
 	}
-
 	testutil.WriteFile(t, secondDir, "remote-change.txt", "remote content")
-	_, err = testutil.RunGit(t, secondDir, "add", "remote-change.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "add", "remote-change.txt"); err != nil {
 		t.Fatalf("Failed to add file in second repo: %v", err)
 	}
-	_, err = testutil.RunGit(t, secondDir, "commit", "-m", "remote commit")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "commit", "-m", "remote commit"); err != nil {
 		t.Fatalf("Failed to commit in second repo: %v", err)
 	}
-	_, err = testutil.RunGit(t, secondDir, "push", "origin", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "push", "origin", "feature/test"); err != nil {
 		t.Fatalf("Failed to push from second repo: %v", err)
 	}
-
-	// Fetch in original repo to update remote refs
-	_, err = testutil.RunGit(t, dir, "fetch", "origin")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "fetch", "origin"); err != nil {
 		t.Fatalf("Failed to fetch: %v", err)
 	}
 
-	withGitRepo(t, dir, func() {
-		status, count, err := git.CompareBranchWithRemote("feature/test")
-		if err != nil {
-			t.Fatalf("CompareBranchWithRemote returned unexpected error: %v", err)
-		}
-		if status != git.SyncStatusBehind {
-			t.Errorf("Expected status SyncStatusBehind, got %s", status)
-		}
-		if count != 1 {
-			t.Errorf("Expected count 1, got %d", count)
-		}
-	})
+	repo := openRepo(t, dir)
+	status, count, err := repo.CompareBranchWithRemote("feature/test")
+	if err != nil {
+		t.Fatalf("CompareBranchWithRemote returned unexpected error: %v", err)
+	}
+	if status != git.SyncStatusBehind {
+		t.Errorf("Expected status SyncStatusBehind, got %s", status)
+	}
+	if count != 1 {
+		t.Errorf("Expected count 1, got %d", count)
+	}
 }
 
-// TestCompareBranchWithRemoteDiverged tests comparison when local and remote have diverged.
-// Steps:
-// 1. Sets up a test repository with a remote
-// 2. Creates and pushes a feature branch with tracking
-// 3. Clones to second repo, adds commit, pushes to remote
-// 4. Adds different commit locally (without fetching first)
-// 5. Fetches in original repo to update remote refs
-// 6. Calls CompareBranchWithRemote
-// 7. Verifies SyncStatusDiverged is returned
 func TestCompareBranchWithRemoteDiverged(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -507,93 +386,65 @@ func TestCompareBranchWithRemoteDiverged(t *testing.T) {
 	}
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Create and push a feature branch
-	_, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "checkout", "-b", "feature/test"); err != nil {
 		t.Fatalf("Failed to create branch: %v", err)
 	}
-
 	testutil.WriteFile(t, dir, "test.txt", "test content")
-	_, err = testutil.RunGit(t, dir, "add", "test.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "add", "test.txt"); err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "test commit")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "test commit"); err != nil {
 		t.Fatalf("Failed to commit: %v", err)
 	}
-
-	_, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "push", "--set-upstream", "origin", "feature/test"); err != nil {
 		t.Fatalf("Failed to push branch: %v", err)
 	}
 
-	// Clone to a second working copy and make changes
 	secondDir := t.TempDir()
-	_, err = testutil.RunGit(t, secondDir, "clone", remoteDir, ".")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "clone", remoteDir, "."); err != nil {
 		t.Fatalf("Failed to clone: %v", err)
 	}
 	testutil.ConfigureGitIdentity(t, secondDir)
-
-	_, err = testutil.RunGit(t, secondDir, "checkout", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "checkout", "feature/test"); err != nil {
 		t.Fatalf("Failed to checkout feature branch in second repo: %v", err)
 	}
-
 	testutil.WriteFile(t, secondDir, "remote-change.txt", "remote content")
-	_, err = testutil.RunGit(t, secondDir, "add", "remote-change.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "add", "remote-change.txt"); err != nil {
 		t.Fatalf("Failed to add file in second repo: %v", err)
 	}
-	_, err = testutil.RunGit(t, secondDir, "commit", "-m", "remote commit")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "commit", "-m", "remote commit"); err != nil {
 		t.Fatalf("Failed to commit in second repo: %v", err)
 	}
-	_, err = testutil.RunGit(t, secondDir, "push", "origin", "feature/test")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "push", "origin", "feature/test"); err != nil {
 		t.Fatalf("Failed to push from second repo: %v", err)
 	}
 
-	// Add local commit (before fetching - creates divergence)
 	testutil.WriteFile(t, dir, "local-change.txt", "local content")
-	_, err = testutil.RunGit(t, dir, "add", "local-change.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "add", "local-change.txt"); err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "local commit")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "commit", "-m", "local commit"); err != nil {
 		t.Fatalf("Failed to commit: %v", err)
 	}
-
-	// Now fetch to update remote refs (creates divergence)
-	_, err = testutil.RunGit(t, dir, "fetch", "origin")
-	if err != nil {
+	if _, err = testutil.RunGit(t, dir, "fetch", "origin"); err != nil {
 		t.Fatalf("Failed to fetch: %v", err)
 	}
 
-	withGitRepo(t, dir, func() {
-		status, count, err := git.CompareBranchWithRemote("feature/test")
-		if err != nil {
-			t.Fatalf("CompareBranchWithRemote returned unexpected error: %v", err)
-		}
-		if status != git.SyncStatusDiverged {
-			t.Errorf("Expected status SyncStatusDiverged, got %s", status)
-		}
-		if count != 2 { // 1 ahead + 1 behind = 2 total
-			t.Errorf("Expected count 2 (1 ahead + 1 behind), got %d", count)
-		}
-	})
+	repo := openRepo(t, dir)
+	status, count, err := repo.CompareBranchWithRemote("feature/test")
+	if err != nil {
+		t.Fatalf("CompareBranchWithRemote returned unexpected error: %v", err)
+	}
+	if status != git.SyncStatusDiverged {
+		t.Errorf("Expected status SyncStatusDiverged, got %s", status)
+	}
+	if count != 2 {
+		t.Errorf("Expected count 2 (1 ahead + 1 behind), got %d", count)
+	}
 }
 
-// TestFetchBranch tests targeted fetch of a specific branch.
-// Steps:
-// 1. Sets up a test repository with a remote
-// 2. Pushes main branch to remote
-// 3. Clones to second repo, adds commit to main, pushes
-// 4. Calls FetchBranch for main in original repo
-// 5. Verifies the remote ref is updated
 func TestFetchBranch(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -603,61 +454,43 @@ func TestFetchBranch(t *testing.T) {
 	}
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	// Get initial commit hash on origin/main
 	initialHash, err := testutil.RunGit(t, dir, "rev-parse", "origin/main")
 	if err != nil {
 		t.Fatalf("Failed to get initial hash: %v", err)
 	}
 
-	// Clone to a second working copy and make changes
 	secondDir := t.TempDir()
-	_, err = testutil.RunGit(t, secondDir, "clone", remoteDir, ".")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "clone", remoteDir, "."); err != nil {
 		t.Fatalf("Failed to clone: %v", err)
 	}
 	testutil.ConfigureGitIdentity(t, secondDir)
-
 	testutil.WriteFile(t, secondDir, "remote-change.txt", "remote content")
-	_, err = testutil.RunGit(t, secondDir, "add", "remote-change.txt")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "add", "remote-change.txt"); err != nil {
 		t.Fatalf("Failed to add file in second repo: %v", err)
 	}
-	_, err = testutil.RunGit(t, secondDir, "commit", "-m", "remote commit")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "commit", "-m", "remote commit"); err != nil {
 		t.Fatalf("Failed to commit in second repo: %v", err)
 	}
-	_, err = testutil.RunGit(t, secondDir, "push", "origin", "main")
-	if err != nil {
+	if _, err = testutil.RunGit(t, secondDir, "push", "origin", "main"); err != nil {
 		t.Fatalf("Failed to push from second repo: %v", err)
 	}
 
-	// Fetch the branch using FetchBranch
-	withGitRepo(t, dir, func() {
-		err := git.FetchBranch("origin", "main")
-		if err != nil {
-			t.Fatalf("FetchBranch returned unexpected error: %v", err)
-		}
-	})
+	repo := openRepo(t, dir)
+	if err := repo.FetchBranch("origin", "main"); err != nil {
+		t.Fatalf("FetchBranch returned unexpected error: %v", err)
+	}
 
-	// Verify the remote ref was updated
 	newHash, err := testutil.RunGit(t, dir, "rev-parse", "origin/main")
 	if err != nil {
 		t.Fatalf("Failed to get new hash: %v", err)
 	}
-
 	if initialHash == newHash {
 		t.Error("Expected origin/main to be updated after fetch, but hash unchanged")
 	}
 }
 
-// TestFetchBranchNonExistent tests fetch of a non-existent branch.
-// A missing remote ref is a benign condition that must be classified as ErrRemoteRefNotFound,
-// so the finish preflight can distinguish it from a fatal transport failure.
-// Steps:
-// 1. Sets up a test repository with a remote
-// 2. Calls FetchBranch for a branch that doesn't exist on remote
-// 3. Verifies the error wraps the ErrRemoteRefNotFound sentinel
 func TestFetchBranchNonExistent(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
@@ -667,233 +500,233 @@ func TestFetchBranchNonExistent(t *testing.T) {
 	}
 	defer testutil.CleanupTestRepo(t, remoteDir)
 
-	withGitRepo(t, dir, func() {
-		err := git.FetchBranch("origin", "non-existent-branch")
-		if err == nil {
-			t.Fatal("Expected error when fetching non-existent branch, got nil")
-		}
-		if !goerrors.Is(err, git.ErrRemoteRefNotFound) {
-			t.Errorf("Expected error to wrap ErrRemoteRefNotFound, got: %v", err)
-		}
-	})
+	repo := openRepo(t, dir)
+	err = repo.FetchBranch("origin", "non-existent-branch")
+	if err == nil {
+		t.Fatal("Expected error when fetching non-existent branch, got nil")
+	}
+	if !goerrors.Is(err, git.ErrRemoteRefNotFound) {
+		t.Errorf("Expected error to wrap ErrRemoteRefNotFound, got: %v", err)
+	}
 }
 
-// TestFetchBranchTransportFailure tests that a transport/connection failure is NOT misclassified
-// as a benign missing ref. Fetching from a bogus remote (a path that is not a git repository)
-// must return an error that does not wrap ErrRemoteRefNotFound, so the preflight treats it as fatal.
-// Steps:
-// 1. Sets up a test repository (no reachable remote for the bogus target)
-// 2. Calls FetchBranch against a non-existent remote path
-// 3. Verifies an error is returned that does NOT wrap ErrRemoteRefNotFound
 func TestFetchBranchTransportFailure(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
 	bogusRemote := filepath.Join(dir, "does-not-exist-remote.git")
 
-	withGitRepo(t, dir, func() {
-		err := git.FetchBranch(bogusRemote, "main")
-		if err == nil {
-			t.Fatal("Expected error when fetching from a non-existent remote, got nil")
-		}
-		if goerrors.Is(err, git.ErrRemoteRefNotFound) {
-			t.Errorf("Expected transport failure NOT to wrap ErrRemoteRefNotFound, got: %v", err)
-		}
-	})
+	repo := openRepo(t, dir)
+	err := repo.FetchBranch(bogusRemote, "main")
+	if err == nil {
+		t.Fatal("Expected error when fetching from a non-existent remote, got nil")
+	}
+	if goerrors.Is(err, git.ErrRemoteRefNotFound) {
+		t.Errorf("Expected transport failure NOT to wrap ErrRemoteRefNotFound, got: %v", err)
+	}
 }
 
-// TestIsGitMergeInProgressTrue tests detection of an active git merge conflict.
-// Steps:
-// 1. Sets up a test repository with two branches containing conflicting changes
-// 2. Starts a merge that produces a conflict
-// 3. Verifies IsGitMergeInProgress returns true
 func TestIsGitMergeInProgressTrue(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	// Create a branch with content
-	_, err := testutil.RunGit(t, dir, "checkout", "-b", "feature")
-	if err != nil {
-		t.Fatalf("Failed to create branch: %v", err)
-	}
-	testutil.WriteFile(t, dir, "conflict.txt", "feature content")
-	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
-	if err != nil {
-		t.Fatalf("Failed to add file: %v", err)
-	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "Feature commit")
-	if err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
-
-	// Add conflicting content on main
-	_, err = testutil.RunGit(t, dir, "checkout", "main")
-	if err != nil {
-		t.Fatalf("Failed to checkout main: %v", err)
-	}
-	testutil.WriteFile(t, dir, "conflict.txt", "main content")
-	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
-	if err != nil {
-		t.Fatalf("Failed to add file: %v", err)
-	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "Main commit")
-	if err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
-
-	// Start merge that will conflict
+	setupConflictingBranches(t, dir)
 	_, _ = testutil.RunGit(t, dir, "merge", "feature")
 
-	withGitRepo(t, dir, func() {
-		if !git.IsGitMergeInProgress() {
-			t.Error("Expected IsGitMergeInProgress to return true during merge conflict")
-		}
-	})
+	repo := openRepo(t, dir)
+	if !repo.IsGitMergeInProgress() {
+		t.Error("Expected IsGitMergeInProgress to return true during merge conflict")
+	}
 }
 
-// TestIsGitMergeInProgressFalse tests that clean repos are not detected as merging.
-// Steps:
-// 1. Sets up a clean test repository
-// 2. Verifies IsGitMergeInProgress returns false
 func TestIsGitMergeInProgressFalse(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	withGitRepo(t, dir, func() {
-		if git.IsGitMergeInProgress() {
-			t.Error("Expected IsGitMergeInProgress to return false on clean repo")
-		}
-	})
+	repo := openRepo(t, dir)
+	if repo.IsGitMergeInProgress() {
+		t.Error("Expected IsGitMergeInProgress to return false on clean repo")
+	}
 }
 
-// TestIsGitRebaseInProgressTrue tests detection of an active git rebase conflict.
-// Steps:
-// 1. Sets up a test repository with two branches containing conflicting changes
-// 2. Starts a rebase that produces a conflict
-// 3. Verifies IsGitRebaseInProgress returns true
 func TestIsGitRebaseInProgressTrue(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	// Create a branch with content
-	_, err := testutil.RunGit(t, dir, "checkout", "-b", "feature")
-	if err != nil {
-		t.Fatalf("Failed to create branch: %v", err)
-	}
-	testutil.WriteFile(t, dir, "conflict.txt", "feature content")
-	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
-	if err != nil {
-		t.Fatalf("Failed to add file: %v", err)
-	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "Feature commit")
-	if err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
-
-	// Add conflicting content on main
-	_, err = testutil.RunGit(t, dir, "checkout", "main")
-	if err != nil {
-		t.Fatalf("Failed to checkout main: %v", err)
-	}
-	testutil.WriteFile(t, dir, "conflict.txt", "main content")
-	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
-	if err != nil {
-		t.Fatalf("Failed to add file: %v", err)
-	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "Main commit")
-	if err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
-
-	// Switch to feature and rebase onto main (will conflict)
-	_, err = testutil.RunGit(t, dir, "checkout", "feature")
-	if err != nil {
+	setupConflictingBranches(t, dir)
+	if _, err := testutil.RunGit(t, dir, "checkout", "feature"); err != nil {
 		t.Fatalf("Failed to checkout feature: %v", err)
 	}
 	_, _ = testutil.RunGit(t, dir, "rebase", "main")
 
-	withGitRepo(t, dir, func() {
-		if !git.IsGitRebaseInProgress() {
-			t.Error("Expected IsGitRebaseInProgress to return true during rebase conflict")
-		}
-	})
+	repo := openRepo(t, dir)
+	if !repo.IsGitRebaseInProgress() {
+		t.Error("Expected IsGitRebaseInProgress to return true during rebase conflict")
+	}
 }
 
-// TestIsGitRebaseInProgressFalse tests that clean repos are not detected as rebasing.
-// Steps:
-// 1. Sets up a clean test repository
-// 2. Verifies IsGitRebaseInProgress returns false
 func TestIsGitRebaseInProgressFalse(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	withGitRepo(t, dir, func() {
-		if git.IsGitRebaseInProgress() {
-			t.Error("Expected IsGitRebaseInProgress to return false on clean repo")
-		}
-	})
+	repo := openRepo(t, dir)
+	if repo.IsGitRebaseInProgress() {
+		t.Error("Expected IsGitRebaseInProgress to return false on clean repo")
+	}
 }
 
-// TestIsGitSquashMergeInProgressTrue tests detection of an active squash merge conflict.
-// Steps:
-// 1. Sets up a test repository with two branches containing conflicting changes
-// 2. Starts a squash merge that produces a conflict
-// 3. Verifies IsGitSquashMergeInProgress returns true
 func TestIsGitSquashMergeInProgressTrue(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	// Create a branch with content
-	_, err := testutil.RunGit(t, dir, "checkout", "-b", "feature")
-	if err != nil {
-		t.Fatalf("Failed to create branch: %v", err)
-	}
-	testutil.WriteFile(t, dir, "conflict.txt", "feature content")
-	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
-	if err != nil {
-		t.Fatalf("Failed to add file: %v", err)
-	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "Feature commit")
-	if err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
-
-	// Add conflicting content on main
-	_, err = testutil.RunGit(t, dir, "checkout", "main")
-	if err != nil {
-		t.Fatalf("Failed to checkout main: %v", err)
-	}
-	testutil.WriteFile(t, dir, "conflict.txt", "main content")
-	_, err = testutil.RunGit(t, dir, "add", "conflict.txt")
-	if err != nil {
-		t.Fatalf("Failed to add file: %v", err)
-	}
-	_, err = testutil.RunGit(t, dir, "commit", "-m", "Main commit")
-	if err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
-
-	// Start squash merge that will conflict
+	setupConflictingBranches(t, dir)
 	_, _ = testutil.RunGit(t, dir, "merge", "--squash", "feature")
 
-	withGitRepo(t, dir, func() {
-		if !git.IsGitSquashMergeInProgress() {
-			t.Error("Expected IsGitSquashMergeInProgress to return true during squash merge conflict")
-		}
-	})
+	repo := openRepo(t, dir)
+	if !repo.IsGitSquashMergeInProgress() {
+		t.Error("Expected IsGitSquashMergeInProgress to return true during squash merge conflict")
+	}
 }
 
-// TestIsGitSquashMergeInProgressFalse tests that clean repos are not detected as squash merging.
-// Steps:
-// 1. Sets up a clean test repository
-// 2. Verifies IsGitSquashMergeInProgress returns false
 func TestIsGitSquashMergeInProgressFalse(t *testing.T) {
+	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	withGitRepo(t, dir, func() {
-		if git.IsGitSquashMergeInProgress() {
-			t.Error("Expected IsGitSquashMergeInProgress to return false on clean repo")
+	repo := openRepo(t, dir)
+	if repo.IsGitSquashMergeInProgress() {
+		t.Error("Expected IsGitSquashMergeInProgress to return false on clean repo")
+	}
+}
+
+// --- Scenario 4: in-progress detection off-CWD, with setup guards ---
+
+func TestRepoIsMergeInProgressTrueOffCwd(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	setupConflictingBranches(t, dir)
+	_, _ = testutil.RunGit(t, dir, "merge", "feature")
+
+	// Setup guard: confirm the conflict is genuinely in progress before asserting.
+	if _, err := os.Stat(filepath.Join(dir, ".git", "MERGE_HEAD")); err != nil {
+		t.Fatalf("Setup guard failed: MERGE_HEAD not present: %v", err)
+	}
+	status, err := testutil.RunGit(t, dir, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("Failed to read status: %v", err)
+	}
+	if !hasUnmergedEntry(status) {
+		t.Fatalf("Setup guard failed: expected a UU entry in status, got:\n%s", status)
+	}
+
+	repo := openRepo(t, dir)
+	if !repo.IsGitMergeInProgress() {
+		t.Error("Expected IsGitMergeInProgress to return true off-CWD")
+	}
+}
+
+func TestRepoIsRebaseInProgressTrueOffCwd(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	setupConflictingBranches(t, dir)
+	if _, err := testutil.RunGit(t, dir, "checkout", "feature"); err != nil {
+		t.Fatalf("Failed to checkout feature: %v", err)
+	}
+	_, _ = testutil.RunGit(t, dir, "rebase", "main")
+
+	// Setup guard: a rebase state dir must exist.
+	_, mergeErr := os.Stat(filepath.Join(dir, ".git", "rebase-merge"))
+	_, applyErr := os.Stat(filepath.Join(dir, ".git", "rebase-apply"))
+	if mergeErr != nil && applyErr != nil {
+		t.Fatalf("Setup guard failed: neither rebase-merge nor rebase-apply present")
+	}
+
+	repo := openRepo(t, dir)
+	if !repo.IsGitRebaseInProgress() {
+		t.Error("Expected IsGitRebaseInProgress to return true off-CWD")
+	}
+}
+
+func TestRepoIsSquashMergeInProgressTrueOffCwd(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	setupConflictingBranches(t, dir)
+	_, _ = testutil.RunGit(t, dir, "merge", "--squash", "feature")
+
+	// Setup guard: SQUASH_MSG present and no rebase-merge (squash, not rebase).
+	if _, err := os.Stat(filepath.Join(dir, ".git", "SQUASH_MSG")); err != nil {
+		t.Fatalf("Setup guard failed: SQUASH_MSG not present: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git", "rebase-merge")); err == nil {
+		t.Fatalf("Setup guard failed: unexpected rebase-merge present for squash")
+	}
+
+	repo := openRepo(t, dir)
+	if !repo.IsGitSquashMergeInProgress() {
+		t.Error("Expected IsGitSquashMergeInProgress to return true off-CWD")
+	}
+}
+
+func TestRepoInProgressChecksIsolatedAcrossRepos(t *testing.T) {
+	t.Parallel()
+	repoA := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, repoA)
+	repoB := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, repoB)
+
+	// Repo A has a merge in progress; repo B is clean.
+	setupConflictingBranches(t, repoA)
+	_, _ = testutil.RunGit(t, repoA, "merge", "feature")
+	if _, err := os.Stat(filepath.Join(repoA, ".git", "MERGE_HEAD")); err != nil {
+		t.Fatalf("Setup guard failed: A has no MERGE_HEAD: %v", err)
+	}
+
+	repo := openRepo(t, repoB)
+	if repo.IsGitMergeInProgress() {
+		t.Error("B reported a merge in progress; A's state leaked")
+	}
+	if repo.IsGitRebaseInProgress() {
+		t.Error("B reported a rebase in progress; A's state leaked")
+	}
+	if repo.IsGitSquashMergeInProgress() {
+		t.Error("B reported a squash merge in progress; A's state leaked")
+	}
+}
+
+// hasUnmergedEntry reports whether git status --porcelain output contains an
+// unmerged (UU) entry.
+func hasUnmergedEntry(status string) bool {
+	for _, line := range splitLines(status) {
+		if len(line) >= 2 && line[0] == 'U' && line[1] == 'U' {
+			return true
 		}
-	})
+	}
+	return false
+}
+
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
 }

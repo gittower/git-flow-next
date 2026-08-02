@@ -12,7 +12,8 @@ import (
 
 // ListCommand is the implementation of the list command for topic branches
 func ListCommand(branchType string) {
-	if err := list(branchType); err != nil {
+	repo := mustOpenRepo()
+	if err := list(repo, branchType); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -25,9 +26,9 @@ func ListCommand(branchType string) {
 }
 
 // list performs the actual branch listing logic and returns any errors
-func list(branchType string) error {
+func list(repo *git.Repo, branchType string) error {
 	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized()
+	initialized, err := config.IsInitialized(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
 	}
@@ -36,7 +37,7 @@ func list(branchType string) error {
 	}
 
 	// Get configuration
-	cfg, err := config.LoadConfig()
+	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -51,7 +52,7 @@ func list(branchType string) error {
 	prefix := branchConfig.Prefix
 
 	// Get all branches
-	branches, err := git.ListBranches()
+	branches, err := repo.ListBranches()
 	if err != nil {
 		return &errors.GitError{Operation: "list branches", Err: err}
 	}
