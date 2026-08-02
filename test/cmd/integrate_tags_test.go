@@ -67,20 +67,13 @@ func TestIntegrateSignedTag(t *testing.T) {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
 	}
 
-	// Ephemeral GPG home so we never touch the developer's keyring.
+	// Ephemeral GPG home so we never touch the developer's keyring. It is
+	// passed through each subprocess env that needs it (never the test process
+	// env) so it stays scoped to this test and is safe under parallel execution.
 	gnupgHome := t.TempDir()
 	if err := os.Chmod(gnupgHome, 0700); err != nil {
 		t.Skipf("cannot secure GNUPGHOME: %v", err)
 	}
-	prev, hadPrev := os.LookupEnv("GNUPGHOME")
-	os.Setenv("GNUPGHOME", gnupgHome)
-	defer func() {
-		if hadPrev {
-			os.Setenv("GNUPGHOME", prev)
-		} else {
-			os.Unsetenv("GNUPGHOME")
-		}
-	}()
 
 	genCmd := exec.Command("gpg", "--batch", "--pinentry-mode", "loopback", "--passphrase", "",
 		"--quick-generate-key", "Test Signer <test@example.com>", "default", "default", "0")
@@ -95,7 +88,7 @@ func TestIntegrateSignedTag(t *testing.T) {
 
 	integAddCommit(t, dir, "develop", "c.txt", "C", "Add C on develop")
 
-	out, err := testutil.RunGitFlow(t, dir, "integrate", "develop", "--tag", "v2.0.0", "--sign")
+	out, err := runGitFlowWithEnv(t, dir, []string{"GNUPGHOME=" + gnupgHome}, "integrate", "develop", "--tag", "v2.0.0", "--sign")
 	if err != nil {
 		t.Fatalf("integrate develop --tag --sign failed: %v\nOutput: %s", err, out)
 	}
