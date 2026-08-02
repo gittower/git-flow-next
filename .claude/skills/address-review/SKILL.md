@@ -145,7 +145,7 @@ Use the `/commit` skill pattern (read `.claude/skills/commit/SKILL.md`):
 
 - Stage only the changed files
 - Write a commit message following COMMIT_GUIDELINES.md
-- The commit message should reference the review, e.g., `fix(hooks): Address review feedback on Windows support`
+- The commit message describes the **actual problem** fixed — never the review process. Do NOT write "Address review feedback" or "Address round N of review". When a round produced several unrelated fixes, split them into logical commits, each with a subject about the real change, e.g. `fix(hooks): Handle CRLF paths on Windows`
 
 **Do NOT push yet.**
 

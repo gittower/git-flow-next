@@ -131,6 +131,7 @@ Adds comprehensive documentation about git-flow default branches and settings to
 - **Don't include file lists**: Git tracks files automatically
 - **Don't exceed 72 characters per line**: Hard wrap the body at 72 columns
 - **Don't commit broken code**: Each commit should represent a working state
+- **Don't reference the review process**: Commit messages describe the actual problem being fixed — never "Address review feedback", "Address round 2 of review", "Fix Copilot comments", or similar. Split review feedback into logical commits by the real problem each one solves, and write each subject/body about that problem
 - **Don't use free-form AI attribution**: Credit AI agents only via the structured `Co-Authored-By` trailer, not prose footers like "Generated with Claude Code"
 
 ## Special Cases
