@@ -56,8 +56,8 @@ fi
 `
 	createExecutableScript(t, dir, "filter-flow-release-start-version", script)
 
-	gitDir := filepath.Join(dir, ".git")
-	result, err := hooks.RunVersionFilter(gitDir, "release", "1.0.0")
+	repo := openRepo(t, dir)
+	result, err := hooks.RunVersionFilter(repo, "release", "1.0.0")
 	if err != nil {
 		t.Fatalf("RunVersionFilter failed: %v", err)
 	}
@@ -83,8 +83,8 @@ fi
 `
 	createExecutableScript(t, dir, "filter-flow-release-start-version", script)
 
-	gitDir := filepath.Join(dir, ".git")
-	result, err := hooks.RunVersionFilter(gitDir, "release", "v1.0.0")
+	repo := openRepo(t, dir)
+	result, err := hooks.RunVersionFilter(repo, "release", "v1.0.0")
 	if err != nil {
 		t.Fatalf("RunVersionFilter failed: %v", err)
 	}
@@ -99,8 +99,8 @@ func TestVersionFilterNonExistentReturnsOriginal(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	gitDir := filepath.Join(dir, ".git")
-	result, err := hooks.RunVersionFilter(gitDir, "release", "1.0.0")
+	repo := openRepo(t, dir)
+	result, err := hooks.RunVersionFilter(repo, "release", "1.0.0")
 	if err != nil {
 		t.Fatalf("RunVersionFilter failed: %v", err)
 	}
@@ -124,8 +124,8 @@ echo "modified-$1"
 `
 	createNonExecutableScript(t, dir, "filter-flow-release-start-version", script)
 
-	gitDir := filepath.Join(dir, ".git")
-	result, err := hooks.RunVersionFilter(gitDir, "release", "1.0.0")
+	repo := openRepo(t, dir)
+	result, err := hooks.RunVersionFilter(repo, "release", "1.0.0")
 	if err != nil {
 		t.Fatalf("RunVersionFilter failed: %v", err)
 	}
@@ -148,8 +148,8 @@ exit 1
 `
 	createExecutableScript(t, dir, "filter-flow-release-start-version", script)
 
-	gitDir := filepath.Join(dir, ".git")
-	_, err := hooks.RunVersionFilter(gitDir, "release", "1.0.0")
+	repo := openRepo(t, dir)
+	_, err := hooks.RunVersionFilter(repo, "release", "1.0.0")
 	if err == nil {
 		t.Fatal("Expected error for non-zero exit code, got nil")
 	}
@@ -166,8 +166,8 @@ func TestVersionFilterEmptyOutputReturnsOriginal(t *testing.T) {
 `
 	createExecutableScript(t, dir, "filter-flow-release-start-version", script)
 
-	gitDir := filepath.Join(dir, ".git")
-	result, err := hooks.RunVersionFilter(gitDir, "release", "1.0.0")
+	repo := openRepo(t, dir)
+	result, err := hooks.RunVersionFilter(repo, "release", "1.0.0")
 	if err != nil {
 		t.Fatalf("RunVersionFilter failed: %v", err)
 	}
@@ -189,8 +189,8 @@ echo "hotfix-$1"
 `
 	createExecutableScript(t, dir, "filter-flow-hotfix-start-version", script)
 
-	gitDir := filepath.Join(dir, ".git")
-	result, err := hooks.RunVersionFilter(gitDir, "hotfix", "1.0.1")
+	repo := openRepo(t, dir)
+	result, err := hooks.RunVersionFilter(repo, "hotfix", "1.0.1")
 	if err != nil {
 		t.Fatalf("RunVersionFilter failed: %v", err)
 	}
@@ -211,8 +211,8 @@ echo "custom-$1"
 `
 	createExecutableScript(t, dir, "filter-flow-epic-start-version", script)
 
-	gitDir := filepath.Join(dir, ".git")
-	result, err := hooks.RunVersionFilter(gitDir, "epic", "my-epic")
+	repo := openRepo(t, dir)
+	result, err := hooks.RunVersionFilter(repo, "epic", "my-epic")
 	if err != nil {
 		t.Fatalf("RunVersionFilter failed: %v", err)
 	}
@@ -237,7 +237,7 @@ Release ${VERSION} - Auto-generated"
 `
 	createExecutableScript(t, dir, "filter-flow-release-finish-tag-message", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.FilterContext{
 		BranchType: "release",
 		BranchName: "1.0.0",
@@ -246,7 +246,7 @@ Release ${VERSION} - Auto-generated"
 		BaseBranch: "main",
 	}
 
-	result, err := hooks.RunTagMessageFilter(gitDir, "release", ctx)
+	result, err := hooks.RunTagMessageFilter(repo, "release", ctx)
 	if err != nil {
 		t.Fatalf("RunTagMessageFilter failed: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestTagMessageFilterNonExistentReturnsOriginal(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.FilterContext{
 		BranchType: "release",
 		BranchName: "1.0.0",
@@ -271,7 +271,7 @@ func TestTagMessageFilterNonExistentReturnsOriginal(t *testing.T) {
 		BaseBranch: "main",
 	}
 
-	result, err := hooks.RunTagMessageFilter(gitDir, "release", ctx)
+	result, err := hooks.RunTagMessageFilter(repo, "release", ctx)
 	if err != nil {
 		t.Fatalf("RunTagMessageFilter failed: %v", err)
 	}
@@ -295,7 +295,7 @@ echo "modified message"
 `
 	createNonExecutableScript(t, dir, "filter-flow-release-finish-tag-message", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.FilterContext{
 		BranchType: "release",
 		BranchName: "1.0.0",
@@ -304,7 +304,7 @@ echo "modified message"
 		BaseBranch: "main",
 	}
 
-	result, err := hooks.RunTagMessageFilter(gitDir, "release", ctx)
+	result, err := hooks.RunTagMessageFilter(repo, "release", ctx)
 	if err != nil {
 		t.Fatalf("RunTagMessageFilter failed: %v", err)
 	}
@@ -326,7 +326,7 @@ exit 1
 `
 	createExecutableScript(t, dir, "filter-flow-release-finish-tag-message", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.FilterContext{
 		BranchType: "release",
 		BranchName: "1.0.0",
@@ -335,7 +335,7 @@ exit 1
 		BaseBranch: "main",
 	}
 
-	_, err := hooks.RunTagMessageFilter(gitDir, "release", ctx)
+	_, err := hooks.RunTagMessageFilter(repo, "release", ctx)
 	if err == nil {
 		t.Fatal("Expected error for non-zero exit code, got nil")
 	}
@@ -353,7 +353,7 @@ echo "Hotfix ${VERSION}"
 `
 	createExecutableScript(t, dir, "filter-flow-hotfix-finish-tag-message", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.FilterContext{
 		BranchType: "hotfix",
 		BranchName: "1.0.1",
@@ -362,7 +362,7 @@ echo "Hotfix ${VERSION}"
 		BaseBranch: "main",
 	}
 
-	result, err := hooks.RunTagMessageFilter(gitDir, "hotfix", ctx)
+	result, err := hooks.RunTagMessageFilter(repo, "hotfix", ctx)
 	if err != nil {
 		t.Fatalf("RunTagMessageFilter failed: %v", err)
 	}
@@ -384,7 +384,7 @@ echo "Epic ${VERSION} completed"
 `
 	createExecutableScript(t, dir, "filter-flow-epic-finish-tag-message", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.FilterContext{
 		BranchType: "epic",
 		BranchName: "my-epic",
@@ -393,7 +393,7 @@ echo "Epic ${VERSION} completed"
 		BaseBranch: "main",
 	}
 
-	result, err := hooks.RunTagMessageFilter(gitDir, "epic", ctx)
+	result, err := hooks.RunTagMessageFilter(repo, "epic", ctx)
 	if err != nil {
 		t.Fatalf("RunTagMessageFilter failed: %v", err)
 	}
@@ -414,7 +414,7 @@ echo "Type: ${BRANCH_TYPE}, Name: ${BRANCH_NAME}, Base: ${BASE_BRANCH}, Version:
 `
 	createExecutableScript(t, dir, "filter-flow-release-finish-tag-message", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.FilterContext{
 		BranchType: "release",
 		BranchName: "my-release",
@@ -423,7 +423,7 @@ echo "Type: ${BRANCH_TYPE}, Name: ${BRANCH_NAME}, Base: ${BASE_BRANCH}, Version:
 		BaseBranch: "main",
 	}
 
-	result, err := hooks.RunTagMessageFilter(gitDir, "release", ctx)
+	result, err := hooks.RunTagMessageFilter(repo, "release", ctx)
 	if err != nil {
 		t.Fatalf("RunTagMessageFilter failed: %v", err)
 	}
@@ -466,7 +466,7 @@ echo "v$1"
 		t.Fatalf("git.Open failed: %v", err)
 	}
 
-	result, err := hooks.RunVersionFilter(repo.GitDir(), "release", "1.0.0")
+	result, err := hooks.RunVersionFilter(repo, "release", "1.0.0")
 	if err != nil {
 		t.Fatalf("RunVersionFilter failed: %v", err)
 	}
@@ -550,11 +550,14 @@ echo "v${VERSION}"
 `
 	createExecutableScript(t, mainRepo, "filter-flow-release-start-version", script)
 
-	// Get the worktree's absolute git directory via a git.Repo handle.
-	wtGitDir := worktreeGitDir(t, worktreePath)
+	// Open a git.Repo handle for the worktree.
+	repo, err := git.Open(worktreePath)
+	if err != nil {
+		t.Fatalf("git.Open failed: %v", err)
+	}
 
 	// Run version filter from worktree context
-	result, err := hooks.RunVersionFilter(wtGitDir, "release", "1.0.0")
+	result, err := hooks.RunVersionFilter(repo, "release", "1.0.0")
 	if err != nil {
 		t.Fatalf("RunVersionFilter failed in worktree: %v", err)
 	}
@@ -590,8 +593,11 @@ echo "Release ${VERSION} from worktree"
 `
 	createExecutableScript(t, mainRepo, "filter-flow-release-finish-tag-message", script)
 
-	// Get the worktree's absolute git directory via a git.Repo handle.
-	wtGitDir := worktreeGitDir(t, worktreePath)
+	// Open a git.Repo handle for the worktree.
+	repo, err := git.Open(worktreePath)
+	if err != nil {
+		t.Fatalf("git.Open failed: %v", err)
+	}
 
 	ctx := hooks.FilterContext{
 		BranchType: "release",
@@ -602,12 +608,113 @@ echo "Release ${VERSION} from worktree"
 	}
 
 	// Run tag message filter from worktree context
-	result, err := hooks.RunTagMessageFilter(wtGitDir, "release", ctx)
+	result, err := hooks.RunTagMessageFilter(repo, "release", ctx)
 	if err != nil {
 		t.Fatalf("RunTagMessageFilter failed in worktree: %v", err)
 	}
 
 	if result != "Release 2.0.0 from worktree" {
 		t.Errorf("Expected 'Release 2.0.0 from worktree', got '%s'", result)
+	}
+}
+
+// TestVersionFilterRelativePathResolvesInWorktree (Scenario 6) verifies that a
+// version filter configured via a relative gitflow.path.hooks is discovered and
+// executed against the active worktree root: the worktree filter transforms the
+// version and runs with cwd == worktree root, while the main-checkout control
+// filter never runs.
+func TestVersionFilterRelativePathResolvesInWorktree(t *testing.T) {
+	t.Parallel()
+	mainRepo, worktreePath, repo := setupWorktree(t, "wt-versionfilter")
+
+	wtMarker := filepath.Join(worktreePath, "vf-marker.txt")
+	mainMarker := filepath.Join(mainRepo, "vf-main-marker.txt")
+	wtScript := `#!/bin/sh
+pwd > "` + wtMarker + `"
+echo "v$1"
+`
+	mainScript := `#!/bin/sh
+pwd > "` + mainMarker + `"
+echo "MAIN$1"
+`
+	createExecutableScript2(t, filepath.Join(worktreePath, ".githooks"), "filter-flow-release-start-version", wtScript)
+	createExecutableScript2(t, filepath.Join(mainRepo, ".githooks"), "filter-flow-release-start-version", mainScript)
+
+	if _, err := testutil.RunGit(t, worktreePath, "config", "gitflow.path.hooks", ".githooks"); err != nil {
+		t.Fatalf("Failed to set gitflow.path.hooks: %v", err)
+	}
+
+	result, err := hooks.RunVersionFilter(repo, "release", "1.0.0")
+	if err != nil {
+		t.Fatalf("RunVersionFilter failed: %v", err)
+	}
+	if result != "v1.0.0" {
+		t.Errorf("Expected worktree filter output 'v1.0.0', got %q", result)
+	}
+
+	content, err := os.ReadFile(wtMarker)
+	if err != nil {
+		t.Fatalf("Worktree filter did not run — marker missing: %v", err)
+	}
+	got := evalSymlinks(t, strings.TrimSpace(string(content)))
+	want := evalSymlinks(t, repo.WorkTree())
+	if got != want {
+		t.Errorf("Filter ran in %q, want active worktree root %q", got, want)
+	}
+	if _, err := os.Stat(mainMarker); !os.IsNotExist(err) {
+		t.Errorf("Main-checkout control filter ran (marker %q exists), expected it not to", mainMarker)
+	}
+}
+
+// TestTagMessageFilterRelativePathResolvesInWorktree (Scenario 7) is the
+// tag-message-filter analogue of Scenario 6.
+func TestTagMessageFilterRelativePathResolvesInWorktree(t *testing.T) {
+	t.Parallel()
+	mainRepo, worktreePath, repo := setupWorktree(t, "wt-tagfilter")
+
+	wtMarker := filepath.Join(worktreePath, "tf-marker.txt")
+	mainMarker := filepath.Join(mainRepo, "tf-main-marker.txt")
+	wtScript := `#!/bin/sh
+pwd > "` + wtMarker + `"
+echo "Release $1 from worktree"
+`
+	mainScript := `#!/bin/sh
+pwd > "` + mainMarker + `"
+echo "MAIN $1"
+`
+	createExecutableScript2(t, filepath.Join(worktreePath, ".githooks"), "filter-flow-release-finish-tag-message", wtScript)
+	createExecutableScript2(t, filepath.Join(mainRepo, ".githooks"), "filter-flow-release-finish-tag-message", mainScript)
+
+	if _, err := testutil.RunGit(t, worktreePath, "config", "gitflow.path.hooks", ".githooks"); err != nil {
+		t.Fatalf("Failed to set gitflow.path.hooks: %v", err)
+	}
+
+	ctx := hooks.FilterContext{
+		BranchType: "release",
+		BranchName: "2.0.0",
+		Version:    "2.0.0",
+		TagMessage: "orig",
+		BaseBranch: "main",
+	}
+
+	result, err := hooks.RunTagMessageFilter(repo, "release", ctx)
+	if err != nil {
+		t.Fatalf("RunTagMessageFilter failed: %v", err)
+	}
+	if result != "Release 2.0.0 from worktree" {
+		t.Errorf("Expected worktree filter output 'Release 2.0.0 from worktree', got %q", result)
+	}
+
+	content, err := os.ReadFile(wtMarker)
+	if err != nil {
+		t.Fatalf("Worktree filter did not run — marker missing: %v", err)
+	}
+	got := evalSymlinks(t, strings.TrimSpace(string(content)))
+	want := evalSymlinks(t, repo.WorkTree())
+	if got != want {
+		t.Errorf("Filter ran in %q, want active worktree root %q", got, want)
+	}
+	if _, err := os.Stat(mainMarker); !os.IsNotExist(err) {
+		t.Errorf("Main-checkout control filter ran (marker %q exists), expected it not to", mainMarker)
 	}
 }

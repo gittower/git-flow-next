@@ -12,15 +12,40 @@ import (
 	"github.com/gittower/git-flow-next/test/testutil"
 )
 
-// worktreeGitDir returns the absolute per-worktree git dir for path via a
-// git.Repo handle, replacing the old os.Chdir + `git rev-parse --git-dir` dance.
-func worktreeGitDir(t *testing.T, path string) string {
+// openRepo opens a git.Repo handle for dir, failing the test on error.
+func openRepo(t *testing.T, dir string) *git.Repo {
 	t.Helper()
-	repo, err := git.Open(path)
+	repo, err := git.Open(dir)
 	if err != nil {
-		t.Fatalf("git.Open(%q) failed: %v", path, err)
+		t.Fatalf("git.Open(%q) failed: %v", dir, err)
 	}
-	return repo.GitDir()
+	return repo
+}
+
+// setupWorktree creates a main repository plus a linked worktree on the given
+// branch and returns the main repo path, the worktree path, and a git.Repo
+// handle opened at the worktree. Cleanup is registered via t.Cleanup so it is
+// safe under t.Parallel().
+func setupWorktree(t *testing.T, branch string) (mainRepo, worktreePath string, repo *git.Repo) {
+	t.Helper()
+	mainRepo = testutil.SetupTestRepo(t)
+	t.Cleanup(func() { testutil.CleanupTestRepo(t, mainRepo) })
+
+	var err error
+	worktreePath, err = os.MkdirTemp("", "git-flow-worktree-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory for worktree: %v", err)
+	}
+	// Remove the directory so `git worktree add` can create it.
+	os.RemoveAll(worktreePath)
+	t.Cleanup(func() { os.RemoveAll(worktreePath) })
+
+	if _, err = testutil.RunGit(t, mainRepo, "worktree", "add", worktreePath, "-b", branch); err != nil {
+		t.Fatalf("Failed to create worktree: %v", err)
+	}
+
+	repo = openRepo(t, worktreePath)
+	return mainRepo, worktreePath, repo
 }
 
 // evalSymlinks normalizes a path so comparisons survive macOS's /var symlink.
@@ -73,7 +98,7 @@ exit 0
 `
 	createHookScript(t, dir, "pre-flow-feature-start", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "my-feature",
@@ -82,7 +107,7 @@ exit 0
 		Origin:     "origin",
 	}
 
-	err := hooks.RunPreHook(gitDir, "feature", hooks.HookActionStart, ctx)
+	err := hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("RunPreHook failed unexpectedly: %v", err)
 	}
@@ -100,7 +125,7 @@ exit 1
 `
 	createHookScript(t, dir, "pre-flow-release-start", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "release",
 		BranchName: "1.0.0",
@@ -110,7 +135,7 @@ exit 1
 		Version:    "1.0.0",
 	}
 
-	err := hooks.RunPreHook(gitDir, "release", hooks.HookActionStart, ctx)
+	err := hooks.RunPreHook(repo, "release", hooks.HookActionStart, ctx)
 	if err == nil {
 		t.Fatal("Expected error for failing pre-hook, got nil")
 	}
@@ -124,7 +149,7 @@ func TestPreHookNonExistent(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "my-feature",
@@ -133,7 +158,7 @@ func TestPreHookNonExistent(t *testing.T) {
 		Origin:     "origin",
 	}
 
-	err := hooks.RunPreHook(gitDir, "feature", hooks.HookActionStart, ctx)
+	err := hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("Expected no error for non-existent hook, got: %v", err)
 	}
@@ -153,7 +178,7 @@ exit 1
 `
 	createNonExecutableHookScript(t, dir, "pre-flow-feature-start", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "my-feature",
@@ -163,7 +188,7 @@ exit 1
 	}
 
 	// Should not error because script is not executable
-	err := hooks.RunPreHook(gitDir, "feature", hooks.HookActionStart, ctx)
+	err := hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("Expected no error for non-executable hook, got: %v", err)
 	}
@@ -180,7 +205,7 @@ echo "Post-hook: $BRANCH_TYPE/$BRANCH_NAME completed with exit code $EXIT_CODE"
 `
 	createHookScript(t, dir, "post-flow-feature-finish", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "my-feature",
@@ -190,7 +215,7 @@ echo "Post-hook: $BRANCH_TYPE/$BRANCH_NAME completed with exit code $EXIT_CODE"
 		ExitCode:   0,
 	}
 
-	result := hooks.RunPostHook(gitDir, "feature", hooks.HookActionFinish, ctx)
+	result := hooks.RunPostHook(repo, "feature", hooks.HookActionFinish, ctx)
 	if !result.Executed {
 		t.Fatal("Expected post-hook to execute")
 	}
@@ -207,7 +232,7 @@ func TestPostHookNonExistent(t *testing.T) {
 	dir := testutil.SetupTestRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "my-feature",
@@ -217,7 +242,7 @@ func TestPostHookNonExistent(t *testing.T) {
 		ExitCode:   0,
 	}
 
-	result := hooks.RunPostHook(gitDir, "feature", hooks.HookActionFinish, ctx)
+	result := hooks.RunPostHook(repo, "feature", hooks.HookActionFinish, ctx)
 	if result.Executed {
 		t.Fatal("Expected Executed=false for non-existent hook")
 	}
@@ -234,7 +259,7 @@ exit 1
 `
 	createHookScript(t, dir, "post-flow-feature-finish", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "my-feature",
@@ -244,7 +269,7 @@ exit 1
 		ExitCode:   0,
 	}
 
-	result := hooks.RunPostHook(gitDir, "feature", hooks.HookActionFinish, ctx)
+	result := hooks.RunPostHook(repo, "feature", hooks.HookActionFinish, ctx)
 	if !result.Executed {
 		t.Fatal("Expected post-hook to execute")
 	}
@@ -277,7 +302,7 @@ echo "post-$EXIT_CODE" >> "` + markerFile + `"
 `
 	createHookScript(t, dir, "post-flow-feature-start", postScript)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "my-feature",
@@ -287,7 +312,7 @@ echo "post-$EXIT_CODE" >> "` + markerFile + `"
 	}
 
 	operationRan := false
-	err := hooks.WithHooks(gitDir, "feature", hooks.HookActionStart, ctx, func() error {
+	err := hooks.WithHooks(repo, "feature", hooks.HookActionStart, ctx, func() error {
 		operationRan = true
 		return nil
 	})
@@ -329,7 +354,7 @@ exit 1
 `
 	createHookScript(t, dir, "pre-flow-release-start", preScript)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "release",
 		BranchName: "1.0.0",
@@ -340,7 +365,7 @@ exit 1
 	}
 
 	operationRan := false
-	err := hooks.WithHooks(gitDir, "release", hooks.HookActionStart, ctx, func() error {
+	err := hooks.WithHooks(repo, "release", hooks.HookActionStart, ctx, func() error {
 		operationRan = true
 		return nil
 	})
@@ -369,7 +394,7 @@ echo "VERSION=$VERSION"
 `
 	createHookScript(t, dir, "pre-flow-release-start", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "release",
 		BranchName: "2.0.0",
@@ -379,7 +404,7 @@ echo "VERSION=$VERSION"
 		Version:    "2.0.0",
 	}
 
-	err := hooks.RunPreHook(gitDir, "release", hooks.HookActionStart, ctx)
+	err := hooks.RunPreHook(repo, "release", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("RunPreHook failed: %v", err)
 	}
@@ -407,7 +432,7 @@ exit 0
 `
 			createHookScript(t, dir, hookName, script)
 
-			gitDir := filepath.Join(dir, ".git")
+			repo := openRepo(t, dir)
 			ctx := hooks.HookContext{
 				BranchType: "feature",
 				BranchName: "test",
@@ -416,7 +441,7 @@ exit 0
 				Origin:     "origin",
 			}
 
-			err := hooks.RunPreHook(gitDir, "feature", action, ctx)
+			err := hooks.RunPreHook(repo, "feature", action, ctx)
 			if err != nil {
 				t.Errorf("RunPreHook failed for action %s: %v", action, err)
 			}
@@ -462,15 +487,18 @@ exit 0
 `
 	createHookScript(t, mainRepo, "pre-flow-feature-start", script)
 
-	// Get the worktree's absolute git directory via a git.Repo handle.
-	wtGitDir := worktreeGitDir(t, worktreePath)
-
-	// The worktree git dir should contain "worktrees" in the path
-	if !strings.Contains(wtGitDir, "worktrees") {
-		t.Errorf("Expected worktree git dir to contain 'worktrees', got: %s", wtGitDir)
+	// Open a git.Repo handle for the worktree.
+	repo, err := git.Open(worktreePath)
+	if err != nil {
+		t.Fatalf("git.Open failed: %v", err)
 	}
 
-	// Run the pre-hook using the worktree's git directory
+	// The worktree git dir should contain "worktrees" in the path
+	if !strings.Contains(repo.GitDir(), "worktrees") {
+		t.Errorf("Expected worktree git dir to contain 'worktrees', got: %s", repo.GitDir())
+	}
+
+	// Run the pre-hook using the worktree repo handle
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "test-worktree-feature",
@@ -479,7 +507,7 @@ exit 0
 		Origin:     "origin",
 	}
 
-	err = hooks.RunPreHook(wtGitDir, "feature", hooks.HookActionStart, ctx)
+	err = hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("RunPreHook failed in worktree: %v", err)
 	}
@@ -516,8 +544,11 @@ exit 0
 `
 	createHookScript(t, mainRepo, "post-flow-feature-finish", script)
 
-	// Get the worktree's absolute git directory via a git.Repo handle.
-	wtGitDir := worktreeGitDir(t, worktreePath)
+	// Open a git.Repo handle for the worktree.
+	repo, err := git.Open(worktreePath)
+	if err != nil {
+		t.Fatalf("git.Open failed: %v", err)
+	}
 
 	ctx := hooks.HookContext{
 		BranchType: "feature",
@@ -528,7 +559,7 @@ exit 0
 		ExitCode:   0,
 	}
 
-	result := hooks.RunPostHook(wtGitDir, "feature", hooks.HookActionFinish, ctx)
+	result := hooks.RunPostHook(repo, "feature", hooks.HookActionFinish, ctx)
 	if !result.Executed {
 		t.Error("Expected post-hook to execute in worktree")
 	}
@@ -692,7 +723,7 @@ echo "ARG4=$4"
 `
 	createHookScript(t, dir, "pre-flow-feature-start", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "test-feature",
@@ -702,7 +733,7 @@ echo "ARG4=$4"
 	}
 
 	// Run hook and check it doesn't fail (arguments are passed correctly)
-	err := hooks.RunPreHook(gitDir, "feature", hooks.HookActionStart, ctx)
+	err := hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("RunPreHook failed: %v", err)
 	}
@@ -744,7 +775,7 @@ exit 0
 `
 	createHookScript(t, dir, "pre-flow-feature-start", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "consistency-test",
@@ -753,7 +784,7 @@ exit 0
 		Origin:     "origin",
 	}
 
-	err := hooks.RunPreHook(gitDir, "feature", hooks.HookActionStart, ctx)
+	err := hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("Hook failed - positional args don't match env vars: %v", err)
 	}
@@ -775,7 +806,7 @@ exit 0
 `
 	createHookScript(t, dir, "pre-flow-feature-finish", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "my-feature",
@@ -784,7 +815,7 @@ exit 0
 		Origin:     "origin",
 	}
 
-	err := hooks.RunPreHook(gitDir, "feature", hooks.HookActionFinish, ctx)
+	err := hooks.RunPreHook(repo, "feature", hooks.HookActionFinish, ctx)
 	if err != nil {
 		t.Fatalf("Finish hook failed: %v", err)
 	}
@@ -806,7 +837,7 @@ exit 0
 `
 	createHookScript(t, dir, "pre-flow-release-start", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "release",
 		BranchName: "1.0.0",
@@ -816,7 +847,7 @@ exit 0
 		Version:    "1.0.0",
 	}
 
-	err := hooks.RunPreHook(gitDir, "release", hooks.HookActionStart, ctx)
+	err := hooks.RunPreHook(repo, "release", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("Start hook failed: %v", err)
 	}
@@ -850,7 +881,7 @@ exit 0
 		Origin:     "origin",
 	}
 
-	if err := hooks.RunPreHook(repo.GitDir(), "feature", hooks.HookActionStart, ctx); err != nil {
+	if err := hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx); err != nil {
 		t.Fatalf("RunPreHook failed: %v", err)
 	}
 
@@ -892,7 +923,7 @@ exit 0
 		ExitCode:   0,
 	}
 
-	result := hooks.RunPostHook(repo.GitDir(), "feature", hooks.HookActionFinish, ctx)
+	result := hooks.RunPostHook(repo, "feature", hooks.HookActionFinish, ctx)
 	if !result.Executed {
 		t.Fatal("Expected post-hook to execute")
 	}
@@ -937,7 +968,7 @@ exit 0
 `
 	createHookScript(t, dir, "pre-flow-feature-start", script)
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "test",
@@ -946,7 +977,7 @@ exit 0
 		Origin:     "origin",
 	}
 
-	err := hooks.RunPreHook(gitDir, "feature", hooks.HookActionStart, ctx)
+	err := hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("RunPreHook failed: %v", err)
 	}
@@ -988,7 +1019,7 @@ exit 0
 		t.Fatalf("Failed to set gitflow.path.hooks: %v", err)
 	}
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "test",
@@ -997,7 +1028,7 @@ exit 0
 		Origin:     "origin",
 	}
 
-	err = hooks.RunPreHook(gitDir, "feature", hooks.HookActionStart, ctx)
+	err = hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("RunPreHook failed: %v", err)
 	}
@@ -1034,7 +1065,7 @@ exit 0
 		t.Fatalf("Failed to set gitflow.path.hooks: %v", err)
 	}
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "test",
@@ -1043,7 +1074,7 @@ exit 0
 		Origin:     "origin",
 	}
 
-	err = hooks.RunPreHook(gitDir, "feature", hooks.HookActionStart, ctx)
+	err = hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("RunPreHook failed: %v", err)
 	}
@@ -1085,7 +1116,7 @@ exit 0
 		t.Fatalf("Failed to set core.hooksPath: %v", err)
 	}
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "test",
@@ -1094,7 +1125,7 @@ exit 0
 		Origin:     "origin",
 	}
 
-	err = hooks.RunPreHook(gitDir, "feature", hooks.HookActionStart, ctx)
+	err = hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("RunPreHook failed: %v", err)
 	}
@@ -1131,7 +1162,7 @@ exit 0
 		t.Fatalf("Failed to set core.hooksPath: %v", err)
 	}
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "test",
@@ -1140,7 +1171,7 @@ exit 0
 		Origin:     "origin",
 	}
 
-	err = hooks.RunPreHook(gitDir, "feature", hooks.HookActionStart, ctx)
+	err = hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("RunPreHook failed: %v", err)
 	}
@@ -1198,7 +1229,7 @@ exit 0
 		t.Fatalf("Failed to set core.hooksPath: %v", err)
 	}
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "test",
@@ -1207,7 +1238,7 @@ exit 0
 		Origin:     "origin",
 	}
 
-	err = hooks.RunPreHook(gitDir, "feature", hooks.HookActionStart, ctx)
+	err = hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("RunPreHook failed: %v", err)
 	}
@@ -1249,7 +1280,7 @@ exit 0
 		t.Fatalf("Failed to set core.hooksPath: %v", err)
 	}
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "release",
 		BranchName: "1.0.0",
@@ -1259,7 +1290,7 @@ exit 0
 		Version:    "1.0.0",
 	}
 
-	err = hooks.RunPreHook(gitDir, "release", hooks.HookActionStart, ctx)
+	err = hooks.RunPreHook(repo, "release", hooks.HookActionStart, ctx)
 	if err != nil {
 		t.Fatalf("RunPreHook failed: %v", err)
 	}
@@ -1301,7 +1332,7 @@ echo "BRANCH=$BRANCH EXIT_CODE=$EXIT_CODE" > "` + markerFile + `"
 		t.Fatalf("Failed to set gitflow.path.hooks: %v", err)
 	}
 
-	gitDir := filepath.Join(dir, ".git")
+	repo := openRepo(t, dir)
 	ctx := hooks.HookContext{
 		BranchType: "feature",
 		BranchName: "my-feature",
@@ -1311,7 +1342,7 @@ echo "BRANCH=$BRANCH EXIT_CODE=$EXIT_CODE" > "` + markerFile + `"
 		ExitCode:   0,
 	}
 
-	result := hooks.RunPostHook(gitDir, "feature", hooks.HookActionFinish, ctx)
+	result := hooks.RunPostHook(repo, "feature", hooks.HookActionFinish, ctx)
 	if !result.Executed {
 		t.Fatal("Expected post-hook to execute from gitflow.path.hooks")
 	}
@@ -1353,8 +1384,8 @@ echo "v${VERSION}"
 		t.Fatalf("Failed to set gitflow.path.hooks: %v", err)
 	}
 
-	gitDir := filepath.Join(dir, ".git")
-	result, err := hooks.RunVersionFilter(gitDir, "release", "1.0.0")
+	repo := openRepo(t, dir)
+	result, err := hooks.RunVersionFilter(repo, "release", "1.0.0")
 	if err != nil {
 		t.Fatalf("RunVersionFilter failed: %v", err)
 	}
@@ -1398,8 +1429,11 @@ echo "post-$EXIT_CODE" >> "` + markerFile + `"
 `
 	createHookScript(t, mainRepo, "post-flow-release-start", postScript)
 
-	// Get worktree git directory via a git.Repo handle.
-	wtGitDir := worktreeGitDir(t, worktreePath)
+	// Open a git.Repo handle for the worktree.
+	repo, err := git.Open(worktreePath)
+	if err != nil {
+		t.Fatalf("git.Open failed: %v", err)
+	}
 
 	ctx := hooks.HookContext{
 		BranchType: "release",
@@ -1411,7 +1445,7 @@ echo "post-$EXIT_CODE" >> "` + markerFile + `"
 	}
 
 	operationRan := false
-	err = hooks.WithHooks(wtGitDir, "release", hooks.HookActionStart, ctx, func() error {
+	err = hooks.WithHooks(repo, "release", hooks.HookActionStart, ctx, func() error {
 		operationRan = true
 		return nil
 	})
@@ -1438,5 +1472,229 @@ echo "post-$EXIT_CODE" >> "` + markerFile + `"
 	}
 	if lines[1] != "post-0" {
 		t.Errorf("Expected second line to be 'post-0', got '%s'", lines[1])
+	}
+}
+
+// TestPreHookDefaultLocationRunsInWorktreeCwd (Scenario 1) verifies that a
+// default-location hook (in the shared common .git/hooks) runs with its working
+// directory set to the active worktree root, not the git-internal
+// worktrees/<name> parent that filepath.Dir(repo.GitDir()) used to yield.
+func TestPreHookDefaultLocationRunsInWorktreeCwd(t *testing.T) {
+	t.Parallel()
+	mainRepo, worktreePath, repo := setupWorktree(t, "wt-prehook-default")
+
+	markerFile := filepath.Join(worktreePath, "marker.txt")
+	script := `#!/bin/sh
+pwd > "` + markerFile + `"
+exit 0
+`
+	// Shared common hooks location (main repo's .git/hooks).
+	createHookScript(t, mainRepo, "pre-flow-feature-start", script)
+
+	ctx := hooks.HookContext{
+		BranchType: "feature",
+		BranchName: "test",
+		FullBranch: "feature/test",
+		BaseBranch: "develop",
+		Origin:     "origin",
+	}
+
+	if err := hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx); err != nil {
+		t.Fatalf("RunPreHook failed: %v", err)
+	}
+
+	content, err := os.ReadFile(markerFile)
+	if err != nil {
+		t.Fatalf("Hook did not run — marker missing: %v", err)
+	}
+	got := evalSymlinks(t, strings.TrimSpace(string(content)))
+	want := evalSymlinks(t, repo.WorkTree())
+	if got != want {
+		t.Errorf("Pre-hook ran in %q, want active worktree root %q", got, want)
+	}
+}
+
+// TestPreHookRelativeGitflowPathHooksResolvesInWorktree (Scenario 2) verifies
+// that a relative gitflow.path.hooks resolves against the active worktree root,
+// so the worktree hook runs and the main-checkout control hook does not.
+func TestPreHookRelativeGitflowPathHooksResolvesInWorktree(t *testing.T) {
+	t.Parallel()
+	mainRepo, worktreePath, repo := setupWorktree(t, "wt-prehook-gitflowpath")
+
+	wtMarker := filepath.Join(worktreePath, "wt-marker.txt")
+	mainMarker := filepath.Join(mainRepo, "main-marker.txt")
+	wtScript := `#!/bin/sh
+pwd > "` + wtMarker + `"
+exit 0
+`
+	mainScript := `#!/bin/sh
+pwd > "` + mainMarker + `"
+exit 0
+`
+	createHookScriptInDir(t, filepath.Join(worktreePath, ".githooks"), "pre-flow-feature-start", wtScript)
+	createHookScriptInDir(t, filepath.Join(mainRepo, ".githooks"), "pre-flow-feature-start", mainScript)
+
+	if _, err := testutil.RunGit(t, worktreePath, "config", "gitflow.path.hooks", ".githooks"); err != nil {
+		t.Fatalf("Failed to set gitflow.path.hooks: %v", err)
+	}
+
+	ctx := hooks.HookContext{
+		BranchType: "feature",
+		BranchName: "test",
+		FullBranch: "feature/test",
+		BaseBranch: "develop",
+		Origin:     "origin",
+	}
+
+	if err := hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx); err != nil {
+		t.Fatalf("RunPreHook failed: %v", err)
+	}
+
+	content, err := os.ReadFile(wtMarker)
+	if err != nil {
+		t.Fatalf("Worktree hook did not run — marker missing: %v", err)
+	}
+	got := evalSymlinks(t, strings.TrimSpace(string(content)))
+	want := evalSymlinks(t, repo.WorkTree())
+	if got != want {
+		t.Errorf("Pre-hook ran in %q, want active worktree root %q", got, want)
+	}
+	if _, err := os.Stat(mainMarker); !os.IsNotExist(err) {
+		t.Errorf("Main-checkout control hook ran (marker %q exists), expected it not to", mainMarker)
+	}
+}
+
+// TestPreHookRelativeCoreHooksPathResolvesInWorktree (Scenario 3) is the
+// core.hooksPath analogue of Scenario 2.
+func TestPreHookRelativeCoreHooksPathResolvesInWorktree(t *testing.T) {
+	t.Parallel()
+	mainRepo, worktreePath, repo := setupWorktree(t, "wt-prehook-corehookspath")
+
+	wtMarker := filepath.Join(worktreePath, "wt-marker.txt")
+	mainMarker := filepath.Join(mainRepo, "main-marker.txt")
+	wtScript := `#!/bin/sh
+pwd > "` + wtMarker + `"
+exit 0
+`
+	mainScript := `#!/bin/sh
+pwd > "` + mainMarker + `"
+exit 0
+`
+	createHookScriptInDir(t, filepath.Join(worktreePath, ".githooks"), "pre-flow-feature-start", wtScript)
+	createHookScriptInDir(t, filepath.Join(mainRepo, ".githooks"), "pre-flow-feature-start", mainScript)
+
+	if _, err := testutil.RunGit(t, worktreePath, "config", "core.hooksPath", ".githooks"); err != nil {
+		t.Fatalf("Failed to set core.hooksPath: %v", err)
+	}
+
+	ctx := hooks.HookContext{
+		BranchType: "feature",
+		BranchName: "test",
+		FullBranch: "feature/test",
+		BaseBranch: "develop",
+		Origin:     "origin",
+	}
+
+	if err := hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx); err != nil {
+		t.Fatalf("RunPreHook failed: %v", err)
+	}
+
+	content, err := os.ReadFile(wtMarker)
+	if err != nil {
+		t.Fatalf("Worktree hook did not run — marker missing: %v", err)
+	}
+	got := evalSymlinks(t, strings.TrimSpace(string(content)))
+	want := evalSymlinks(t, repo.WorkTree())
+	if got != want {
+		t.Errorf("Pre-hook ran in %q, want active worktree root %q", got, want)
+	}
+	if _, err := os.Stat(mainMarker); !os.IsNotExist(err) {
+		t.Errorf("Main-checkout control hook ran (marker %q exists), expected it not to", mainMarker)
+	}
+}
+
+// TestPostHookDefaultLocationRunsInWorktreeCwd (Scenario 4) confirms the fix
+// threads through the post-hook path: a default-location post-hook runs with its
+// working directory set to the active worktree root.
+func TestPostHookDefaultLocationRunsInWorktreeCwd(t *testing.T) {
+	t.Parallel()
+	mainRepo, worktreePath, repo := setupWorktree(t, "wt-posthook-default")
+
+	markerFile := filepath.Join(worktreePath, "post-marker.txt")
+	script := `#!/bin/sh
+pwd > "` + markerFile + `"
+exit 0
+`
+	createHookScript(t, mainRepo, "post-flow-feature-finish", script)
+
+	ctx := hooks.HookContext{
+		BranchType: "feature",
+		BranchName: "test",
+		FullBranch: "feature/test",
+		BaseBranch: "develop",
+		Origin:     "origin",
+		ExitCode:   0,
+	}
+
+	result := hooks.RunPostHook(repo, "feature", hooks.HookActionFinish, ctx)
+	if !result.Executed {
+		t.Fatal("Expected post-hook to execute")
+	}
+	if result.ExitCode != 0 {
+		t.Errorf("Expected exit code 0, got %d", result.ExitCode)
+	}
+
+	content, err := os.ReadFile(markerFile)
+	if err != nil {
+		t.Fatalf("Hook did not run — marker missing: %v", err)
+	}
+	got := evalSymlinks(t, strings.TrimSpace(string(content)))
+	want := evalSymlinks(t, repo.WorkTree())
+	if got != want {
+		t.Errorf("Post-hook ran in %q, want active worktree root %q", got, want)
+	}
+}
+
+// TestPreHookRelativeGitflowPathHooksInPlainRepo (Scenario 5) is the regression
+// guard: in a plain (non-worktree) repo a relative gitflow.path.hooks resolves
+// against the checkout root, which equals the worktree root, so behavior is
+// unchanged.
+func TestPreHookRelativeGitflowPathHooksInPlainRepo(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	markerFile := filepath.Join(dir, "plain-marker.txt")
+	script := `#!/bin/sh
+pwd > "` + markerFile + `"
+exit 0
+`
+	createHookScriptInDir(t, filepath.Join(dir, ".githooks"), "pre-flow-feature-start", script)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.path.hooks", ".githooks"); err != nil {
+		t.Fatalf("Failed to set gitflow.path.hooks: %v", err)
+	}
+
+	repo := openRepo(t, dir)
+	ctx := hooks.HookContext{
+		BranchType: "feature",
+		BranchName: "test",
+		FullBranch: "feature/test",
+		BaseBranch: "develop",
+		Origin:     "origin",
+	}
+
+	if err := hooks.RunPreHook(repo, "feature", hooks.HookActionStart, ctx); err != nil {
+		t.Fatalf("RunPreHook failed: %v", err)
+	}
+
+	content, err := os.ReadFile(markerFile)
+	if err != nil {
+		t.Fatalf("Hook did not run — marker missing: %v", err)
+	}
+	got := evalSymlinks(t, strings.TrimSpace(string(content)))
+	want := evalSymlinks(t, repo.WorkTree())
+	if got != want {
+		t.Errorf("Pre-hook ran in %q, want repo root %q", got, want)
 	}
 }
