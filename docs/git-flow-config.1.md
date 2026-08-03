@@ -28,7 +28,7 @@ Branch names are matched **case-insensitively**. The case used when a branch is 
 ### Adding Configuration
 
 **add base** *name* [*parent*] [*options*]
-: Add a base branch configuration. Creates the Git branch immediately if it doesn't exist.
+: Add a base branch configuration. Creates the Git branch immediately if it doesn't exist. If branch creation fails, the new configuration is removed.
 
 **add topic** *name* *parent* [*options*]  
 : Add a topic branch type configuration. Saves configuration for use with start command.

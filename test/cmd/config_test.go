@@ -1335,6 +1335,115 @@ func TestConfigEditTopicStartingPointResolvesCaseInsensitively(t *testing.T) {
 	assertNoLineContains(t, cfg, "gitflow.branch.v9_release.", "edit topic starting point")
 }
 
+func setupConfigAddBaseMissingParentRef(t *testing.T) string {
+	t.Helper()
+	tempDir := testutil.SetupTestRepo(t)
+	t.Cleanup(func() { testutil.CleanupTestRepo(t, tempDir) })
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGit(t, tempDir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to check out main: %v", err)
+	}
+	if _, err := testutil.RunGit(t, tempDir, "branch", "-D", "develop"); err != nil {
+		t.Fatalf("Failed to delete develop: %v", err)
+	}
+
+	return tempDir
+}
+
+// TestConfigAddBaseRollsBackConfigWhenBranchCreationFails tests that a failed
+// branch creation removes the saved base configuration.
+// Steps:
+// 1. Initializes git-flow and removes the configured develop ref
+// 2. Attempts to add qa with the missing develop ref
+// 3. Verifies branch creation fails and the qa configuration is absent
+// 4. Verifies config list does not show qa
+func TestConfigAddBaseRollsBackConfigWhenBranchCreationFails(t *testing.T) {
+	t.Parallel()
+	tempDir := setupConfigAddBaseMissingParentRef(t)
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "qa", "develop")
+	if err == nil {
+		t.Fatalf("Expected branch creation to fail, got success\nOutput: %s", output)
+	}
+	if !strings.Contains(output, "create branch 'qa'") {
+		t.Errorf("Expected branch creation error, got:\n%s", output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertNoLineContains(t, cfg, "gitflow.branch.qa.", "failed add rollback")
+
+	listOutput, err := testutil.RunGitFlow(t, tempDir, "config", "list")
+	if err != nil {
+		t.Fatalf("Expected config list to succeed, got error: %v\nOutput: %s", err, listOutput)
+	}
+	assertNoLineContains(t, listOutput, "  qa ", "failed add rollback")
+}
+
+// TestConfigAddBaseCanRetryAfterBranchCreationFails tests that a failed base
+// addition can be retried after restoring the missing parent ref.
+// Steps:
+// 1. Initializes git-flow with the configured develop ref removed
+// 2. Verifies adding qa fails while develop is missing
+// 3. Restores develop and retries the add
+// 4. Verifies the qa configuration and ref are created
+func TestConfigAddBaseCanRetryAfterBranchCreationFails(t *testing.T) {
+	t.Parallel()
+	tempDir := setupConfigAddBaseMissingParentRef(t)
+
+	if output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "qa", "develop"); err == nil {
+		t.Fatalf("Expected initial branch creation to fail, got success\nOutput: %s", output)
+	}
+	if _, err := testutil.RunGit(t, tempDir, "branch", "develop", "main"); err != nil {
+		t.Fatalf("Failed to recreate develop: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "qa", "develop")
+	if err != nil {
+		t.Fatalf("Expected retry to succeed, got error: %v\nOutput: %s", err, output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.qa.type base", "retry after failed add")
+	assertContainsLine(t, cfg, "gitflow.branch.qa.parent develop", "retry after failed add")
+	if !refExists(t, tempDir, "qa") {
+		t.Error("Expected refs/heads/qa to exist after retry")
+	}
+}
+
+// TestConfigAddBaseUsesExistingRef tests that an existing branch bypasses
+// branch creation while saving the base configuration.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates a plain qa branch from main
+// 3. Adds qa as a base branch with main as its parent
+// 4. Verifies no branch is created and the base configuration is saved
+func TestConfigAddBaseUsesExistingRef(t *testing.T) {
+	t.Parallel()
+	tempDir := testutil.SetupTestRepo(t)
+	t.Cleanup(func() { testutil.CleanupTestRepo(t, tempDir) })
+
+	if _, err := testutil.RunGitFlow(t, tempDir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+	if _, err := testutil.RunGit(t, tempDir, "branch", "qa", "main"); err != nil {
+		t.Fatalf("Failed to create qa branch: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, tempDir, "config", "add", "base", "qa", "main")
+	if err != nil {
+		t.Fatalf("Expected add with existing ref to succeed, got error: %v\nOutput: %s", err, output)
+	}
+	if strings.Contains(output, "Created branch 'qa'") {
+		t.Errorf("Expected existing qa ref to skip branch creation, got:\n%s", output)
+	}
+
+	cfg := gitflowBranchConfig(t, tempDir)
+	assertContainsLine(t, cfg, "gitflow.branch.qa.type base", "existing ref add")
+}
+
 // mustOpenRepo opens a git.Repo handle for dir, failing the test on error.
 func mustOpenRepo(t *testing.T, dir string) *git.Repo {
 	t.Helper()
