@@ -50,6 +50,34 @@ func (e *EmptyBranchNameError) ExitCode() ExitCode {
 	return ExitCodeInvalidInput
 }
 
+// InvalidInputError indicates invalid user input with a custom message. It is a
+// typed error so callers get ExitCodeInvalidInput (2) instead of the default
+// git-error code.
+type InvalidInputError struct {
+	Message string
+}
+
+func (e *InvalidInputError) Error() string {
+	return e.Message
+}
+
+func (e *InvalidInputError) ExitCode() ExitCode {
+	return ExitCodeInvalidInput
+}
+
+// SharedConfigDriftError indicates that local git-flow config has drifted from
+// the committed .gitflow file. It carries the drift exit code (validation error)
+// so `config status` can signal drift distinctly from "not initialized".
+type SharedConfigDriftError struct{}
+
+func (e *SharedConfigDriftError) Error() string {
+	return "local git-flow configuration is out of sync with .gitflow (run 'git flow config sync')"
+}
+
+func (e *SharedConfigDriftError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
 // InvalidBranchTypeError indicates an unknown branch type
 type InvalidBranchTypeError struct {
 	BranchType string
