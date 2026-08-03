@@ -156,6 +156,197 @@ func RunGitFlowWithInput(t *testing.T, dir string, input string, args ...string)
 	return string(output), nil
 }
 
+// RunGitFlowInteractive runs a git-flow command with the given stdin input and
+// forces the first-run interactivity seam ON via GIT_FLOW_ASSUME_INTERACTIVE=1.
+// The subprocess test harness cannot allocate a PTY, so git-flow's real
+// term.IsTerminal check would always report non-interactive; this test-only env
+// var makes the first-run activation decision treat stdin as interactive and
+// read the answer from the piped input. Use it for the prompt scenarios (accept
+// "y\n" / decline "n\n"); use RunGitFlow (env unset) to exercise the
+// non-interactive hint path.
+func RunGitFlowInteractive(t *testing.T, dir string, input string, args ...string) (string, error) {
+	cmd := exec.Command(gitFlowPath, args...)
+	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(input)
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=:", "GIT_FLOW_ASSUME_INTERACTIVE=1")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return string(output), &ExitError{
+				ExitCode: exitErr.ExitCode(),
+				Err:      fmt.Errorf("%s", output),
+			}
+		}
+		return string(output), err
+	}
+	return string(output), nil
+}
+
+// SharedConfigPath returns the path to the committable .gitflow file at the root
+// of the given repository directory.
+func SharedConfigPath(dir string) string {
+	return filepath.Join(dir, ".gitflow")
+}
+
+// GitConfigValue returns a single git config value from the repository's LOCAL
+// scope (.git/config), or the empty string when the key is unset. Reading from
+// local scope (not merged) is what the shared-copy tests need: they verify keys
+// actually landed in .git/config.
+func GitConfigValue(t *testing.T, dir, key string) string {
+	out, err := RunGit(t, dir, "config", "--local", "--get", key)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// GitConfigExists reports whether a key is present in the repository's LOCAL
+// git config.
+func GitConfigExists(t *testing.T, dir, key string) bool {
+	_, err := RunGit(t, dir, "config", "--local", "--get", key)
+	return err == nil
+}
+
+// GitConfigAll returns all values for a (possibly multi-value) key from the
+// repository's LOCAL git config, in file order. Returns nil when unset.
+func GitConfigAll(t *testing.T, dir, key string) []string {
+	out, err := RunGit(t, dir, "config", "--local", "--get-all", key)
+	if err != nil {
+		return nil
+	}
+	var vals []string
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		if l != "" {
+			vals = append(vals, l)
+		}
+	}
+	return vals
+}
+
+// GitConfigHasPrefix reports whether the repository's LOCAL git config contains
+// any key whose name starts with the given prefix (e.g. "gitflow.branch.qa.").
+func GitConfigHasPrefix(t *testing.T, dir, prefix string) bool {
+	out, err := RunGit(t, dir, "config", "--local", "--get-regexp", "^"+prefix)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(out) != ""
+}
+
+// SharedConfigValue returns a single value from the .gitflow file, or empty when
+// unset.
+func SharedConfigValue(t *testing.T, dir, key string) string {
+	out, err := RunGit(t, dir, "config", "--file", SharedConfigPath(dir), "--get", key)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// SharedConfigAll returns all values for a key from the .gitflow file, in order.
+func SharedConfigAll(t *testing.T, dir, key string) []string {
+	out, err := RunGit(t, dir, "config", "--file", SharedConfigPath(dir), "--get-all", key)
+	if err != nil {
+		return nil
+	}
+	var vals []string
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		if l != "" {
+			vals = append(vals, l)
+		}
+	}
+	return vals
+}
+
+// SharedConfigSet sets a key in the .gitflow file via `git config --file`.
+func SharedConfigSet(t *testing.T, dir, key, value string) {
+	t.Helper()
+	if _, err := RunGit(t, dir, "config", "--file", SharedConfigPath(dir), key, value); err != nil {
+		t.Fatalf("Failed to set %s in .gitflow: %v", key, err)
+	}
+}
+
+// SharedConfigHasPrefix reports whether the .gitflow file contains any key whose
+// name starts with the given prefix.
+func SharedConfigHasPrefix(t *testing.T, dir, prefix string) bool {
+	out, err := RunGit(t, dir, "config", "--file", SharedConfigPath(dir), "--get-regexp", "^"+prefix)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(out) != ""
+}
+
+// AuthorSharedConfig runs `git flow init --shared --defaults` (plus any extra
+// args) in a throwaway repository and returns the raw bytes of the resulting
+// .gitflow file. Callers copy this into a fresh clone via SetupFreshCloneWithShared.
+func AuthorSharedConfig(t *testing.T, extraArgs ...string) []byte {
+	t.Helper()
+	src := SetupTestRepo(t)
+	defer CleanupTestRepo(t, src)
+	args := append([]string{"init", "--shared", "--defaults"}, extraArgs...)
+	if out, err := RunGitFlow(t, src, args...); err != nil {
+		t.Fatalf("Failed to author shared config: %v\nOutput: %s", err, out)
+	}
+	data, err := os.ReadFile(SharedConfigPath(src))
+	if err != nil {
+		t.Fatalf("Failed to read authored .gitflow: %v", err)
+	}
+	return data
+}
+
+// SetupFreshCloneWithShared creates a fresh repository that contains a committed
+// .gitflow file (with the given content) but NO local gitflow.* keys, simulating
+// a fresh clone of a repository that carries a committed .gitflow before its
+// first-run activation. Like a real clone of a defaults repo, it also has a
+// develop branch (the non-trunk base of the default configuration) so topic
+// branches that start from develop can be created after activation.
+func SetupFreshCloneWithShared(t *testing.T, gitflowContent []byte) string {
+	t.Helper()
+	dir := SetupTestRepo(t)
+	if err := os.WriteFile(SharedConfigPath(dir), gitflowContent, 0644); err != nil {
+		t.Fatalf("Failed to write .gitflow: %v", err)
+	}
+	if _, err := RunGit(t, dir, "add", ".gitflow"); err != nil {
+		t.Fatalf("Failed to stage .gitflow: %v", err)
+	}
+	if _, err := RunGit(t, dir, "commit", "-m", "Add committed .gitflow"); err != nil {
+		t.Fatalf("Failed to commit .gitflow: %v", err)
+	}
+	// A real clone of a git-flow-defaults repository has develop as well as main.
+	// Branch develop AFTER committing .gitflow so both branches carry the file;
+	// this keeps the work tree switchable when a test edits the (tracked) .gitflow.
+	if _, err := RunGit(t, dir, "branch", "develop"); err != nil {
+		t.Fatalf("Failed to create develop branch: %v", err)
+	}
+	return dir
+}
+
+// ClearLocalGitflowConfig removes every gitflow.* key from the repository's LOCAL
+// git config, leaving other scopes and any .gitflow file untouched. It is used to
+// return a repository that ran `git flow init` to a real "fresh clone" state
+// (branches present, but no local git-flow configuration).
+func ClearLocalGitflowConfig(t *testing.T, dir string) {
+	t.Helper()
+	out, err := RunGit(t, dir, "config", "--local", "--get-regexp", "^gitflow\\.")
+	if err != nil {
+		// No gitflow.* keys present: nothing to clear.
+		return
+	}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if line == "" {
+			continue
+		}
+		key := strings.SplitN(line, " ", 2)[0]
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		// --unset-all removes multi-value keys too; ignore "not found".
+		_, _ = RunGit(t, dir, "config", "--local", "--unset-all", key)
+	}
+}
+
 // SetupTestRepo creates a temporary Git repository for testing
 func SetupTestRepo(t *testing.T) string {
 	// Create temporary directory
