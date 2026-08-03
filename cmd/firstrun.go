@@ -17,11 +17,20 @@ import (
 // the shared config (prompt when interactive, auto-init when
 // gitflow.shared.autoInit=true, hint otherwise) by copying gitflow.* into local
 // .git/config before the invoked command proceeds. It is a no-op for the init
-// command itself, outside a work tree / in a bare repo, when no .gitflow exists,
-// and when the repo is already configured (local wins).
+// command itself and for the config command group, outside a work tree / in a
+// bare repo, when no .gitflow exists, and when the repo is already configured
+// (local wins).
 func firstRunActivation(cmd *cobra.Command) error {
 	// Never intercept the command that configures the repository.
 	if cmd.Name() == "init" {
+		return nil
+	}
+
+	// Never intercept the config command group: config verbs manage git-flow
+	// config explicitly. `config status` must stay read-only (no prompt/copy) and
+	// `config sync` must not be refused by an untrusted-hook auto-init before it
+	// gets a chance to run and skip the hook itself.
+	if cmd.Name() == "config" || (cmd.Parent() != nil && cmd.Parent().Name() == "config") {
 		return nil
 	}
 
@@ -66,7 +75,7 @@ func firstRunActivation(cmd *cobra.Command) error {
 	case firstRunInteractive():
 		return activatePrompt(repo)
 	default:
-		fmt.Fprintf(os.Stderr, "Note: this repository has a shared %s configuration that has not been activated.\nRun 'git flow init' to activate it, or set gitflow.shared.autoInit=true to activate automatically.\n", config.SharedConfigFileName)
+		fmt.Fprintf(os.Stderr, "Note: this repository has a shared %s configuration that has not been activated.\nRun 'git flow config sync' to activate it, or set gitflow.shared.autoInit=true to activate automatically.\n", config.SharedConfigFileName)
 		return nil
 	}
 }
@@ -84,6 +93,9 @@ func activateAutoInit(repo *git.Repo) error {
 			"refusing to auto-initialize from %s: it declares an untrusted shared hook path (%s). Set gitflow.shared.trustHooks=true to allow it.",
 			config.SharedConfigFileName, strings.Join(hookKeys, ", "))}
 	}
+	// No skipped-hook warning here (unlike activatePrompt): auto-init refuses
+	// outright when an untrusted hook path is present and copies it only when
+	// trusted, so it never partially skips a hook.
 	if _, err := config.CopySharedToLocal(repo); err != nil {
 		return err
 	}

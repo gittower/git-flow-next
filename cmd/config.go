@@ -428,13 +428,18 @@ func removeBranchSection(repo *git.Repo, shared bool, branchName string) error {
 }
 
 func executeConfigAddBase(repo *git.Repo, name, parent, upstreamStrategy, downstreamStrategy string, autoUpdate bool, shared bool) error {
-	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized(repo)
-	if err != nil {
-		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
-	}
-	if !initialized {
-		return &errors.NotInitializedError{}
+	// Validate that git-flow is initialized. Only gate LOCAL edits: for --shared
+	// the target is the .gitflow file (whose existence loadConfigForEdit enforces
+	// with the correct "run 'git flow init --shared'" suggestion), so a fresh
+	// clone with a .gitflow but no local init can still edit the shared file.
+	if !shared {
+		initialized, err := config.IsInitialized(repo)
+		if err != nil {
+			return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+		}
+		if !initialized {
+			return &errors.NotInitializedError{}
+		}
 	}
 
 	// Validate branch name
@@ -516,13 +521,18 @@ func executeConfigAddBase(repo *git.Repo, name, parent, upstreamStrategy, downst
 }
 
 func executeConfigAddTopic(repo *git.Repo, name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool, shared bool) error {
-	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized(repo)
-	if err != nil {
-		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
-	}
-	if !initialized {
-		return &errors.NotInitializedError{}
+	// Validate that git-flow is initialized. Only gate LOCAL edits: for --shared
+	// the target is the .gitflow file (whose existence loadConfigForEdit enforces
+	// with the correct "run 'git flow init --shared'" suggestion), so a fresh
+	// clone with a .gitflow but no local init can still edit the shared file.
+	if !shared {
+		initialized, err := config.IsInitialized(repo)
+		if err != nil {
+			return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+		}
+		if !initialized {
+			return &errors.NotInitializedError{}
+		}
 	}
 
 	// Validate branch name
@@ -601,13 +611,18 @@ func executeConfigAddTopic(repo *git.Repo, name, parent, prefix, startingPoint, 
 }
 
 func executeConfigEditBase(repo *git.Repo, name, upstreamStrategy, downstreamStrategy string, autoUpdate bool, shared bool) error {
-	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized(repo)
-	if err != nil {
-		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
-	}
-	if !initialized {
-		return &errors.NotInitializedError{}
+	// Validate that git-flow is initialized. Only gate LOCAL edits: for --shared
+	// the target is the .gitflow file (whose existence loadConfigForEdit enforces
+	// with the correct "run 'git flow init --shared'" suggestion), so a fresh
+	// clone with a .gitflow but no local init can still edit the shared file.
+	if !shared {
+		initialized, err := config.IsInitialized(repo)
+		if err != nil {
+			return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+		}
+		if !initialized {
+			return &errors.NotInitializedError{}
+		}
 	}
 
 	// Load current configuration
@@ -660,13 +675,18 @@ func executeConfigEditBase(repo *git.Repo, name, upstreamStrategy, downstreamStr
 }
 
 func executeConfigEditTopic(repo *git.Repo, name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool, shared bool) error {
-	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized(repo)
-	if err != nil {
-		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
-	}
-	if !initialized {
-		return &errors.NotInitializedError{}
+	// Validate that git-flow is initialized. Only gate LOCAL edits: for --shared
+	// the target is the .gitflow file (whose existence loadConfigForEdit enforces
+	// with the correct "run 'git flow init --shared'" suggestion), so a fresh
+	// clone with a .gitflow but no local init can still edit the shared file.
+	if !shared {
+		initialized, err := config.IsInitialized(repo)
+		if err != nil {
+			return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+		}
+		if !initialized {
+			return &errors.NotInitializedError{}
+		}
 	}
 
 	// Load current configuration
@@ -730,13 +750,18 @@ func executeConfigEditTopic(repo *git.Repo, name, prefix, startingPoint, upstrea
 }
 
 func executeConfigRenameBase(repo *git.Repo, oldName, newName string, shared bool) error {
-	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized(repo)
-	if err != nil {
-		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
-	}
-	if !initialized {
-		return &errors.NotInitializedError{}
+	// Validate that git-flow is initialized. Only gate LOCAL edits: for --shared
+	// the target is the .gitflow file (whose existence loadConfigForEdit enforces
+	// with the correct "run 'git flow init --shared'" suggestion), so a fresh
+	// clone with a .gitflow but no local init can still edit the shared file.
+	if !shared {
+		initialized, err := config.IsInitialized(repo)
+		if err != nil {
+			return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+		}
+		if !initialized {
+			return &errors.NotInitializedError{}
+		}
 	}
 
 	// Validate new branch name
@@ -818,13 +843,18 @@ func executeConfigRenameBase(repo *git.Repo, oldName, newName string, shared boo
 }
 
 func executeConfigRenameTopic(repo *git.Repo, oldName, newName string, shared bool) error {
-	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized(repo)
-	if err != nil {
-		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
-	}
-	if !initialized {
-		return &errors.NotInitializedError{}
+	// Validate that git-flow is initialized. Only gate LOCAL edits: for --shared
+	// the target is the .gitflow file (whose existence loadConfigForEdit enforces
+	// with the correct "run 'git flow init --shared'" suggestion), so a fresh
+	// clone with a .gitflow but no local init can still edit the shared file.
+	if !shared {
+		initialized, err := config.IsInitialized(repo)
+		if err != nil {
+			return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+		}
+		if !initialized {
+			return &errors.NotInitializedError{}
+		}
 	}
 
 	// Validate new branch name
@@ -879,13 +909,18 @@ func executeConfigRenameTopic(repo *git.Repo, oldName, newName string, shared bo
 }
 
 func executeConfigDeleteBase(repo *git.Repo, name string, shared bool) error {
-	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized(repo)
-	if err != nil {
-		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
-	}
-	if !initialized {
-		return &errors.NotInitializedError{}
+	// Validate that git-flow is initialized. Only gate LOCAL edits: for --shared
+	// the target is the .gitflow file (whose existence loadConfigForEdit enforces
+	// with the correct "run 'git flow init --shared'" suggestion), so a fresh
+	// clone with a .gitflow but no local init can still edit the shared file.
+	if !shared {
+		initialized, err := config.IsInitialized(repo)
+		if err != nil {
+			return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+		}
+		if !initialized {
+			return &errors.NotInitializedError{}
+		}
 	}
 
 	// Load current configuration
@@ -936,13 +971,18 @@ func executeConfigDeleteBase(repo *git.Repo, name string, shared bool) error {
 }
 
 func executeConfigDeleteTopic(repo *git.Repo, name string, shared bool) error {
-	// Validate that git-flow is initialized
-	initialized, err := config.IsInitialized(repo)
-	if err != nil {
-		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
-	}
-	if !initialized {
-		return &errors.NotInitializedError{}
+	// Validate that git-flow is initialized. Only gate LOCAL edits: for --shared
+	// the target is the .gitflow file (whose existence loadConfigForEdit enforces
+	// with the correct "run 'git flow init --shared'" suggestion), so a fresh
+	// clone with a .gitflow but no local init can still edit the shared file.
+	if !shared {
+		initialized, err := config.IsInitialized(repo)
+		if err != nil {
+			return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+		}
+		if !initialized {
+			return &errors.NotInitializedError{}
+		}
 	}
 
 	// Load current configuration

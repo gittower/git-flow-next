@@ -199,6 +199,30 @@ func TestConfigAddTopicSharedWithoutFileErrors(t *testing.T) {
 	}
 }
 
+// TestConfigEditTopicSharedFreshCloneNoLocalInit covers Imp-4: shared CRUD must
+// not be gated on local git-flow init. On a FRESH CLONE (committed .gitflow with a
+// feature type, NO local init), 'config edit topic feature --shared --prefix=feat/'
+// must succeed, update .gitflow, and re-sync local.
+// Steps:
+// 1. Fresh clone carrying a committed .gitflow, no local gitflow.* keys
+// 2. Runs 'config edit topic feature --shared --prefix=feat/'
+// 3. Verifies success, .gitflow feature.prefix=feat/, and local re-synced to feat/
+func TestConfigEditTopicSharedFreshCloneNoLocalInit(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupFreshCloneWithShared(t, testutil.AuthorSharedConfig(t))
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "config", "edit", "topic", "feature", "--shared", "--prefix=feat/"); err != nil {
+		t.Fatalf("expected shared edit to succeed without local init, got: %v\n%s", err, out)
+	}
+	if v := testutil.SharedConfigValue(t, dir, "gitflow.branch.feature.prefix"); v != "feat/" {
+		t.Errorf("expected .gitflow feature.prefix=feat/, got %q", v)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.feature.prefix"); v != "feat/" {
+		t.Errorf("expected local re-synced feature.prefix=feat/, got %q", v)
+	}
+}
+
 // TestConfigAddBaseSharedAddsBaseAndSyncs covers scenario 30base-a: config add
 // base --shared adds a base branch to .gitflow, re-syncs local, and creates the branch.
 // Steps:

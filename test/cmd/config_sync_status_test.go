@@ -466,6 +466,109 @@ func TestConfigStatusUntrustedHookNotDrift(t *testing.T) {
 	}
 }
 
+// TestConfigStatusFreshCloneReadOnlyReportsDrift covers Imp-1: config status on a
+// FRESH CLONE (committed .gitflow, no local gitflow.* keys) with
+// gitflow.shared.autoInit=true must stay read-only — it must NOT auto-activate —
+// and must report drift because local lacks the shared keys.
+// Steps:
+// 1. Fresh clone carrying a committed .gitflow, set local gitflow.shared.autoInit=true
+// 2. Runs 'git flow config status'
+// 3. Verifies no activation (no gitflow.branch.* copied, no activation notice) and drift, exit 6
+func TestConfigStatusFreshCloneReadOnlyReportsDrift(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupFreshCloneWithShared(t, testutil.AuthorSharedConfig(t))
+	defer testutil.CleanupTestRepo(t, dir)
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "gitflow.shared.autoInit", "true"); err != nil {
+		t.Fatalf("set autoInit: %v", err)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "status")
+	if err == nil {
+		t.Fatalf("expected config status to report drift on a fresh clone, got success\n%s", out)
+	}
+	assertExitCode(t, err, errors.ExitCodeValidationError)
+	// Read-only: config status must not have auto-activated despite autoInit=true.
+	if testutil.GitConfigHasPrefix(t, dir, "gitflow.branch.") {
+		t.Error("expected config status to NOT copy any gitflow.branch.* keys (must be read-only)")
+	}
+	if strings.Contains(out, "auto-initialized") {
+		t.Errorf("expected no activation notice from config status, got: %s", out)
+	}
+}
+
+// TestConfigSyncFreshCloneUntrustedHookSucceeds covers Imp-1: config sync on a
+// fresh clone with gitflow.shared.autoInit=true AND an untrusted hook path in
+// .gitflow must SUCCEED (not be refused by activation) — it copies the non-hook
+// keys and skips the untrusted hook. Before the fix, activateAutoInit refused
+// before sync could run.
+// Steps:
+// 1. Fresh clone with a committed .gitflow that ALSO declares gitflow.path.hooks; set local autoInit=true
+// 2. Runs 'git flow config sync'
+// 3. Verifies exit 0, a normal key (feature.prefix) synced, the hook NOT copied, and a skipped-hook warning
+func TestConfigSyncFreshCloneUntrustedHookSucceeds(t *testing.T) {
+	t.Parallel()
+	// Author a .gitflow that includes an untrusted hook path, then drop it into a
+	// fresh clone (no local init).
+	shared := testutil.AuthorSharedConfig(t)
+	dir := testutil.SetupFreshCloneWithShared(t, shared)
+	defer testutil.CleanupTestRepo(t, dir)
+	testutil.SharedConfigSet(t, dir, "gitflow.path.hooks", "/some/hooks")
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "gitflow.shared.autoInit", "true"); err != nil {
+		t.Fatalf("set autoInit: %v", err)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "sync")
+	if err != nil {
+		t.Fatalf("expected config sync to succeed despite untrusted hook, got: %v\n%s", err, out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.feature.prefix"); v != "feature/" {
+		t.Errorf("expected non-hook keys synced (feature.prefix=feature/), got %q", v)
+	}
+	if testutil.GitConfigExists(t, dir, "gitflow.path.hooks") {
+		t.Error("expected untrusted gitflow.path.hooks NOT copied to local")
+	}
+	if !strings.Contains(out, "gitflow.shared.trustHooks") {
+		t.Errorf("expected a skipped-hook warning naming gitflow.shared.trustHooks, got: %s", out)
+	}
+}
+
+// TestConfigStatusStaleHookAfterTrustRevokedIsDrift covers Imp-3: after a trusted
+// hook path is copied to local and trust is then revoked, config status must
+// report the stale local hook as drift (the file/expected map filters it out, the
+// local map does not).
+// Steps:
+// 1. init --shared --defaults, add gitflow.path.hooks, set trustHooks=true, sync (copies the hook to local)
+// 2. Unset trustHooks, then run 'git flow config status'
+// 3. Verifies OUT OF SYNC naming gitflow.path.hooks, exit 6
+func TestConfigStatusStaleHookAfterTrustRevokedIsDrift(t *testing.T) {
+	t.Parallel()
+	dir := initSharedDefaults(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	testutil.SharedConfigSet(t, dir, "gitflow.path.hooks", "/some/hooks")
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "gitflow.shared.trustHooks", "true"); err != nil {
+		t.Fatalf("set trustHooks: %v", err)
+	}
+	if out, err := testutil.RunGitFlow(t, dir, "config", "sync"); err != nil {
+		t.Fatalf("sync (trusted) failed: %v\n%s", err, out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.path.hooks"); v != "/some/hooks" {
+		t.Fatalf("precondition: expected hook copied to local when trusted, got %q", v)
+	}
+
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "--unset", "gitflow.shared.trustHooks"); err != nil {
+		t.Fatalf("unset trustHooks: %v", err)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "status")
+	if err == nil {
+		t.Fatalf("expected drift for a stale local hook after trust revoked, got success\n%s", out)
+	}
+	assertExitCode(t, err, errors.ExitCodeValidationError)
+	if !strings.Contains(out, "gitflow.path.hooks") {
+		t.Errorf("expected drift to name gitflow.path.hooks, got: %s", out)
+	}
+}
+
 // TestSharedSyncRemovesHookPathAfterTrustRevoked covers scenario 17d: revoking
 // trustHooks removes a previously-copied hook path on the next sync.
 // Steps:

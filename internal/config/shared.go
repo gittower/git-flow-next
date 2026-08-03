@@ -271,9 +271,10 @@ func SharedStatus(repo *git.Repo) (inSync bool, diffs []string, note string, err
 		if !IsSharedManagedKey(e.key) {
 			continue
 		}
-		if isHookPathKey(e.key) && !trust {
-			continue
-		}
+		// Do NOT filter an untrusted hook path out of the local map: the file
+		// (expected) map is filtered, so a hook path lingering in local config
+		// after trust was revoked surfaces here as drift — matching what the next
+		// sync would remove. The never-copied case (no local hook) stays in sync.
 		localValues[e.key] = append(localValues[e.key], e.value)
 	}
 
