@@ -249,6 +249,45 @@ git flow release finish v1.0 --tag  # Force tagging for this invocation
 
 Not every option spans all three layers. Layer 1 is reserved for essential branch-type properties — many command options exist only at Layer 2 and Layer 3. For example, `sign`, `keep`, and publish `push-options` are purely operational and have no Layer 1 equivalent.
 
+## Shared Configuration (.gitflow)
+
+By default git-flow configuration lives in `.git/config`, which is never committed, so every clone must run `git flow init`. A committable `.gitflow` file at the repository root lets a team share one configuration.
+
+git-flow does not read `.gitflow` directly during operations — it **copies** the `gitflow.*` keys into the clone's local `.git/config`, so every read site sees the shared values and native git precedence still applies.
+
+### Creating and using .gitflow
+
+```bash
+# Author .gitflow and copy it into local config, then commit it
+git flow init --defaults --shared
+git add .gitflow && git commit -m "Add shared git-flow configuration"
+
+# On a fresh clone, activate the committed configuration
+git flow init            # or set gitflow.shared.autoInit=true to activate automatically
+
+# Keep local config in step with .gitflow
+git flow config status   # exit 0 in sync, exit 6 on drift
+git flow config sync     # re-copy .gitflow into local config
+
+# Edit the shared file (and re-sync local) instead of local-only config
+git flow config edit topic feature --shared --prefix feat/
+git flow config add topic qa develop --shared
+```
+
+### Shared-managed keys and control keys
+
+The copy moves the whole `gitflow.*` namespace **except** the control keys `gitflow.shared.*` and per-branch runtime metadata `gitflow.branch.<branch>.base`. Keys outside `gitflow.*` (e.g. `core.*`, `alias.*`) are never copied, and multi-value keys keep their order.
+
+```bash
+# Activate a committed .gitflow automatically on your clones (read from global/local, never copied)
+git config --global gitflow.shared.autoInit true
+
+# Allow copying the executable hook path key from a trusted .gitflow
+git config gitflow.shared.trustHooks true
+```
+
+When `gitflow.shared.trustHooks` is unset, the `gitflow.path.hooks` key is not copied from `.gitflow` (and is removed from local on the next sync if it was previously copied); non-interactive auto-init refuses when an untrusted shared hook path is present. See `docs/gitflow-config.5.md` for the full first-run activation and hook-trust semantics.
+
 ## Legacy Compatibility
 
 ### Git-Flow-AVH Compatibility

@@ -57,6 +57,19 @@ Branch names are matched **case-insensitively**. The case used when a branch is 
 **delete topic** *name*
 : Delete a topic branch type configuration. Does not affect existing branches of this type.
 
+### Shared Configuration
+
+**sync**
+: Copy the shared-managed **gitflow.*** keys from the committable **.gitflow** file into the repository's local **.git/config**, overwriting differing values and removing local keys no longer present in **.gitflow**. Hook/filter path keys (**gitflow.path.hooks**) are copied only when **gitflow.shared.trustHooks** is enabled. When no **.gitflow** file is present, **sync** is a no-op that exits successfully.
+
+**status**
+: Compare the shared-managed **gitflow.*** keys in local **.git/config** against the **.gitflow** file, listing any that differ. Exits **0** when in sync (or when no **.gitflow** is present) and **6** when they have drifted. Local-only keys (**gitflow.shared.***, runtime **gitflow.branch.<branch>.base**) and an intentionally-skipped untrusted hook path are never reported as drift.
+
+## SHARED OPTION
+
+**--shared**
+: Available on **add**, **edit**, **rename**, and **delete** (both **base** and **topic**). Edit the committable **.gitflow** file instead of local config, then re-sync the shared-managed keys into local **.git/config**. Requires an existing **.gitflow** (created by **git flow init --shared**); without one the command fails and suggests **git flow init --shared**, creating no file. Without **--shared**, CRUD verbs write local config only, which **config status** will then report as drift from **.gitflow**.
+
 ## COMMAND OPTIONS
 
 ### Add Base Branch (`add base`)
@@ -257,6 +270,8 @@ The config command performs validation to ensure:
 
 ## STORAGE
 
+Local configuration is stored in **.git/config** under the **gitflow.*** namespace. With **--shared**, the same keys are additionally written to a committable **.gitflow** file at the repository top level and then copied into local config. See **gitflow-config**(5) for the **.gitflow** format, the shared-managed key set, and first-run activation.
+
 All configuration is stored in **.git/config** under the **gitflow.*** namespace:
 
 ```ini
@@ -295,6 +310,9 @@ All configuration is stored in **.git/config** under the **gitflow.*** namespace
 
 **4**
 : Git operation failed
+
+**6**
+: **config status** detected drift between local config and **.gitflow**
 
 ## SEE ALSO
 
