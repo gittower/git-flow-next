@@ -30,6 +30,7 @@ Configuration scope options control where settings are stored:
   --global            Store in user's ~/.gitconfig
   --system            Store in system-wide /etc/gitconfig
   --file=<path>       Store in specified file
+  --shared            Write a committable .gitflow file and copy it into local config
 
 Use --custom for interactive custom configuration.
 If git-flow-avh configuration exists, it will be imported.`,

@@ -263,7 +263,7 @@ git flow init --defaults --shared
 git add .gitflow && git commit -m "Add shared git-flow configuration"
 
 # On a fresh clone, activate the committed configuration
-git flow init            # or set gitflow.shared.autoInit=true to activate automatically
+git flow config sync     # or set gitflow.shared.autoInit=true to activate automatically
 
 # Keep local config in step with .gitflow
 git flow config status   # exit 0 in sync, exit 6 on drift
