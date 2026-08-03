@@ -111,14 +111,53 @@ func TestSharedStartFetchDirectReadSite(t *testing.T) {
 	}
 }
 
-// TestSharedDeleteForceAndRemoteDirectReadSite covers scenario 14:
-// gitflow.feature.delete.force and gitflow.branch.feature.deleteRemote declared
-// only in .gitflow are honored (direct reads in cmd/delete.go).
+// TestSharedDeleteForceDirectReadSite covers scenario 14a:
+// gitflow.feature.delete.force declared only in .gitflow is honored (direct read
+// in cmd/delete.go), so an unmerged feature branch is force-deleted even without
+// --force on the CLI. (One behavior: force honored from shared config.)
 // Steps:
-// 1. Builds a repo+remote, authors a .gitflow with delete.force=true and deleteRemote=true, autoInit=true
-// 2. Starts feature/x, commits a unique (unmerged) change, and publishes it to origin
-// 3. Runs 'feature delete x' (no flags) and verifies the local and remote branches are gone
-func TestSharedDeleteForceAndRemoteDirectReadSite(t *testing.T) {
+// 1. Builds a fresh-clone fixture whose .gitflow sets delete.force=true (no deleteRemote), autoInit=true
+// 2. Starts feature/x and commits a unique (provably unmerged) change on it
+// 3. Runs 'feature delete x' (no --force) and verifies the local branch is gone
+func TestSharedDeleteForceDirectReadSite(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupFreshCloneWithShared(t, testutil.AuthorSharedConfig(t))
+	defer testutil.CleanupTestRepo(t, dir)
+	testutil.SharedConfigSet(t, dir, "gitflow.feature.delete.force", "true")
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "gitflow.shared.autoInit", "true"); err != nil {
+		t.Fatalf("failed to set autoInit: %v", err)
+	}
+
+	if out, err := testutil.RunGitFlow(t, dir, "feature", "start", "x"); err != nil {
+		t.Fatalf("feature start failed: %v\n%s", err, out)
+	}
+	if err := testutil.WriteFile(t, dir, "unmerged.txt", "unique"); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "add", "unmerged.txt"); err != nil {
+		t.Fatalf("failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "unique change"); err != nil {
+		t.Fatalf("failed to commit: %v", err)
+	}
+
+	if out, err := testutil.RunGitFlow(t, dir, "feature", "delete", "x"); err != nil {
+		t.Fatalf("feature delete failed: %v\n%s", err, out)
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("expected local feature/x to be deleted (force honored from shared config)")
+	}
+}
+
+// TestSharedDeleteRemoteDirectReadSite covers scenario 14b:
+// gitflow.branch.feature.deleteRemote declared only in .gitflow is honored
+// (direct read in cmd/delete.go). delete.force is present only so the unmerged
+// branch delete proceeds; the asserted behavior is REMOTE deletion.
+// Steps:
+// 1. Builds a repo+remote, authors a .gitflow with deleteRemote=true and delete.force=true, autoInit=true
+// 2. Starts feature/x, commits a unique change, and publishes it so refs/heads/feature/x exists on origin
+// 3. Runs 'feature delete x' (no flags) and verifies the remote branch is gone
+func TestSharedDeleteRemoteDirectReadSite(t *testing.T) {
 	t.Parallel()
 	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -127,8 +166,8 @@ func TestSharedDeleteForceAndRemoteDirectReadSite(t *testing.T) {
 	if err := os.WriteFile(testutil.SharedConfigPath(dir), testutil.AuthorSharedConfig(t), 0644); err != nil {
 		t.Fatalf("failed to write .gitflow: %v", err)
 	}
-	testutil.SharedConfigSet(t, dir, "gitflow.feature.delete.force", "true")
 	testutil.SharedConfigSet(t, dir, "gitflow.branch.feature.deleteRemote", "true")
+	testutil.SharedConfigSet(t, dir, "gitflow.feature.delete.force", "true")
 	testutil.ClearLocalGitflowConfig(t, dir)
 	if _, err := testutil.RunGit(t, dir, "config", "--local", "gitflow.shared.autoInit", "true"); err != nil {
 		t.Fatalf("failed to set autoInit: %v", err)
@@ -152,9 +191,6 @@ func TestSharedDeleteForceAndRemoteDirectReadSite(t *testing.T) {
 
 	if out, err := testutil.RunGitFlow(t, dir, "feature", "delete", "x"); err != nil {
 		t.Fatalf("feature delete failed: %v\n%s", err, out)
-	}
-	if testutil.BranchExists(t, dir, "feature/x") {
-		t.Error("expected local feature/x to be deleted (force honored from shared config)")
 	}
 	lsRemote, err := testutil.RunGit(t, dir, "ls-remote", "--heads", "origin", "refs/heads/feature/x")
 	if err != nil {

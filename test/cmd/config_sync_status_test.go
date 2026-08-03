@@ -41,13 +41,45 @@ func TestConfigSyncAddsMissingLocalValue(t *testing.T) {
 	}
 }
 
-// TestConfigSyncRemovesStaleKeys covers scenario 20: sync removes a stale branch
-// type and a dropped multi-value entry.
+// TestConfigSyncRemovesStaleBranchType covers scenario 20a: sync removes a stale
+// branch type that is absent from .gitflow. (One behavior: stale branch-type
+// section removal on sync.)
 // Steps:
-// 1. init --shared --defaults, add a push-option [a,b] and a qa type to both file and local
-// 2. Edits .gitflow to remove the qa type and drop the b push-option value
-// 3. Runs 'git flow config sync' and verifies qa.* is gone and push-option is [a] only
-func TestConfigSyncRemovesStaleKeys(t *testing.T) {
+// 1. init --shared --defaults, add a custom qa type to .gitflow+local via config add topic --shared
+// 2. Removes the qa section from .gitflow
+// 3. Runs 'git flow config sync' and verifies qa.* is gone while feature defaults remain
+func TestConfigSyncRemovesStaleBranchType(t *testing.T) {
+	t.Parallel()
+	dir := initSharedDefaults(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "config", "add", "topic", "qa", "develop", "--shared"); err != nil {
+		t.Fatalf("config add topic qa --shared failed: %v\n%s", err, out)
+	}
+
+	sharedPath := testutil.SharedConfigPath(dir)
+	if _, err := testutil.RunGit(t, dir, "config", "--file", sharedPath, "--remove-section", "gitflow.branch.qa"); err != nil {
+		t.Fatalf("remove qa section: %v", err)
+	}
+
+	if out, err := testutil.RunGitFlow(t, dir, "config", "sync"); err != nil {
+		t.Fatalf("config sync failed: %v\n%s", err, out)
+	}
+	if testutil.GitConfigHasPrefix(t, dir, "gitflow.branch.qa.") {
+		t.Error("expected stale local gitflow.branch.qa.* to be removed")
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.feature.prefix"); v != "feature/" {
+		t.Errorf("expected feature defaults to remain, got feature.prefix=%q", v)
+	}
+}
+
+// TestConfigSyncRemovesDroppedMultiValue covers scenario 20b: sync removes a
+// dropped multi-value entry (multi-value shrink).
+// Steps:
+// 1. init --shared --defaults, set push-option [a,b] in .gitflow and sync so local has [a,b]
+// 2. Drops b from .gitflow, leaving [a]
+// 3. Runs 'git flow config sync' and verifies local push-option is [a] only
+func TestConfigSyncRemovesDroppedMultiValue(t *testing.T) {
 	t.Parallel()
 	dir := initSharedDefaults(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -59,17 +91,11 @@ func TestConfigSyncRemovesStaleKeys(t *testing.T) {
 	if _, err := testutil.RunGit(t, dir, "config", "--file", sharedPath, "--add", "gitflow.feature.publish.push-option", "b"); err != nil {
 		t.Fatalf("add push-option b: %v", err)
 	}
-	if out, err := testutil.RunGitFlow(t, dir, "config", "add", "topic", "qa", "develop", "--shared"); err != nil {
-		t.Fatalf("config add topic qa --shared failed: %v\n%s", err, out)
-	}
 	if out, err := testutil.RunGitFlow(t, dir, "config", "sync"); err != nil {
 		t.Fatalf("initial sync failed: %v\n%s", err, out)
 	}
 
-	// Shrink .gitflow: drop the qa type and the b push-option value.
-	if _, err := testutil.RunGit(t, dir, "config", "--file", sharedPath, "--remove-section", "gitflow.branch.qa"); err != nil {
-		t.Fatalf("remove qa section: %v", err)
-	}
+	// Drop b from .gitflow, leaving [a].
 	if _, err := testutil.RunGit(t, dir, "config", "--file", sharedPath, "--unset-all", "gitflow.feature.publish.push-option"); err != nil {
 		t.Fatalf("unset push-option: %v", err)
 	}
@@ -79,9 +105,6 @@ func TestConfigSyncRemovesStaleKeys(t *testing.T) {
 
 	if out, err := testutil.RunGitFlow(t, dir, "config", "sync"); err != nil {
 		t.Fatalf("config sync failed: %v\n%s", err, out)
-	}
-	if testutil.GitConfigHasPrefix(t, dir, "gitflow.branch.qa.") {
-		t.Error("expected stale local gitflow.branch.qa.* to be removed")
 	}
 	local := testutil.GitConfigAll(t, dir, "gitflow.feature.publish.push-option")
 	if len(local) != 1 || local[0] != "a" {
@@ -351,6 +374,40 @@ func TestSharedFileMalformedClearErrorSync(t *testing.T) {
 	}
 	if testutil.GitConfigHasPrefix(t, dir, "gitflow.branch.") {
 		t.Error("expected no partial gitflow.branch.* mutation on malformed-file sync")
+	}
+}
+
+// TestSharedFileMalformedClearErrorStatus covers scenario 35c: a malformed
+// .gitflow fails at config status with a clear error naming the file, and is NOT
+// misreported as in-sync (exit 0) nor as ordinary drift (ExitCodeValidationError)
+// — a parse failure is a distinct, clearly-named error.
+// Steps:
+// 1. init --defaults first (so the first-run hook no-ops), THEN write an unparsable .gitflow
+// 2. Runs 'git flow config status'
+// 3. Verifies non-zero exit, an error naming .gitflow, a non-drift exit code, and no local gitflow.* mutation
+func TestSharedFileMalformedClearErrorStatus(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("init --defaults failed: %v\n%s", err, out)
+	}
+	if err := os.WriteFile(testutil.SharedConfigPath(dir), []byte("[gitflow\nbroken = = =\n"), 0644); err != nil {
+		t.Fatalf("write malformed .gitflow: %v", err)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "status")
+	if err == nil {
+		t.Fatalf("expected config status to fail on malformed .gitflow, not report in-sync\n%s", out)
+	}
+	if ee, ok := err.(*testutil.ExitError); ok && ee.ExitCode == int(errors.ExitCodeValidationError) {
+		t.Errorf("expected a distinct parse-error exit code, not ordinary drift (%d): %s", int(errors.ExitCodeValidationError), out)
+	}
+	if !strings.Contains(out, ".gitflow") {
+		t.Errorf("expected error naming .gitflow, got: %s", out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.feature.prefix"); v != "feature/" {
+		t.Errorf("expected local gitflow.* unchanged (feature.prefix=feature/), got %q", v)
 	}
 }
 
