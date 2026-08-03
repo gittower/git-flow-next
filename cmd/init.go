@@ -51,13 +51,14 @@ If git-flow-avh configuration exists, it will be imported.`,
 		globalScope, _ := cmd.Flags().GetBool("global")
 		systemScope, _ := cmd.Flags().GetBool("system")
 		fileScope, _ := cmd.Flags().GetString("file")
-		InitCommand(useDefaults, !noCreateBranches, force, preset, custom, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix, localScope, globalScope, systemScope, fileScope)
+		sharedScope, _ := cmd.Flags().GetBool("shared")
+		InitCommand(useDefaults, !noCreateBranches, force, preset, custom, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix, localScope, globalScope, systemScope, fileScope, sharedScope)
 	},
 }
 
 // InitCommand is the implementation of the init command
-func InitCommand(useDefaults, createBranches, force bool, preset string, custom bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string, localScope, globalScope, systemScope bool, fileScope string) {
-	if err := initFlow(useDefaults, createBranches, force, preset, custom, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix, localScope, globalScope, systemScope, fileScope); err != nil {
+func InitCommand(useDefaults, createBranches, force bool, preset string, custom bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string, localScope, globalScope, systemScope bool, fileScope string, sharedScope bool) {
+	if err := initFlow(useDefaults, createBranches, force, preset, custom, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix, localScope, globalScope, systemScope, fileScope, sharedScope); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -70,8 +71,11 @@ func InitCommand(useDefaults, createBranches, force bool, preset string, custom 
 }
 
 // initFlow performs the actual initialization logic and returns any errors
-func initFlow(useDefaults, createBranches, force bool, preset string, custom bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string, localScope, globalScope, systemScope bool, fileScope string) error {
-	// Validate mutual exclusivity of scope flags
+func initFlow(useDefaults, createBranches, force bool, preset string, custom bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string, localScope, globalScope, systemScope bool, fileScope string, sharedScope bool) error {
+	// Validate mutual exclusivity of scope flags. --shared is not a git config
+	// scope; it selects "write structured config to <toplevel>/.gitflow, then
+	// copy gitflow.* into local .git/config", so it cannot be combined with the
+	// single-scope write flags.
 	scopeCount := 0
 	if localScope {
 		scopeCount++
@@ -85,8 +89,11 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 	if fileScope != "" {
 		scopeCount++
 	}
+	if sharedScope {
+		scopeCount++
+	}
 	if scopeCount > 1 {
-		return fmt.Errorf("cannot use multiple scope options together; specify only one of --local, --global, --system, or --file")
+		return &errors.InvalidInputError{Message: "cannot use multiple scope options together; specify only one of --shared, --local, --global, --system, or --file"}
 	}
 
 	// Determine config scope
@@ -123,10 +130,24 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 		return &errors.GitError{Operation: "check if git repository", Err: fmt.Errorf("not a git repository. Please run 'git init' first")}
 	}
 
-	// Check if git-flow-next is already initialized at the specified scope
-	status, err := config.IsGitFlowNextInitializedWithScope(scope, scopeFile)
-	if err != nil {
-		return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+	// Shared scope has its own "already configured" detection based on the
+	// presence of the committed .gitflow file, not on git config scopes.
+	if sharedScope {
+		if config.SharedConfigExists(repo) && !force {
+			fmt.Fprintln(os.Stderr, "Git-flow is already configured via the shared .gitflow file. Use --force to rewrite it.")
+			return &errors.AlreadyInitializedError{}
+		}
+	}
+
+	// Check if git-flow-next is already initialized at the specified scope. This
+	// standard scope-based detection is skipped for --shared (handled above), so
+	// a local copy left by a previous shared activation does not block re-authoring.
+	var status config.InitializedStatus
+	if !sharedScope {
+		status, err = config.IsGitFlowNextInitializedWithScope(scope, scopeFile)
+		if err != nil {
+			return &errors.GitError{Operation: "check if git-flow is initialized", Err: err}
+		}
 	}
 
 	if status.Initialized && !force {
@@ -255,12 +276,37 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 		}
 	}
 
-	// Save configuration with the appropriate scope
-	if err := config.SaveConfigWithScope(cfg, scope, scopeFile); err != nil {
-		return &errors.GitError{Operation: "save configuration", Err: err}
-	}
-	if err := config.MarkRepoInitializedWithScope(scope, scopeFile); err != nil {
-		return &errors.GitError{Operation: "mark repository as initialized", Err: err}
+	// Save configuration. --shared authors the structured config into the
+	// committable <toplevel>/.gitflow file and then copies gitflow.* into local
+	// .git/config so every read site (including the direct git-config readers)
+	// sees the shared settings.
+	if sharedScope {
+		sharedPath := config.SharedConfigPath(repo)
+		// A forced re-init removes any existing .gitflow first so the rewrite
+		// cannot leave stale keys behind.
+		if force {
+			if _, statErr := os.Stat(sharedPath); statErr == nil {
+				if err := os.Remove(sharedPath); err != nil {
+					return &errors.GitError{Operation: "remove existing .gitflow", Err: err}
+				}
+			}
+		}
+		if err := config.SaveConfigWithScope(cfg, git.ConfigScopeFile, sharedPath); err != nil {
+			return &errors.GitError{Operation: "save shared configuration", Err: err}
+		}
+		if err := config.MarkRepoInitializedWithScope(git.ConfigScopeFile, sharedPath); err != nil {
+			return &errors.GitError{Operation: "mark shared configuration as initialized", Err: err}
+		}
+		if _, err := config.CopySharedToLocal(repo); err != nil {
+			return &errors.GitError{Operation: "copy shared configuration into local config", Err: err}
+		}
+	} else {
+		if err := config.SaveConfigWithScope(cfg, scope, scopeFile); err != nil {
+			return &errors.GitError{Operation: "save configuration", Err: err}
+		}
+		if err := config.MarkRepoInitializedWithScope(scope, scopeFile); err != nil {
+			return &errors.GitError{Operation: "mark repository as initialized", Err: err}
+		}
 	}
 
 	// Create branches if requested
@@ -712,4 +758,5 @@ func init() {
 	initCmd.Flags().Bool("global", false, "Store configuration in user's global ~/.gitconfig")
 	initCmd.Flags().Bool("system", false, "Store configuration in system-wide /etc/gitconfig")
 	initCmd.Flags().String("file", "", "Store configuration in specified file")
+	initCmd.Flags().Bool("shared", false, "Write a committable .gitflow file at the repo root and copy it into local config (mutually exclusive with the other scope flags)")
 }
