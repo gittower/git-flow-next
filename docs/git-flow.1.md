@@ -147,7 +147,7 @@ git flow config add topic bugfix develop --prefix=bug/
 
 ## SEE ALSO
 
-**git-flow-init**(1), **git-flow-config**(1), **git-flow-start**(1), **git-flow-finish**(1), **git-flow-integrate**(1), **git-flow-update**(1), **git-flow-delete**(1), **git-flow-track**(1), **gitflow-config**(5), **git**(1)
+**git-flow-init**(1), **git-flow-config**(1), **git-flow-completion**(1), **git-flow-start**(1), **git-flow-finish**(1), **git-flow-integrate**(1), **git-flow-update**(1), **git-flow-delete**(1), **git-flow-track**(1), **gitflow-config**(5), **git**(1)
 
 ## AUTHORS
 

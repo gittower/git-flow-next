@@ -13,6 +13,7 @@ This directory contains comprehensive manpage-style documentation for all git-fl
 - **git-flow-release.1.md** - Release branch management
 - **git-flow-hotfix.1.md** - Hotfix branch management
 - **git-flow-overview.1.md** - Repository workflow overview
+- **git-flow-completion.1.md** - Shell completion script generation
 
 ### Configuration Documentation (Section 5)
 - **gitflow-config.5.md** - Complete configuration reference and examples
