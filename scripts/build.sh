@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Abort on the first error so a failed build or archive step never reaches the
+# staging-directory cleanup below, which would otherwise delete the binaries
+# needed to retry or diagnose the failure.
+set -e
+
 # Get version from command line or use "dev" as default
 VERSION=${1:-dev}
 BINARY_NAME="git-flow"
@@ -23,7 +28,10 @@ BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
 # Combined with -trimpath and CGO_ENABLED=0 for minimal binary size
 BUILD_FLAGS="-s -w -X 'github.com/gittower/git-flow-next/version.BuildTime=${BUILD_TIME}' -X 'github.com/gittower/git-flow-next/version.GitCommit=${GIT_COMMIT}'"
 
-# Create build directory and per-platform staging directories
+# Start from a clean build directory so stale archives from an earlier run
+# never leak into the checksums and re-archiving can't retain an obsolete
+# binary entry. Then create the per-platform staging directories.
+rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 for dir in "${PLATFORM_DIRS[@]}"; do
     mkdir -p "$BUILD_DIR/$dir"
