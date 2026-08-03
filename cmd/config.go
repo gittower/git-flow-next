@@ -62,7 +62,8 @@ Examples:
 		downstreamStrategy, _ := cmd.Flags().GetString("downstream-strategy")
 		autoUpdate, _ := cmd.Flags().GetBool("auto-update")
 
-		ConfigAddBaseCommand(name, parent, upstreamStrategy, downstreamStrategy, autoUpdate)
+		shared, _ := cmd.Flags().GetBool("shared")
+		ConfigAddBaseCommand(name, parent, upstreamStrategy, downstreamStrategy, autoUpdate, shared)
 	},
 }
 
@@ -89,7 +90,8 @@ Examples:
 		downstreamStrategy, _ := cmd.Flags().GetString("downstream-strategy")
 		tag, _ := cmd.Flags().GetBool("tag")
 
-		ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag)
+		shared, _ := cmd.Flags().GetBool("shared")
+		ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag, shared)
 	},
 }
 
@@ -115,7 +117,8 @@ Examples:
 		downstreamStrategy, _ := cmd.Flags().GetString("downstream-strategy")
 		autoUpdate, _ := cmd.Flags().GetBool("auto-update")
 
-		ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy, autoUpdate)
+		shared, _ := cmd.Flags().GetBool("shared")
+		ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy, autoUpdate, shared)
 	},
 }
 
@@ -137,7 +140,8 @@ Examples:
 		downstreamStrategy, _ := cmd.Flags().GetString("downstream-strategy")
 		tag, _ := cmd.Flags().GetBool("tag")
 
-		ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag)
+		shared, _ := cmd.Flags().GetBool("shared")
+		ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag, shared)
 	},
 }
 
@@ -162,7 +166,8 @@ Examples:
 		oldName := args[0]
 		newName := args[1]
 
-		ConfigRenameBaseCommand(oldName, newName)
+		shared, _ := cmd.Flags().GetBool("shared")
+		ConfigRenameBaseCommand(oldName, newName, shared)
 	},
 }
 
@@ -181,7 +186,8 @@ Examples:
 		oldName := args[0]
 		newName := args[1]
 
-		ConfigRenameTopicCommand(oldName, newName)
+		shared, _ := cmd.Flags().GetBool("shared")
+		ConfigRenameTopicCommand(oldName, newName, shared)
 	},
 }
 
@@ -206,7 +212,8 @@ Examples:
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
 
-		ConfigDeleteBaseCommand(name)
+		shared, _ := cmd.Flags().GetBool("shared")
+		ConfigDeleteBaseCommand(name, shared)
 	},
 }
 
@@ -224,7 +231,8 @@ Examples:
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
 
-		ConfigDeleteTopicCommand(name)
+		shared, _ := cmd.Flags().GetBool("shared")
+		ConfigDeleteTopicCommand(name, shared)
 	},
 }
 
@@ -244,9 +252,9 @@ Example:
 }
 
 // ConfigAddBaseCommand adds a base branch configuration
-func ConfigAddBaseCommand(name, parent, upstreamStrategy, downstreamStrategy string, autoUpdate bool) {
+func ConfigAddBaseCommand(name, parent, upstreamStrategy, downstreamStrategy string, autoUpdate bool, shared bool) {
 	repo := mustOpenRepo()
-	if err := executeConfigAddBase(repo, name, parent, upstreamStrategy, downstreamStrategy, autoUpdate); err != nil {
+	if err := executeConfigAddBase(repo, name, parent, upstreamStrategy, downstreamStrategy, autoUpdate, shared); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -259,9 +267,9 @@ func ConfigAddBaseCommand(name, parent, upstreamStrategy, downstreamStrategy str
 }
 
 // ConfigAddTopicCommand adds a topic branch type configuration
-func ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) {
+func ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool, shared bool) {
 	repo := mustOpenRepo()
-	if err := executeConfigAddTopic(repo, name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag); err != nil {
+	if err := executeConfigAddTopic(repo, name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag, shared); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -274,9 +282,9 @@ func ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy
 }
 
 // ConfigEditBaseCommand edits a base branch configuration
-func ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy string, autoUpdate bool) {
+func ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy string, autoUpdate bool, shared bool) {
 	repo := mustOpenRepo()
-	if err := executeConfigEditBase(repo, name, upstreamStrategy, downstreamStrategy, autoUpdate); err != nil {
+	if err := executeConfigEditBase(repo, name, upstreamStrategy, downstreamStrategy, autoUpdate, shared); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -289,9 +297,9 @@ func ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy string, au
 }
 
 // ConfigEditTopicCommand edits a topic branch type configuration
-func ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) {
+func ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool, shared bool) {
 	repo := mustOpenRepo()
-	if err := executeConfigEditTopic(repo, name, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag); err != nil {
+	if err := executeConfigEditTopic(repo, name, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag, shared); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -304,9 +312,9 @@ func ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downs
 }
 
 // ConfigRenameBaseCommand renames a base branch
-func ConfigRenameBaseCommand(oldName, newName string) {
+func ConfigRenameBaseCommand(oldName, newName string, shared bool) {
 	repo := mustOpenRepo()
-	if err := executeConfigRenameBase(repo, oldName, newName); err != nil {
+	if err := executeConfigRenameBase(repo, oldName, newName, shared); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -319,9 +327,9 @@ func ConfigRenameBaseCommand(oldName, newName string) {
 }
 
 // ConfigRenameTopicCommand renames a topic branch type
-func ConfigRenameTopicCommand(oldName, newName string) {
+func ConfigRenameTopicCommand(oldName, newName string, shared bool) {
 	repo := mustOpenRepo()
-	if err := executeConfigRenameTopic(repo, oldName, newName); err != nil {
+	if err := executeConfigRenameTopic(repo, oldName, newName, shared); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -334,9 +342,9 @@ func ConfigRenameTopicCommand(oldName, newName string) {
 }
 
 // ConfigDeleteBaseCommand deletes a base branch configuration
-func ConfigDeleteBaseCommand(name string) {
+func ConfigDeleteBaseCommand(name string, shared bool) {
 	repo := mustOpenRepo()
-	if err := executeConfigDeleteBase(repo, name); err != nil {
+	if err := executeConfigDeleteBase(repo, name, shared); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -349,9 +357,9 @@ func ConfigDeleteBaseCommand(name string) {
 }
 
 // ConfigDeleteTopicCommand deletes a topic branch type configuration
-func ConfigDeleteTopicCommand(name string) {
+func ConfigDeleteTopicCommand(name string, shared bool) {
 	repo := mustOpenRepo()
-	if err := executeConfigDeleteTopic(repo, name); err != nil {
+	if err := executeConfigDeleteTopic(repo, name, shared); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -378,7 +386,48 @@ func ConfigListCommand() {
 	}
 }
 
-func executeConfigAddBase(repo *git.Repo, name, parent, upstreamStrategy, downstreamStrategy string, autoUpdate bool) error {
+// loadConfigForEdit loads the configuration a CRUD verb should edit: the .gitflow
+// file when --shared is set (requiring it to exist first), or the repository's
+// local/merged config otherwise.
+func loadConfigForEdit(repo *git.Repo, shared bool) (*config.Config, error) {
+	if shared {
+		if !config.SharedConfigExists(repo) {
+			return nil, &errors.InvalidInputError{Message: "no shared .gitflow file found; run 'git flow init --shared' first"}
+		}
+		return config.LoadSharedConfig(repo)
+	}
+	return config.Load(repo)
+}
+
+// persistConfig writes the edited configuration back. For --shared it rewrites
+// the structured keys into .gitflow and then re-syncs the shared-managed key set
+// into local .git/config; otherwise it writes local config directly.
+func persistConfig(repo *git.Repo, cfg *config.Config, shared bool) error {
+	if shared {
+		if err := config.SaveConfigWithScope(cfg, git.ConfigScopeFile, config.SharedConfigPath(repo)); err != nil {
+			return err
+		}
+		if _, err := config.CopySharedToLocal(repo); err != nil {
+			return err
+		}
+		return nil
+	}
+	return config.SaveConfig(cfg)
+}
+
+// removeBranchSection removes a branch's config section. For --shared it removes
+// the section from .gitflow (local is reconciled by the re-sync in persistConfig,
+// which stale-removes keys no longer present in the shared file); otherwise it
+// removes the section from local config directly.
+func removeBranchSection(repo *git.Repo, shared bool, branchName string) error {
+	section := fmt.Sprintf("gitflow.branch.%s", branchName)
+	if shared {
+		return git.UnsetConfigSectionFile(config.SharedConfigPath(repo), section)
+	}
+	return repo.UnsetConfigSection(section)
+}
+
+func executeConfigAddBase(repo *git.Repo, name, parent, upstreamStrategy, downstreamStrategy string, autoUpdate bool, shared bool) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized(repo)
 	if err != nil {
@@ -394,7 +443,7 @@ func executeConfigAddBase(repo *git.Repo, name, parent, upstreamStrategy, downst
 	}
 
 	// Load current configuration
-	cfg, err := config.Load(repo)
+	cfg, err := loadConfigForEdit(repo, shared)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -449,7 +498,7 @@ func executeConfigAddBase(repo *git.Repo, name, parent, upstreamStrategy, downst
 	cfg.Branches[name] = branchConfig
 
 	// Save configuration
-	if err := config.SaveConfig(cfg); err != nil {
+	if err := persistConfig(repo, cfg, shared); err != nil {
 		return &errors.GitError{Operation: "save configuration", Err: err}
 	}
 
@@ -466,7 +515,7 @@ func executeConfigAddBase(repo *git.Repo, name, parent, upstreamStrategy, downst
 	return nil
 }
 
-func executeConfigAddTopic(repo *git.Repo, name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) error {
+func executeConfigAddTopic(repo *git.Repo, name, parent, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool, shared bool) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized(repo)
 	if err != nil {
@@ -482,7 +531,7 @@ func executeConfigAddTopic(repo *git.Repo, name, parent, prefix, startingPoint, 
 	}
 
 	// Load current configuration
-	cfg, err := config.Load(repo)
+	cfg, err := loadConfigForEdit(repo, shared)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -543,7 +592,7 @@ func executeConfigAddTopic(repo *git.Repo, name, parent, prefix, startingPoint, 
 	cfg.Branches[name] = branchConfig
 
 	// Save configuration
-	if err := config.SaveConfig(cfg); err != nil {
+	if err := persistConfig(repo, cfg, shared); err != nil {
 		return &errors.GitError{Operation: "save configuration", Err: err}
 	}
 
@@ -551,7 +600,7 @@ func executeConfigAddTopic(repo *git.Repo, name, parent, prefix, startingPoint, 
 	return nil
 }
 
-func executeConfigEditBase(repo *git.Repo, name, upstreamStrategy, downstreamStrategy string, autoUpdate bool) error {
+func executeConfigEditBase(repo *git.Repo, name, upstreamStrategy, downstreamStrategy string, autoUpdate bool, shared bool) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized(repo)
 	if err != nil {
@@ -562,7 +611,7 @@ func executeConfigEditBase(repo *git.Repo, name, upstreamStrategy, downstreamStr
 	}
 
 	// Load current configuration
-	cfg, err := config.Load(repo)
+	cfg, err := loadConfigForEdit(repo, shared)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -602,7 +651,7 @@ func executeConfigEditBase(repo *git.Repo, name, upstreamStrategy, downstreamStr
 	cfg.Branches[name] = branchConfig
 
 	// Save configuration
-	if err := config.SaveConfig(cfg); err != nil {
+	if err := persistConfig(repo, cfg, shared); err != nil {
 		return &errors.GitError{Operation: "save configuration", Err: err}
 	}
 
@@ -610,7 +659,7 @@ func executeConfigEditBase(repo *git.Repo, name, upstreamStrategy, downstreamStr
 	return nil
 }
 
-func executeConfigEditTopic(repo *git.Repo, name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool) error {
+func executeConfigEditTopic(repo *git.Repo, name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool, shared bool) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized(repo)
 	if err != nil {
@@ -621,7 +670,7 @@ func executeConfigEditTopic(repo *git.Repo, name, prefix, startingPoint, upstrea
 	}
 
 	// Load current configuration
-	cfg, err := config.Load(repo)
+	cfg, err := loadConfigForEdit(repo, shared)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -672,7 +721,7 @@ func executeConfigEditTopic(repo *git.Repo, name, prefix, startingPoint, upstrea
 	cfg.Branches[name] = branchConfig
 
 	// Save configuration
-	if err := config.SaveConfig(cfg); err != nil {
+	if err := persistConfig(repo, cfg, shared); err != nil {
 		return &errors.GitError{Operation: "save configuration", Err: err}
 	}
 
@@ -680,7 +729,7 @@ func executeConfigEditTopic(repo *git.Repo, name, prefix, startingPoint, upstrea
 	return nil
 }
 
-func executeConfigRenameBase(repo *git.Repo, oldName, newName string) error {
+func executeConfigRenameBase(repo *git.Repo, oldName, newName string, shared bool) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized(repo)
 	if err != nil {
@@ -696,7 +745,7 @@ func executeConfigRenameBase(repo *git.Repo, oldName, newName string) error {
 	}
 
 	// Load current configuration
-	cfg, err := config.Load(repo)
+	cfg, err := loadConfigForEdit(repo, shared)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -739,7 +788,7 @@ func executeConfigRenameBase(repo *git.Repo, oldName, newName string) error {
 	}
 
 	// Remove old branch config from git config
-	if err := repo.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", oldName)); err != nil {
+	if err := removeBranchSection(repo, shared, oldName); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("remove old branch config for '%s'", oldName), Err: err}
 	}
 
@@ -760,7 +809,7 @@ func executeConfigRenameBase(repo *git.Repo, oldName, newName string) error {
 	}
 
 	// Save configuration
-	if err := config.SaveConfig(cfg); err != nil {
+	if err := persistConfig(repo, cfg, shared); err != nil {
 		return &errors.GitError{Operation: "save configuration", Err: err}
 	}
 
@@ -768,7 +817,7 @@ func executeConfigRenameBase(repo *git.Repo, oldName, newName string) error {
 	return nil
 }
 
-func executeConfigRenameTopic(repo *git.Repo, oldName, newName string) error {
+func executeConfigRenameTopic(repo *git.Repo, oldName, newName string, shared bool) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized(repo)
 	if err != nil {
@@ -784,7 +833,7 @@ func executeConfigRenameTopic(repo *git.Repo, oldName, newName string) error {
 	}
 
 	// Load current configuration
-	cfg, err := config.Load(repo)
+	cfg, err := loadConfigForEdit(repo, shared)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -812,7 +861,7 @@ func executeConfigRenameTopic(repo *git.Repo, oldName, newName string) error {
 	// Remove the old branch config section from git config (topic renames
 	// only touch config, not refs), so the old canonical subsection does not
 	// linger after the save writes the new one.
-	if err := repo.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", oldName)); err != nil {
+	if err := removeBranchSection(repo, shared, oldName); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("remove old branch config for '%s'", oldName), Err: err}
 	}
 
@@ -821,7 +870,7 @@ func executeConfigRenameTopic(repo *git.Repo, oldName, newName string) error {
 	cfg.Branches[newName] = branchConfig
 
 	// Save configuration
-	if err := config.SaveConfig(cfg); err != nil {
+	if err := persistConfig(repo, cfg, shared); err != nil {
 		return &errors.GitError{Operation: "save configuration", Err: err}
 	}
 
@@ -829,7 +878,7 @@ func executeConfigRenameTopic(repo *git.Repo, oldName, newName string) error {
 	return nil
 }
 
-func executeConfigDeleteBase(repo *git.Repo, name string) error {
+func executeConfigDeleteBase(repo *git.Repo, name string, shared bool) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized(repo)
 	if err != nil {
@@ -840,7 +889,7 @@ func executeConfigDeleteBase(repo *git.Repo, name string) error {
 	}
 
 	// Load current configuration
-	cfg, err := config.Load(repo)
+	cfg, err := loadConfigForEdit(repo, shared)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -869,7 +918,7 @@ func executeConfigDeleteBase(repo *git.Repo, name string) error {
 	}
 
 	// Remove branch config from git config
-	if err := repo.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", name)); err != nil {
+	if err := removeBranchSection(repo, shared, name); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("remove branch config for '%s'", name), Err: err}
 	}
 
@@ -877,7 +926,7 @@ func executeConfigDeleteBase(repo *git.Repo, name string) error {
 	delete(cfg.Branches, name)
 
 	// Save configuration
-	if err := config.SaveConfig(cfg); err != nil {
+	if err := persistConfig(repo, cfg, shared); err != nil {
 		return &errors.GitError{Operation: "save configuration", Err: err}
 	}
 
@@ -886,7 +935,7 @@ func executeConfigDeleteBase(repo *git.Repo, name string) error {
 	return nil
 }
 
-func executeConfigDeleteTopic(repo *git.Repo, name string) error {
+func executeConfigDeleteTopic(repo *git.Repo, name string, shared bool) error {
 	// Validate that git-flow is initialized
 	initialized, err := config.IsInitialized(repo)
 	if err != nil {
@@ -897,7 +946,7 @@ func executeConfigDeleteTopic(repo *git.Repo, name string) error {
 	}
 
 	// Load current configuration
-	cfg, err := config.Load(repo)
+	cfg, err := loadConfigForEdit(repo, shared)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
 	}
@@ -916,7 +965,7 @@ func executeConfigDeleteTopic(repo *git.Repo, name string) error {
 	}
 
 	// Remove branch config from git config
-	if err := repo.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", name)); err != nil {
+	if err := removeBranchSection(repo, shared, name); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("remove branch config for '%s'", name), Err: err}
 	}
 
@@ -924,7 +973,7 @@ func executeConfigDeleteTopic(repo *git.Repo, name string) error {
 	delete(cfg.Branches, name)
 
 	// Save configuration
-	if err := config.SaveConfig(cfg); err != nil {
+	if err := persistConfig(repo, cfg, shared); err != nil {
 		return &errors.GitError{Operation: "save configuration", Err: err}
 	}
 
@@ -944,7 +993,7 @@ func executeConfigList(repo *git.Repo) error {
 		return nil
 	}
 
-	// Load current configuration
+	// Load current configuration (list always reads local/merged config)
 	cfg, err := config.Load(repo)
 	if err != nil {
 		return &errors.GitError{Operation: "load configuration", Err: err}
@@ -1052,6 +1101,104 @@ func executeConfigList(repo *git.Repo) error {
 	return nil
 }
 
+var configSyncCmd = &cobra.Command{
+	Use:   "sync",
+	Short: "Copy the shared .gitflow config into local git config",
+	Args:  cobra.NoArgs,
+	Long: `Copy the shared-managed gitflow.* keys from the committable .gitflow file into
+the repository's local .git/config, overwriting differing values and removing
+local keys no longer present in .gitflow.
+
+Hook/filter path keys are copied only when gitflow.shared.trustHooks is enabled.
+When no .gitflow file is present this is a no-op that exits successfully.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		ConfigSyncCommand()
+	},
+}
+
+var configStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Show whether local git config matches the shared .gitflow",
+	Args:  cobra.NoArgs,
+	Long: `Compare the shared-managed gitflow.* keys in local .git/config against the
+committable .gitflow file.
+
+Exits 0 when in sync (or when no .gitflow file is present), and with a non-zero
+validation-error code when the two have drifted, listing the differing keys.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		ConfigStatusCommand()
+	},
+}
+
+// ConfigSyncCommand copies the shared .gitflow config into local config.
+func ConfigSyncCommand() {
+	repo := mustOpenRepo()
+	if err := executeConfigSync(repo); err != nil {
+		var exitCode errors.ExitCode
+		if flowErr, ok := err.(errors.Error); ok {
+			exitCode = flowErr.ExitCode()
+		} else {
+			exitCode = errors.ExitCodeGitError
+		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(int(exitCode))
+	}
+}
+
+// ConfigStatusCommand reports drift between local config and .gitflow.
+func ConfigStatusCommand() {
+	repo := mustOpenRepo()
+	if err := executeConfigStatus(repo); err != nil {
+		var exitCode errors.ExitCode
+		if flowErr, ok := err.(errors.Error); ok {
+			exitCode = flowErr.ExitCode()
+		} else {
+			exitCode = errors.ExitCodeGitError
+		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(int(exitCode))
+	}
+}
+
+func executeConfigSync(repo *git.Repo) error {
+	if !config.SharedConfigExists(repo) {
+		fmt.Println("No shared .gitflow configuration found; nothing to sync.")
+		return nil
+	}
+	result, err := config.CopySharedToLocal(repo)
+	if err != nil {
+		return err
+	}
+	for _, k := range result.SkippedHookKeys {
+		fmt.Fprintf(os.Stderr, "Warning: skipped shared hook path %q; set gitflow.shared.trustHooks=true to apply it.\n", k)
+	}
+	fmt.Println("Synced local git-flow configuration from .gitflow.")
+	return nil
+}
+
+func executeConfigStatus(repo *git.Repo) error {
+	if !config.SharedConfigExists(repo) {
+		fmt.Println("No shared .gitflow configuration found.")
+		return nil
+	}
+	inSync, diffs, note, err := config.SharedStatus(repo)
+	if err != nil {
+		return err
+	}
+	if note != "" {
+		fmt.Println(note)
+	}
+	if inSync {
+		fmt.Println("Local git-flow configuration is in sync with .gitflow.")
+		return nil
+	}
+	fmt.Println("Local git-flow configuration is out of sync with .gitflow. Differing keys:")
+	for _, k := range diffs {
+		fmt.Printf("  %s\n", k)
+	}
+	return &errors.SharedConfigDriftError{}
+}
+
 // Helper functions
 
 func isValidMergeStrategy(strategy string) bool {
@@ -1098,6 +1245,8 @@ func init() {
 	configCmd.AddCommand(configRenameCmd)
 	configCmd.AddCommand(configDeleteCmd)
 	configCmd.AddCommand(configListCmd)
+	configCmd.AddCommand(configSyncCmd)
+	configCmd.AddCommand(configStatusCmd)
 
 	// Add base/topic subcommands
 	configAddCmd.AddCommand(configAddBaseCmd)
@@ -1130,4 +1279,15 @@ func init() {
 	configEditTopicCmd.Flags().String("upstream-strategy", "", "Merge strategy when merging to parent (merge|rebase|squash)")
 	configEditTopicCmd.Flags().String("downstream-strategy", "", "Merge strategy when updating from parent (merge|rebase)")
 	configEditTopicCmd.Flags().Bool("tag", false, "Create tags on finish")
+
+	// --shared writes to the committable .gitflow file and re-syncs local config,
+	// instead of writing local config only. Available on every CRUD verb.
+	for _, c := range []*cobra.Command{
+		configAddBaseCmd, configAddTopicCmd,
+		configEditBaseCmd, configEditTopicCmd,
+		configRenameBaseCmd, configRenameTopicCmd,
+		configDeleteBaseCmd, configDeleteTopicCmd,
+	} {
+		c.Flags().Bool("shared", false, "Edit the shared .gitflow file and re-sync local config (requires an existing .gitflow)")
+	}
 }
