@@ -53,7 +53,13 @@ func RegisterShorthandCommands() {
 			fetchFlag, _ := cmd.Flags().GetBool("fetch")
 			noFetchFlag, _ := cmd.Flags().GetBool("no-fetch")
 			fetch := getBoolFlag(fetchFlag, noFetchFlag)
-			DeleteCommand(branchType, name, force, remote, fetch)
+			removeWorktreeFlag, _ := cmd.Flags().GetBool("remove-worktree")
+			noRemoveWorktreeFlag, _ := cmd.Flags().GetBool("no-remove-worktree")
+			removeWorktree := getBoolFlag(removeWorktreeFlag, noRemoveWorktreeFlag)
+			forceRemoveWorktreeFlag, _ := cmd.Flags().GetBool("force-remove-worktree")
+			noForceRemoveWorktreeFlag, _ := cmd.Flags().GetBool("no-force-remove-worktree")
+			forceRemoveWorktree := getBoolFlag(forceRemoveWorktreeFlag, noForceRemoveWorktreeFlag)
+			DeleteCommand(branchType, name, force, remote, fetch, removeWorktree, forceRemoveWorktree)
 			return nil
 		},
 	}
@@ -63,6 +69,10 @@ func RegisterShorthandCommands() {
 	deleteCmd.Flags().Bool("no-remote", false, "Don't delete remote tracking branch")
 	deleteCmd.Flags().Bool("fetch", false, "Fetch from remote before deleting")
 	deleteCmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before deleting")
+	deleteCmd.Flags().Bool("remove-worktree", false, "Remove a linked worktree holding the branch before deleting it (overrides config)")
+	deleteCmd.Flags().Bool("no-remove-worktree", false, "Don't remove a linked worktree holding the branch")
+	deleteCmd.Flags().Bool("force-remove-worktree", false, "Force-remove a dirty linked worktree (uncommitted/untracked changes are lost)")
+	deleteCmd.Flags().Bool("no-force-remove-worktree", false, "Don't force-remove a dirty linked worktree")
 	rootCmd.AddCommand(deleteCmd)
 
 	// Update
@@ -155,10 +165,12 @@ func RegisterShorthandCommands() {
 				TagName:     cmd.Flag("tagname").Value.String(),
 			}
 			retentionOptions := &config.BranchRetentionOptions{
-				Keep:        getBoolPtr(cmd, "keep", "no-keep"),
-				KeepRemote:  getBoolPtr(cmd, "keepremote", "no-keepremote"),
-				KeepLocal:   getBoolPtr(cmd, "keeplocal", "no-keeplocal"),
-				ForceDelete: getBoolPtr(cmd, "force-delete", "no-force-delete"),
+				Keep:                getBoolPtr(cmd, "keep", "no-keep"),
+				KeepRemote:          getBoolPtr(cmd, "keepremote", "no-keepremote"),
+				KeepLocal:           getBoolPtr(cmd, "keeplocal", "no-keeplocal"),
+				ForceDelete:         getBoolPtr(cmd, "force-delete", "no-force-delete"),
+				RemoveWorktree:      getBoolPtr(cmd, "remove-worktree", "no-remove-worktree"),
+				ForceRemoveWorktree: getBoolPtr(cmd, "force-remove-worktree", "no-force-remove-worktree"),
 			}
 			// Create merge strategy options with squash message support
 			mergeOptions := &config.MergeStrategyOptions{

@@ -233,6 +233,11 @@ func executeFinish(repo *git.Repo, branchType string, name string, continueOp bo
 
 	// Resolve all options once before starting operations
 	resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
+	if resolvedOptions.RemoveWorktree && !resolvedOptions.ForceRemoveWorktree && !resolvedOptions.Keep && !resolvedOptions.KeepLocal {
+		if err := preflightWorktreeRemoval(repo, name, false); err != nil {
+			return err
+		}
+	}
 
 	// Fetch the topic (and parent, best-effort) and verify the topic is in sync with its remote.
 	// This runs only on the initial finish, never on --continue/--abort (handled above). A fatal
@@ -786,7 +791,7 @@ func handleDeleteBranchStep(repo *git.Repo, cfg *config.Config, state *mergestat
 	// Delete branches based on settings
 	// Use force delete since we've already merged the branch
 	forceDelete := true
-	if err := deleteBranchesIfNeeded(repo, state, cfg.Remote, keepRemote, keepLocal, forceDelete); err != nil {
+	if err := deleteBranchesIfNeeded(repo, state, cfg.Remote, keepRemote, keepLocal, forceDelete, resolvedOptions.RemoveWorktree, resolvedOptions.ForceRemoveWorktree); err != nil {
 		return err
 	}
 
@@ -1033,22 +1038,32 @@ func updateChildBranch(repo *git.Repo, cfg *config.Config, branchName string, st
 }
 
 // deleteBranchesIfNeeded deletes branches based on retention settings
-func deleteBranchesIfNeeded(repo *git.Repo, state *mergestate.MergeState, remote string, keepRemote, keepLocal, forceDelete bool) error {
-	// Delete remote branch if not keeping it and if remote branch exists
+func deleteBranchesIfNeeded(repo *git.Repo, state *mergestate.MergeState, remote string, keepRemote, keepLocal, forceDelete bool, removeWorktree, forceRemoveWorktree bool) error {
+	// Delete local branch if not keeping it
+	if !keepLocal {
+		// A branch checked out in a linked worktree cannot be deleted by git.
+		// When enabled, remove that worktree (refusing to force-remove a dirty
+		// one unless forceRemoveWorktree is set) before deleting the branch.
+		if removeWorktree {
+			if err := removeWorktreeForBranch(repo, state.FullBranchName, forceRemoveWorktree); err != nil {
+				return err
+			}
+		}
+
+		if err := repo.DeleteBranch(state.FullBranchName, forceDelete); err != nil {
+			return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", state.FullBranchName), Err: err}
+		}
+	}
+
+	// Delete the remote branch only after local cleanup succeeds. In particular,
+	// a dirty linked worktree must not leave the remote branch deleted while the
+	// local branch and worktree remain.
 	if !keepRemote {
-		// Only attempt to delete if the remote branch actually exists
 		if repo.RemoteBranchExists(remote, state.FullBranchName) {
 			remoteBranch := fmt.Sprintf("%s/%s", remote, state.FullBranchName)
 			if err := repo.DeleteRemoteBranch(remote, state.FullBranchName); err != nil {
 				return &errors.GitError{Operation: fmt.Sprintf("delete remote branch '%s'", remoteBranch), Err: err}
 			}
-		}
-	}
-
-	// Delete local branch if not keeping it
-	if !keepLocal {
-		if err := repo.DeleteBranch(state.FullBranchName, forceDelete); err != nil {
-			return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", state.FullBranchName), Err: err}
 		}
 	}
 

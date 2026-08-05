@@ -212,6 +212,61 @@ func (r *Repo) DeleteBranch(branch string, force bool) error {
 	return nil
 }
 
+// WorktreeForBranch returns the absolute path of the linked worktree that has
+// the given local branch checked out, or "" if no other worktree holds it. The
+// repository's own worktree is never returned: callers only remove the worktree
+// after they have already switched off the branch, so the current worktree can
+// never hold it. It parses `git worktree list --porcelain`.
+func (r *Repo) WorktreeForBranch(branch string) (string, error) {
+	output, err := r.gitCmd("worktree", "list", "--porcelain").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
+	target := "branch refs/heads/" + branch
+	current := filepath.Clean(r.workTree)
+	var path string
+	for _, line := range strings.Split(string(output), "\n") {
+		switch {
+		case strings.HasPrefix(line, "worktree "):
+			path = strings.TrimSpace(strings.TrimPrefix(line, "worktree "))
+		case strings.TrimSpace(line) == target:
+			if path != "" && filepath.Clean(path) != current {
+				return path, nil
+			}
+		case strings.TrimSpace(line) == "":
+			path = ""
+		}
+	}
+	return "", nil
+}
+
+// RemoveWorktree removes the linked worktree at the given path. If force is
+// true, a dirty worktree (uncommitted or untracked changes) is removed anyway.
+func (r *Repo) RemoveWorktree(path string, force bool) error {
+	args := []string{"worktree", "remove"}
+	if force {
+		args = append(args, "--force")
+	}
+	args = append(args, path)
+
+	output, err := r.gitCmd(args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to remove worktree at '%s': %s", path, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+// WorktreeHasChanges reports whether the worktree at path has modified,
+// staged, or untracked files.
+func (r *Repo) WorktreeHasChanges(path string) (bool, error) {
+	output, err := gitCommand(path, "status", "--porcelain").Output()
+	if err != nil {
+		return false, fmt.Errorf("failed to inspect worktree at '%s': %w", path, err)
+	}
+	return strings.TrimSpace(string(output)) != "", nil
+}
+
 // HasCommits checks if the repository has any commits
 func (r *Repo) HasCommits() (bool, error) {
 	if err := r.gitCmd("rev-parse", "--verify", "HEAD").Run(); err != nil {

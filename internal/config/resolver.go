@@ -18,6 +18,10 @@ type ResolvedFinishOptions struct {
 	KeepLocal   bool
 	ForceDelete bool
 
+	// Worktree removal options
+	RemoveWorktree      bool // Whether to remove a linked worktree holding the branch before deleting it
+	ForceRemoveWorktree bool // Whether to force-remove a dirty (uncommitted/untracked) linked worktree
+
 	// Merge strategy options
 	MergeStrategy  string // Final resolved strategy (merge/rebase/squash)
 	UseRebase      bool   // Whether to use rebase
@@ -55,10 +59,12 @@ type TagOptions struct {
 // BranchRetentionOptions represents command-line retention options
 // Note: This should match the BranchRetentionOptions type in cmd package
 type BranchRetentionOptions struct {
-	Keep        *bool
-	KeepRemote  *bool
-	KeepLocal   *bool
-	ForceDelete *bool
+	Keep                *bool
+	KeepRemote          *bool
+	KeepLocal           *bool
+	ForceDelete         *bool
+	RemoveWorktree      *bool
+	ForceRemoveWorktree *bool
 }
 
 // MergeStrategyOptions represents command-line merge strategy options
@@ -106,6 +112,10 @@ func ResolveFinishOptions(cfg *Config, branchType string, branchName string, tag
 		KeepRemote:  resolveFinishKeepRemote(cfg, branchType, retentionOpts),
 		KeepLocal:   resolveFinishKeepLocal(cfg, branchType, retentionOpts),
 		ForceDelete: resolveFinishForceDelete(cfg, branchType, retentionOpts),
+
+		// Worktree removal resolution
+		RemoveWorktree:      resolveFinishRemoveWorktree(cfg, branchType, retentionOpts),
+		ForceRemoveWorktree: resolveFinishForceRemoveWorktree(cfg, branchType, retentionOpts),
 
 		// Merge strategy resolution
 		MergeStrategy:  strategy,
@@ -306,6 +316,51 @@ func resolveFinishForceDelete(cfg *Config, branchType string, retentionOpts *Bra
 	}
 
 	return forceDelete
+}
+
+// resolveFinishRemoveWorktree resolves whether to remove a linked worktree that
+// has the branch checked out before the branch is deleted. Default is opt-out
+// (false): without configuration, a branch held by a worktree fails to delete,
+// as git does by default. Enable it per branch type with
+// gitflow.<branchtype>.finish.remove-worktree, or override per invocation with
+// --remove-worktree/--no-remove-worktree.
+func resolveFinishRemoveWorktree(cfg *Config, branchType string, retentionOpts *BranchRetentionOptions) bool {
+	// Layer 1: Default is not to remove worktrees
+	removeWorktree := false
+
+	// Layer 2: Check command-specific config
+	if rwConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.finish.remove-worktree", branchType)); rwConfig {
+		removeWorktree = true
+	}
+
+	// Layer 3: Command-line flags override config
+	if retentionOpts != nil && retentionOpts.RemoveWorktree != nil {
+		removeWorktree = *retentionOpts.RemoveWorktree
+	}
+
+	return removeWorktree
+}
+
+// resolveFinishForceRemoveWorktree resolves whether removing a linked worktree
+// that has uncommitted or untracked changes should be force-removed. Default is
+// false: a dirty worktree errors instead of silently discarding work. Enable
+// per branch type with gitflow.<branchtype>.finish.force-remove-worktree, or
+// override per invocation with --force-remove-worktree/--no-force-remove-worktree.
+func resolveFinishForceRemoveWorktree(cfg *Config, branchType string, retentionOpts *BranchRetentionOptions) bool {
+	// Layer 1: Default is not to force-remove
+	forceRemoveWorktree := false
+
+	// Layer 2: Check command-specific config
+	if frwConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.finish.force-remove-worktree", branchType)); frwConfig {
+		forceRemoveWorktree = true
+	}
+
+	// Layer 3: Command-line flags override config
+	if retentionOpts != nil && retentionOpts.ForceRemoveWorktree != nil {
+		forceRemoveWorktree = *retentionOpts.ForceRemoveWorktree
+	}
+
+	return forceRemoveWorktree
 }
 
 // getCommandConfigBool gets a boolean config value from preloaded config

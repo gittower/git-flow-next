@@ -44,6 +44,18 @@ The delete operation removes the specified topic branch from the local repositor
 **--no-fetch**
 : Don't fetch from remote before deleting (overrides config). This skips only the fetch; the topic sync check still runs against existing local tracking data.
 
+**--remove-worktree**
+: Remove a linked worktree holding the branch before deleting it (overrides `gitflow.<type>.delete.remove-worktree`). Git refuses to delete a branch checked out in a linked worktree; this option removes that worktree first so deletion can proceed.
+
+**--no-remove-worktree**
+: Don't remove a linked worktree holding the branch (default)
+
+**--force-remove-worktree**
+: Force-remove a linked worktree that has uncommitted or untracked changes (those changes are lost). Overrides `gitflow.<type>.delete.force-remove-worktree`.
+
+**--no-force-remove-worktree**
+: Don't force-remove a dirty linked worktree (default); error instead of discarding changes
+
 ## SAFETY CHECKS
 
 By default, Git prevents deletion of branches with unmerged changes. The delete command:
@@ -156,6 +168,15 @@ git config gitflow.branch.feature.deleteRemote true
 ```bash
 # Always fetch before deleting feature branches
 git config gitflow.feature.delete.fetch true
+```
+
+### Worktree Removal Settings
+```bash
+# Automatically remove a linked worktree holding the branch before deleting it
+git config gitflow.feature.delete.remove-worktree true
+
+# Force-remove dirty worktrees (uncommitted/untracked changes are lost)
+git config gitflow.feature.delete.force-remove-worktree true
 ```
 
 ## SAFETY CONSIDERATIONS
