@@ -457,6 +457,9 @@ func executeConfigAddBase(repo *git.Repo, name, parent, upstreamStrategy, downst
 	if err := repo.BranchExists(name); err != nil {
 		// Branch doesn't exist, create it
 		if err := repo.CreateBranch(name, parent); err != nil {
+			if rollbackErr := repo.UnsetConfigSection(fmt.Sprintf("gitflow.branch.%s", name)); rollbackErr != nil {
+				err = fmt.Errorf("%w; failed to roll back configuration: %w", err, rollbackErr)
+			}
 			return &errors.GitError{Operation: fmt.Sprintf("create branch '%s'", name), Err: err}
 		}
 		fmt.Printf("✓ Created branch '%s'\n", name)
