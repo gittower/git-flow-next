@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -342,8 +343,17 @@ func ClearLocalGitflowConfig(t *testing.T, dir string) {
 			continue
 		}
 		seen[key] = true
-		// --unset-all removes multi-value keys too; ignore "not found".
-		_, _ = RunGit(t, dir, "config", "--local", "--unset-all", key)
+		// --unset-all removes multi-value keys too. The key was just enumerated
+		// from --get-regexp, so it exists; only exit 5 ("key not found", e.g. a
+		// concurrent unset) is benign — any other failure is unexpected and would
+		// leave the config partially cleared, so fail the test loudly.
+		if _, err := RunGit(t, dir, "config", "--local", "--unset-all", key); err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) && exitErr.ExitCode() == 5 {
+				continue
+			}
+			t.Fatalf("Failed to unset local gitflow config %s: %v", key, err)
+		}
 	}
 }
 

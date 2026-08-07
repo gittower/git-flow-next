@@ -1,7 +1,6 @@
 package config_test
 
 import (
-	"os/exec"
 	"strings"
 	"testing"
 
@@ -13,9 +12,7 @@ import (
 // `git config --file`.
 func setSharedConfig(t *testing.T, dir, key, value string) {
 	t.Helper()
-	cmd := exec.Command("git", "config", "--file", config.SharedConfigFileName, key, value)
-	cmd.Dir = dir
-	if err := cmd.Run(); err != nil {
+	if _, err := testutil.RunGit(t, dir, "config", "--file", config.SharedConfigFileName, key, value); err != nil {
 		t.Fatalf("Failed to set shared config %s: %v", key, err)
 	}
 }
@@ -24,13 +21,11 @@ func setSharedConfig(t *testing.T, dir, key, value string) {
 // key is present.
 func localConfigValue(t *testing.T, dir, key string) (string, bool) {
 	t.Helper()
-	cmd := exec.Command("git", "config", "--local", "--get", key)
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	out, err := testutil.RunGit(t, dir, "config", "--local", "--get", key)
 	if err != nil {
 		return "", false
 	}
-	return strings.TrimSpace(string(out)), true
+	return strings.TrimSpace(out), true
 }
 
 // TestSharedManagedKeyPredicate covers scenario 38: the shared-managed key
@@ -220,9 +215,7 @@ func TestIsUnconfiguredAfterGitFlowInit(t *testing.T) {
 	dir := setupTestRepo(t)
 	defer cleanupTestRepo(t, dir)
 
-	cmd := exec.Command(testutil.GitFlowPath(), "init", "--defaults")
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
 		t.Fatalf("git flow init failed: %v\n%s", err, out)
 	}
 
