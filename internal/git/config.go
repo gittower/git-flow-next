@@ -155,7 +155,8 @@ func (r *Repo) GetConfigRegexpLines(pattern string) ([]string, error) {
 func (r *Repo) GetConfigLocalRegexpLines(pattern string) ([]string, error) {
 	output, err := r.gitCmd("config", "--local", "--get-regexp", pattern).Output()
 	if err != nil {
-		if strings.Contains(err.Error(), "exit status 1") {
+		// exit 1 = no matching keys (a valid, possibly empty result).
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			return []string{}, nil
 		}
 		return nil, fmt.Errorf("failed to get local git config matching %s: %w", pattern, err)
@@ -168,7 +169,7 @@ func (r *Repo) GetConfigLocalRegexpLines(pattern string) ([]string, error) {
 // values, so callers can reproduce an ordered multi-value list by unsetting then
 // adding each value in order.
 func (r *Repo) AddConfig(key, value string) error {
-	if _, err := r.gitCmd("config", "--add", key, value).Output(); err != nil {
+	if _, err := r.gitCmd("config", "--local", "--add", key, value).Output(); err != nil {
 		return fmt.Errorf("failed to add git config %s: %w", key, err)
 	}
 	return nil
