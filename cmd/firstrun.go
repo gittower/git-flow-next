@@ -29,8 +29,10 @@ func firstRunActivation(cmd *cobra.Command) error {
 	// Never intercept the config command group: config verbs manage git-flow
 	// config explicitly. `config status` must stay read-only (no prompt/copy) and
 	// `config sync` must not be refused by an untrusted-hook auto-init before it
-	// gets a chance to run and skip the hook itself.
-	if cmd.Name() == "config" || (cmd.Parent() != nil && cmd.Parent().Name() == "config") {
+	// gets a chance to run and skip the hook itself. Walk the whole ancestor chain
+	// so nested leaves (`config add topic`, `config edit base`, …) are exempt too,
+	// not just the direct children of `config`.
+	if isConfigCommand(cmd) {
 		return nil
 	}
 
@@ -78,6 +80,19 @@ func firstRunActivation(cmd *cobra.Command) error {
 		fmt.Fprintf(os.Stderr, "Note: this repository has a shared %s configuration that has not been activated.\nRun 'git flow config sync' to activate it, or set gitflow.shared.autoInit=true to activate automatically.\n", config.SharedConfigFileName)
 		return nil
 	}
+}
+
+// isConfigCommand reports whether cmd is the config command or any command
+// nested under it, walking the full parent chain. The config leaves (base/topic
+// under add/edit/rename/delete) sit two levels below config, so a direct-parent
+// check alone would let them slip past the first-run exemption.
+func isConfigCommand(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Name() == "config" {
+			return true
+		}
+	}
+	return false
 }
 
 // activateAutoInit performs a non-interactive activation. It refuses wholesale

@@ -223,6 +223,40 @@ func TestConfigEditTopicSharedFreshCloneNoLocalInit(t *testing.T) {
 	}
 }
 
+// TestConfigNestedLeafFreshCloneNoActivation guards the first-run exemption for
+// NESTED config leaves: `config add topic` sits two levels below `config`, so a
+// direct-parent-only exemption would let first-run activation fire for it. On a
+// fresh clone that has autoInit=true set locally, a wrongly-fired activation
+// would auto-copy the shared config and print an "auto-initialized" notice
+// before the command runs. The config verb must stay exempt: no notice, and the
+// edit targets .gitflow directly.
+// Steps:
+// 1. Fresh clone carrying a committed .gitflow, no local gitflow.* keys, autoInit=true local
+// 2. Runs 'config add topic qa develop --shared'
+// 3. Verifies no auto-init notice, success, and gitflow.branch.qa lands in .gitflow
+func TestConfigNestedLeafFreshCloneNoActivation(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupFreshCloneWithShared(t, testutil.AuthorSharedConfig(t))
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// autoInit is a local control key, so it survives ClearLocalGitflowConfig's
+	// job here: if activation wrongly fired it would take the auto-init branch.
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "gitflow.shared.autoInit", "true"); err != nil {
+		t.Fatalf("failed to set autoInit: %v", err)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "add", "topic", "qa", "develop", "--shared")
+	if err != nil {
+		t.Fatalf("config add topic --shared on fresh clone failed: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "auto-initialized") {
+		t.Errorf("expected no first-run activation for a nested config command, got: %s", out)
+	}
+	if v := testutil.SharedConfigValue(t, dir, "gitflow.branch.qa.type"); v != "topic" {
+		t.Errorf("expected .gitflow qa.type=topic, got %q", v)
+	}
+}
+
 // TestConfigAddBaseSharedAddsBaseAndSyncs covers scenario 30base-a: config add
 // base --shared adds a base branch to .gitflow, re-syncs local, and creates the branch.
 // Steps:
