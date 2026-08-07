@@ -407,8 +407,14 @@ func persistConfig(repo *git.Repo, cfg *config.Config, shared bool) error {
 		if err := config.SaveConfigWithScope(cfg, git.ConfigScopeFile, config.SharedConfigPath(repo)); err != nil {
 			return err
 		}
-		if _, err := config.CopySharedToLocal(repo); err != nil {
+		result, err := config.CopySharedToLocal(repo)
+		if err != nil {
 			return err
+		}
+		// Mirror `config sync`: make the hook-trust filter visible so users editing
+		// shared config know a hook path was withheld from local until trusted.
+		for _, k := range result.SkippedHookKeys {
+			fmt.Fprintf(os.Stderr, "Warning: skipped shared hook path %q; set gitflow.shared.trustHooks=true to apply it.\n", k)
 		}
 		return nil
 	}
