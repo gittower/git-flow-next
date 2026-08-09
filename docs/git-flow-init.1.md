@@ -14,7 +14,7 @@ Initialize git-flow configuration in the current Git repository. This command se
 
 **git-flow init** supports three initialization modes:
 
-1. **Interactive Mode** (default) - Presents a menu to choose between presets or custom configuration
+1. **Interactive Mode** (default) - Prompts for branch names and prefixes one question at a time, each showing its default in brackets that Enter accepts
 2. **Preset Mode** - Automatically applies a predefined workflow configuration  
 3. **Custom Mode** - Sets up only the trunk branch and shows configuration commands
 
