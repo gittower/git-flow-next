@@ -258,11 +258,14 @@ By default, git-flow stores configuration in the repository's **.git/config** fi
 **0**
 : Successful initialization
 
+**1**
+: Usage error — an unknown option or an unexpected argument
+
 **2**
 : Invalid options — for example multiple configuration scope options, or an invalid branch name
 
 **3**
-: The current directory is not a git repository and repository creation was not authorized (no **--init**, and either no interactive terminal or the prompt was declined)
+: Git operation failed (for example the current directory is not a git repository and repository creation was not authorized — no **--init**, and either no interactive terminal or the prompt was declined)
 
 **6**
 : A required precondition failed — git-flow is already initialized and **--force** was not given, or the repository has no commits and branch creation is requested but no git identity (**user.name** and **user.email**) is configured
@@ -279,7 +282,7 @@ By default, git-flow stores configuration in the repository's **.git/config** fi
 - In interactive mode without **--force**, users are prompted for confirmation before reconfiguring
 - Existing branches are preserved during initialization
 - When initializing a repository with no existing commits, **git-flow init** creates an empty initial commit to enable branch creation. No files are added to the working directory
-- Creating that initial commit requires a configured git identity. When the repository has no commits and branch creation is requested, **git-flow init** verifies that both **user.name** and **user.email** are set (in local, global, or system config) before writing any configuration. If the identity is missing, init fails fast with an actionable error (exit status **6**) and leaves the repository untouched, so it can be re-run after configuring the identity. Repositories that already have commits, or runs with **--no-create-branches**, do not require an identity
+- Creating that initial commit requires a configured git identity. When the repository has no commits and branch creation is requested, **git-flow init** verifies that both **user.name** and **user.email** are set (in local, global, or system config) before writing any configuration. If the identity is missing, init fails fast with an actionable error (exit status **6**) and writes no configuration, so it can be re-run after configuring the identity. A repository that **--init** created moments earlier is not rolled back and stays in place, as described above. Repositories that already have commits, or runs with **--no-create-branches**, do not require an identity
 - Compatible with repositories previously initialized with git-flow-avh
 - Configuration scope options (**--local**, **--global**, **--system**, **--file**) only affect the **init** command. All other git-flow commands (start, finish, update, etc.) always read from merged config using Git's standard precedence (local > global > system)
 - When checking initialization status without an explicit scope flag, git-flow checks merged config and reports which scope the configuration was found in
