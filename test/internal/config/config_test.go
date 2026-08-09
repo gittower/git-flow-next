@@ -636,3 +636,58 @@ func keysOf(m map[string]config.BranchConfig) []string {
 	}
 	return keys
 }
+
+// TestTrunkBranchReturnsUnparentedBaseBranch tests that TrunkBranch reports the
+// base branch with no parent for the shipped default configuration.
+// Steps:
+// 1. Builds config.DefaultConfig()
+// 2. Calls TrunkBranch()
+// 3. Verifies it returns "main"
+func TestTrunkBranchReturnsUnparentedBaseBranch(t *testing.T) {
+	t.Parallel()
+	if got := config.DefaultConfig().TrunkBranch(); got != "main" {
+		t.Errorf("Expected trunk 'main', got %q", got)
+	}
+}
+
+// TestTrunkBranchTieBreakIsLexicographic tests that TrunkBranch is deterministic
+// when several base branches have no parent, despite Go's randomized map
+// iteration order.
+// Steps:
+// 1. Builds a Config with two unparented base branches, "zulu" and "alpha"
+// 2. Calls TrunkBranch() at least 20 times
+// 3. Verifies every call returns "alpha", the lexicographically smallest name
+func TestTrunkBranchTieBreakIsLexicographic(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{
+		Version: "1.0",
+		Branches: map[string]config.BranchConfig{
+			"zulu":  {Type: string(config.BranchTypeBase)},
+			"alpha": {Type: string(config.BranchTypeBase)},
+		},
+	}
+	for i := 0; i < 20; i++ {
+		if got := cfg.TrunkBranch(); got != "alpha" {
+			t.Fatalf("Iteration %d: expected trunk 'alpha', got %q", i, got)
+		}
+	}
+}
+
+// TestTrunkBranchWithoutTrunkReturnsEmpty tests that TrunkBranch returns an
+// empty string for a configuration whose base branches all have a parent.
+// Steps:
+// 1. Builds a Config whose only base branch has a non-empty Parent
+// 2. Calls TrunkBranch()
+// 3. Verifies it returns ""
+func TestTrunkBranchWithoutTrunkReturnsEmpty(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{
+		Version: "1.0",
+		Branches: map[string]config.BranchConfig{
+			"develop": {Type: string(config.BranchTypeBase), Parent: "main"},
+		},
+	}
+	if got := cfg.TrunkBranch(); got != "" {
+		t.Errorf("Expected empty trunk, got %q", got)
+	}
+}
