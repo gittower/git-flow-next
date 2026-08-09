@@ -249,6 +249,10 @@ git flow release finish v1.0 --tag  # Force tagging for this invocation
 
 Not every option spans all three layers. Layer 1 is reserved for essential branch-type properties — many command options exist only at Layer 2 and Layer 3. For example, `sign`, `keep`, and publish `push-options` are purely operational and have no Layer 1 equivalent.
 
+### Boolean Values
+
+Options listed with `Values: true, false` accept every git-config boolean spelling, at both Layer 1 and Layer 2: `true`, `yes`, `on` and any non-zero integer are true; `false`, `no`, `off`, `0` and an empty value are false; matching is case-insensitive. An unrecognized value is treated as `false`. Note that inverse options such as `no-rebase` and `notag` are separate keys rather than falsy spellings of the positive option. See the **Boolean Values** section of `docs/gitflow-config.5.md` for the full rule.
+
 ## Shared Configuration (.gitflow)
 
 By default git-flow configuration lives in `.git/config`, which is never committed, so every clone must run `git flow init`. A committable `.gitflow` file at the repository root lets a team share one configuration.
