@@ -205,7 +205,7 @@ func TestNoSharedFileBehavesAsToday(t *testing.T) {
 // Steps:
 // 1. Creates a bare repository
 // 2. Runs 'git flow version' in it
-// 3. Verifies exit 0, normal version output, and no .gitflow text or panic
+// 3. Verifies exit 0, output exactly '<version> (git-flow-next)', and no .gitflow text or panic
 func TestBareRepoNoSharedDetection(t *testing.T) {
 	t.Parallel()
 	bareDir, err := os.MkdirTemp("", "git-flow-test-bare-*")
@@ -221,9 +221,7 @@ func TestBareRepoNoSharedDetection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("version in bare repo failed: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "git-flow-next version") {
-		t.Errorf("expected version output, got: %s", out)
-	}
+	assertVersionOutput(t, out)
 	if strings.Contains(out, ".gitflow") {
 		t.Errorf("expected no .gitflow text in bare-repo version output, got: %s", out)
 	}

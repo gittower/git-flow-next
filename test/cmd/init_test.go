@@ -303,7 +303,7 @@ func TestInitInteractive(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Run git-flow init with input
-	input := "custom-main\ncustom-dev\nf/\nr/\nh/\ns/\n"
+	input := "custom-main\ncustom-dev\nf/\nb/\nr/\nh/\ns/\n\n"
 	output, err := runGitFlowWithInput(t, dir, input, "init")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow init: %v\nOutput: %s", err, output)
@@ -1690,5 +1690,812 @@ func TestInitFileRelativePathResolvesAgainstInvocationDir(t *testing.T) {
 	// The work-tree-root cfgdir must never have been created.
 	if _, err := os.Stat(filepath.Join(dir, "cfgdir")); !os.IsNotExist(err) {
 		t.Errorf("work-tree-root cfgdir was created/read; --file did not resolve against invocation dir")
+	}
+}
+
+// runGitFlowWithInputAndEnv runs git-flow with both piped stdin and custom
+// environment variables. The repository-creation prompt is gated on interactive
+// stdin (GIT_FLOW_ASSUME_INTERACTIVE=1, since the subprocess harness cannot
+// allocate a PTY) and also consumes stdin, so neither runGitFlowWithInput nor
+// runGitFlowWithEnv is sufficient on its own.
+func runGitFlowWithInputAndEnv(t *testing.T, dir string, input string, env []string, args ...string) (string, error) {
+	t.Helper()
+	gitFlowPath := testutil.GitFlowPath()
+	cmd := exec.Command(gitFlowPath, args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), env...)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatalf("Failed to get stdin pipe: %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start command: %v", err)
+	}
+	io.WriteString(stdin, input)
+	stdin.Close()
+	err = cmd.Wait()
+	return stdout.String() + stderr.String(), err
+}
+
+// setupNonRepoDir returns a temporary directory that is deliberately NOT a git
+// repository, for the "git flow init outside a repository" scenarios.
+func setupNonRepoDir(t *testing.T) string {
+	t.Helper()
+	return t.TempDir()
+}
+
+// hasGitDir reports whether dir contains a .git entry, i.e. whether a
+// repository was created there.
+func hasGitDir(t *testing.T, dir string) bool {
+	t.Helper()
+	_, err := os.Stat(filepath.Join(dir, ".git"))
+	return err == nil
+}
+
+// identityConfigEnv seeds a writable temporary global git config with a user
+// identity plus any extra key/value settings, and returns the environment
+// pointing git at it with the system config isolated, together with the path of
+// the seeded global config file (tests asserting on --global writes need it).
+// Unlike isolatedConfigEnv it supplies an identity, so init can create the
+// initial commit. It also pins LC_ALL=C so assertions on git's own output
+// ("Initialized empty Git repository") are not defeated by a translated locale.
+func identityConfigEnv(t *testing.T, extra map[string]string) ([]string, string) {
+	t.Helper()
+	globalConfigFile := filepath.Join(t.TempDir(), "gitconfig-global")
+	settings := map[string]string{"user.name": "A", "user.email": "a@b.c"}
+	for k, v := range extra {
+		settings[k] = v
+	}
+	for k, v := range settings {
+		if _, err := testutil.RunGit(t, t.TempDir(), "config", "--file", globalConfigFile, k, v); err != nil {
+			t.Fatalf("Failed to seed global %s: %v", k, err)
+		}
+	}
+	env := []string{"GIT_CONFIG_GLOBAL=" + globalConfigFile, "GIT_CONFIG_SYSTEM=" + os.DevNull, "LC_ALL=C"}
+	return env, globalConfigFile
+}
+
+// TestInitCreatesRepositoryWithInitFlag tests that --init creates a git
+// repository in an empty directory and then initializes git-flow in it.
+// Steps:
+//  1. Creates a temporary directory that is not a git repository
+//  2. Seeds a temporary global git config with a user identity
+//  3. Runs 'git flow init --defaults --init' in that directory
+//  4. Verifies the command succeeds
+//  5. Verifies a .git directory exists and the directory is inside a work tree
+//  6. Verifies gitflow.version is 1.0 in local config
+//  7. Verifies the main and develop base branches were created
+//  8. Verifies the output reports both git-flow initialization and git's own
+//     'Initialized empty Git repository' line (presence only, never ordering)
+func TestInitCreatesRepositoryWithInitFlag(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	env, _ := identityConfigEnv(t, nil)
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--init")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+	}
+	if !hasGitDir(t, dir) {
+		t.Error("Expected a .git directory to be created")
+	}
+	insideWorkTree, err := testutil.RunGit(t, dir, "rev-parse", "--is-inside-work-tree")
+	if err != nil {
+		t.Fatalf("Expected the directory to be a work tree: %v", err)
+	}
+	if strings.TrimSpace(insideWorkTree) != "true" {
+		t.Errorf("Expected 'true' from rev-parse --is-inside-work-tree, got: %s", insideWorkTree)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
+		t.Errorf("Expected gitflow.version to be '1.0', got: %s", v)
+	}
+	if !branchExists(t, dir, "main") {
+		t.Error("Expected 'main' branch to exist")
+	}
+	if !branchExists(t, dir, "develop") {
+		t.Error("Expected 'develop' branch to exist")
+	}
+	if !strings.Contains(output, "Initializing git-flow with default settings") {
+		t.Errorf("Expected output to contain 'Initializing git-flow with default settings', got: %s", output)
+	}
+	if !strings.Contains(output, "Git flow has been initialized") {
+		t.Errorf("Expected output to contain 'Git flow has been initialized', got: %s", output)
+	}
+	if !strings.Contains(output, "Initialized empty Git repository") {
+		t.Errorf("Expected output to surface git's own 'Initialized empty Git repository' line, got: %s", output)
+	}
+}
+
+// TestInitWithInitFlagUsesTrunkAsInitialBranch tests that the repository created
+// by --init uses the resolved git-flow trunk as its initial branch, overriding
+// an ambient init.defaultBranch.
+// Steps:
+//  1. Creates a temporary directory that is not a git repository
+//  2. Seeds a global git config with an identity and init.defaultBranch=legacy
+//  3. Runs 'git flow init --defaults --init --no-create-branches' so HEAD stays
+//     unborn and the initial branch remains observable
+//  4. Verifies the command succeeds
+//  5. Verifies HEAD points at 'main', not 'legacy'
+//  6. Verifies no 'legacy' branch exists
+//  7. Verifies gitflow.version is 1.0 in local config
+func TestInitWithInitFlagUsesTrunkAsInitialBranch(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	env, _ := identityConfigEnv(t, map[string]string{"init.defaultBranch": "legacy"})
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--init", "--no-create-branches")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+	}
+	head, err := testutil.RunGit(t, dir, "symbolic-ref", "--short", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+	if strings.TrimSpace(head) != "main" {
+		t.Errorf("Expected initial branch 'main', got: %s", strings.TrimSpace(head))
+	}
+	if branchExists(t, dir, "legacy") {
+		t.Error("Expected no 'legacy' branch; init.defaultBranch must not win over the trunk")
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
+		t.Errorf("Expected gitflow.version to be '1.0', got: %s", v)
+	}
+}
+
+// TestInitWithInitFlagUsesCustomMainAsInitialBranch tests that --main drives the
+// initial branch of the repository created by --init.
+// Steps:
+// 1. Creates a temporary directory that is not a git repository
+// 2. Seeds a global git config with an identity and init.defaultBranch=legacy
+// 3. Runs 'git flow init --init --main trunk --no-create-branches'
+// 4. Verifies the command succeeds
+// 5. Verifies HEAD points at 'trunk'
+// 6. Verifies gitflow.branch.trunk.type is 'base' in local config
+func TestInitWithInitFlagUsesCustomMainAsInitialBranch(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	env, _ := identityConfigEnv(t, map[string]string{"init.defaultBranch": "legacy"})
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--init", "--main", "trunk", "--no-create-branches")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+	}
+	head, err := testutil.RunGit(t, dir, "symbolic-ref", "--short", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+	if strings.TrimSpace(head) != "trunk" {
+		t.Errorf("Expected initial branch 'trunk', got: %s", strings.TrimSpace(head))
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.branch.trunk.type", "local"); v != "base" {
+		t.Errorf("Expected gitflow.branch.trunk.type to be 'base', got: %s", v)
+	}
+}
+
+// TestInitWithoutInitFlagOutsideRepositoryFails tests that the default behavior
+// outside a git repository is unchanged: an error, and nothing created.
+// Steps:
+//  1. Creates a temporary directory that is not a git repository
+//  2. Seeds a global git config with an identity so the failure is unambiguously
+//     the missing repository (stdin is a pipe and GIT_FLOW_ASSUME_INTERACTIVE is unset)
+//  3. Runs 'git flow init --defaults' without --init
+//  4. Verifies the command fails with exit code 3
+//  5. Verifies the output still names 'git init' as the remedy
+//  6. Verifies no .git directory was created
+//  7. Verifies the directory is still completely empty
+func TestInitWithoutInitFlagOutsideRepositoryFails(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	env, _ := identityConfigEnv(t, nil)
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults")
+	if code := exitCodeOf(t, err); code != 3 {
+		t.Fatalf("Expected exit code 3, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "not a git repository. Please run 'git init' first") {
+		t.Errorf("Expected output to contain the unchanged not-a-repository message, got: %s", output)
+	}
+	if hasGitDir(t, dir) {
+		t.Error("Expected no .git directory to be created")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("Failed to read directory: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("Expected the directory to stay empty, got %d entries", len(entries))
+	}
+}
+
+// TestInitFlagIsNoOpInExistingRepository tests that --init is a no-op inside an
+// existing git repository: no new repository, no re-init, ordinary git-flow setup.
+// Steps:
+// 1. Creates a test repository with a commit and an identity
+// 2. Records its work-tree root and HEAD commit
+// 3. Runs 'git flow init --defaults --init' with LC_ALL=C pinned
+// 4. Verifies the command succeeds
+// 5. Verifies the work-tree root is unchanged (no nested repository)
+// 6. Verifies the commit reachable from main is unchanged
+// 7. Verifies git-flow really initialized (develop branch, gitflow.version)
+// 8. Verifies git never reported creating or reinitializing a repository
+func TestInitFlagIsNoOpInExistingRepository(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	topBefore, err := testutil.RunGit(t, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		t.Fatalf("Failed to read work-tree root: %v", err)
+	}
+	headBefore, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+
+	output, err := runGitFlowWithEnv(t, dir, []string{"LC_ALL=C"}, "init", "--defaults", "--init")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+	}
+
+	topAfter, err := testutil.RunGit(t, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		t.Fatalf("Failed to read work-tree root after init: %v", err)
+	}
+	if strings.TrimSpace(topAfter) != strings.TrimSpace(topBefore) {
+		t.Errorf("Expected work-tree root %q, got %q", strings.TrimSpace(topBefore), strings.TrimSpace(topAfter))
+	}
+	mainAfter, err := testutil.RunGit(t, dir, "rev-parse", "main")
+	if err != nil {
+		t.Fatalf("Failed to read main after init: %v", err)
+	}
+	if strings.TrimSpace(mainAfter) != strings.TrimSpace(headBefore) {
+		t.Errorf("Expected main to stay at %q, got %q", strings.TrimSpace(headBefore), strings.TrimSpace(mainAfter))
+	}
+	if !branchExists(t, dir, "develop") {
+		t.Error("Expected 'develop' branch to exist")
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
+		t.Errorf("Expected gitflow.version to be '1.0', got: %s", v)
+	}
+	if strings.Contains(output, "Initialized empty Git repository") {
+		t.Errorf("Expected no repository creation inside an existing repository, got: %s", output)
+	}
+	if strings.Contains(output, "Reinitialized existing Git repository") {
+		t.Errorf("Expected no 'git init' against the existing repository, got: %s", output)
+	}
+}
+
+// TestInitWithInitFlagFailsWithoutIdentity tests that --init on a directory with
+// no git identity anywhere fails fast with the identity error, leaving the
+// created .git in place but writing no configuration.
+// Steps:
+// 1. Creates a temporary directory that is not a git repository
+// 2. Isolates global and system config so no identity is visible
+// 3. Runs 'git flow init --defaults --init'
+// 4. Verifies the command fails with exit code 6 and the identity message
+// 5. Verifies the output does not leak an opaque 'exit status 128'
+// 6. Verifies the .git directory is still present (no rollback is required)
+// 7. Verifies config queries against the directory work (positive control)
+// 8. Verifies no gitflow configuration was written
+// 9. Verifies neither main nor develop was created
+func TestInitWithInitFlagFailsWithoutIdentity(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	env := isolatedConfigEnv()
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--init")
+	if code := exitCodeOf(t, err); code != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "git user identity is not configured") {
+		t.Errorf("Expected output to contain 'git user identity is not configured', got: %s", output)
+	}
+	if strings.Contains(output, "exit status 128") {
+		t.Errorf("Expected no opaque 'exit status 128' in output, got: %s", output)
+	}
+	if !hasGitDir(t, dir) {
+		t.Error("Expected the created .git directory to remain in place")
+	}
+	if _, err := testutil.RunGit(t, dir, "rev-parse", "--git-dir"); err != nil {
+		t.Fatalf("Positive control failed: config queries against %s do not work: %v", dir, err)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "" {
+		t.Errorf("Expected no gitflow.version to be written, got: %s", v)
+	}
+	if keys := gitflowConfigKeysLocal(t, dir); keys != "" {
+		t.Errorf("Expected no local gitflow.* config, got: %s", keys)
+	}
+	if branchExists(t, dir, "main") {
+		t.Error("Expected no 'main' branch")
+	}
+	if branchExists(t, dir, "develop") {
+		t.Error("Expected no 'develop' branch")
+	}
+}
+
+// TestInitInteractiveDeclineDoesNotCreateRepository tests that answering 'n' to
+// the repository-creation prompt aborts without creating anything.
+// Steps:
+// 1. Creates a temporary directory that is not a git repository
+// 2. Seeds an identity and forces interactive stdin (GIT_FLOW_ASSUME_INTERACTIVE=1)
+// 3. Runs 'git flow init' answering 'n'
+// 4. Verifies the command fails with exit code 3
+// 5. Verifies the prompt text was shown
+// 6. Verifies the decline message names both 'git init' and '--init', and that it does not read as an internal check failure
+// 7. Verifies no .git directory exists and the directory is still empty
+// 8. Verifies configuration prompting was never reached
+func TestInitInteractiveDeclineDoesNotCreateRepository(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	baseEnv, _ := identityConfigEnv(t, nil)
+	env := append(baseEnv, "GIT_FLOW_ASSUME_INTERACTIVE=1")
+
+	output, err := runGitFlowWithInputAndEnv(t, dir, "n\n", env, "init")
+	if code := exitCodeOf(t, err); code != 3 {
+		t.Fatalf("Expected exit code 3, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "Create one? [y/N]") {
+		t.Errorf("Expected the creation prompt in output, got: %s", output)
+	}
+	if !strings.Contains(output, "no git repository. Run 'git init' first, or re-run with --init") {
+		t.Errorf("Expected the decline message naming 'git init' and '--init', got: %s", output)
+	}
+	if strings.Contains(output, "failed to check if git repository") {
+		t.Errorf("Expected a decline message, not an internal check failure, got: %s", output)
+	}
+	if hasGitDir(t, dir) {
+		t.Error("Expected no .git directory after declining")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("Failed to read directory: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("Expected the directory to stay empty, got %d entries", len(entries))
+	}
+	if strings.Contains(output, "Branch name for production releases") {
+		t.Errorf("Expected no configuration prompting after a decline, got: %s", output)
+	}
+}
+
+// TestInitInteractiveEmptyAnswerDoesNotCreateRepository tests that a bare Enter
+// at the repository-creation prompt takes the [y/N] default and declines.
+// Steps:
+// 1. Creates a temporary directory that is not a git repository
+// 2. Seeds an identity and forces interactive stdin (GIT_FLOW_ASSUME_INTERACTIVE=1)
+// 3. Runs 'git flow init' answering with an empty line
+// 4. Verifies the command fails with exit code 3
+// 5. Verifies the prompt text was shown
+// 6. Verifies the decline message names both 'git init' and '--init', and that it does not read as an internal check failure
+// 7. Verifies no .git directory exists and the directory is still empty
+// 8. Verifies configuration prompting was never reached
+func TestInitInteractiveEmptyAnswerDoesNotCreateRepository(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	baseEnv, _ := identityConfigEnv(t, nil)
+	env := append(baseEnv, "GIT_FLOW_ASSUME_INTERACTIVE=1")
+
+	output, err := runGitFlowWithInputAndEnv(t, dir, "\n", env, "init")
+	if code := exitCodeOf(t, err); code != 3 {
+		t.Fatalf("Expected exit code 3, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "Create one? [y/N]") {
+		t.Errorf("Expected the creation prompt in output, got: %s", output)
+	}
+	if !strings.Contains(output, "no git repository. Run 'git init' first, or re-run with --init") {
+		t.Errorf("Expected the decline message naming 'git init' and '--init', got: %s", output)
+	}
+	if strings.Contains(output, "failed to check if git repository") {
+		t.Errorf("Expected a decline message, not an internal check failure, got: %s", output)
+	}
+	if hasGitDir(t, dir) {
+		t.Error("Expected no .git directory after declining")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("Failed to read directory: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("Expected the directory to stay empty, got %d entries", len(entries))
+	}
+	if strings.Contains(output, "Branch name for production releases") {
+		t.Errorf("Expected no configuration prompting after a decline, got: %s", output)
+	}
+}
+
+// TestInitInteractiveAcceptCreatesRepository tests that answering 'y' to the
+// repository-creation prompt creates the repository and then runs the ordinary
+// interactive configuration, whose answers must not be swallowed by the prompt.
+// Steps:
+//  1. Creates a temporary directory that is not a git repository
+//  2. Seeds an identity and forces interactive stdin (GIT_FLOW_ASSUME_INTERACTIVE=1)
+//  3. Runs 'git flow init' answering 'y' followed by the legacy interactive
+//     configuration answers (custom-main, custom-dev, the four prefixes, tag prefix)
+//  4. Verifies the command succeeds
+//  5. Verifies both the creation prompt and the configuration prompts were shown
+//  6. Verifies a repository now exists at the directory
+//  7. Verifies the custom-main and custom-dev branches were created
+//  8. Verifies no stray 'main' branch exists, proving the repository was created
+//     after the trunk was resolved rather than before
+//  9. Verifies gitflow.version and gitflow.branch.custom-main.type were written,
+//     proving the answers after the prompt were read
+func TestInitInteractiveAcceptCreatesRepository(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	baseEnv, _ := identityConfigEnv(t, nil)
+	env := append(baseEnv, "GIT_FLOW_ASSUME_INTERACTIVE=1")
+
+	// y to create the repo, then the legacy interactive-config answers:
+	// main, develop, feature, bugfix, release, hotfix, support, tag prefix.
+	input := "y\ncustom-main\ncustom-dev\nfeature/\nbugfix/\nrelease/\nhotfix/\nsupport/\n\n"
+	output, err := runGitFlowWithInputAndEnv(t, dir, input, env, "init")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+	}
+	if !strings.Contains(output, "Create one? [y/N]") {
+		t.Errorf("Expected the creation prompt in output, got: %s", output)
+	}
+	if !strings.Contains(output, "Branch name for production releases") {
+		t.Errorf("Expected the interactive configuration prompts in output, got: %s", output)
+	}
+	if !hasGitDir(t, dir) {
+		t.Error("Expected a .git directory to be created")
+	}
+	insideWorkTree, err := testutil.RunGit(t, dir, "rev-parse", "--is-inside-work-tree")
+	if err != nil {
+		t.Fatalf("Expected the directory to be a work tree: %v", err)
+	}
+	if strings.TrimSpace(insideWorkTree) != "true" {
+		t.Errorf("Expected 'true' from rev-parse --is-inside-work-tree, got: %s", insideWorkTree)
+	}
+	if !branchExists(t, dir, "custom-main") {
+		t.Error("Expected 'custom-main' branch to exist")
+	}
+	if !branchExists(t, dir, "custom-dev") {
+		t.Error("Expected 'custom-dev' branch to exist")
+	}
+	// The trunk is only known once interactive configuration has run, so the
+	// repository must be created after it. Creating it earlier would fall back to
+	// the ambient init.defaultBranch and strand a 'main' branch here.
+	if branchExists(t, dir, "main") {
+		t.Error("Expected no stray 'main' branch: the repository must be created after the trunk is resolved")
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
+		t.Errorf("Expected gitflow.version to be '1.0', got: %s", v)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.branch.custom-main.type", "local"); v != "base" {
+		t.Errorf("Expected gitflow.branch.custom-main.type to be 'base', got: %s", v)
+	}
+}
+
+// TestInitWithInitFlagWritesLocalScopeConfig tests that --init writes the
+// git-flow configuration into the created repository's local scope by default.
+// Steps:
+//  1. Creates a temporary directory that is not a git repository
+//  2. Seeds a global git config with a user identity
+//  3. Runs 'git flow init --defaults --init' with no scope flag
+//  4. Verifies the command succeeds
+//  5. Verifies gitflow.version, gitflow.initialized and
+//     gitflow.branch.develop.parent are all present in local config
+func TestInitWithInitFlagWritesLocalScopeConfig(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	env, _ := identityConfigEnv(t, nil)
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--init")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
+		t.Errorf("Expected gitflow.version to be '1.0', got: %s", v)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.initialized", "local"); v != "true" {
+		t.Errorf("Expected gitflow.initialized to be 'true', got: %s", v)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.branch.develop.parent", "local"); v != "main" {
+		t.Errorf("Expected gitflow.branch.develop.parent to be 'main', got: %s", v)
+	}
+}
+
+// TestInitFlagInSubdirectoryDoesNotCreateNestedRepository tests that --init in a
+// subdirectory of an existing repository configures the outer repository instead
+// of creating a nested one.
+// Steps:
+// 1. Creates a test repository and a 'nested' subdirectory inside it
+// 2. Runs 'git flow init --defaults --init' from the subdirectory
+// 3. Verifies the command succeeds
+// 4. Verifies no .git directory was created in the subdirectory
+// 5. Verifies the subdirectory still resolves to the outer work-tree root
+// 6. Verifies the outer repository was configured (gitflow.version)
+func TestInitFlagInSubdirectoryDoesNotCreateNestedRepository(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	sub := filepath.Join(dir, "nested")
+	if err := os.MkdirAll(sub, 0755); err != nil {
+		t.Fatalf("Failed to create nested directory: %v", err)
+	}
+
+	output, err := runGitFlow(t, sub, "init", "--defaults", "--init")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+	}
+	if hasGitDir(t, sub) {
+		t.Error("Expected no nested .git directory in the subdirectory")
+	}
+	subTop, err := testutil.RunGit(t, sub, "rev-parse", "--show-toplevel")
+	if err != nil {
+		t.Fatalf("Failed to read work-tree root from the subdirectory: %v", err)
+	}
+	outerTop, err := testutil.RunGit(t, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		t.Fatalf("Failed to read outer work-tree root: %v", err)
+	}
+	if strings.TrimSpace(subTop) != strings.TrimSpace(outerTop) {
+		t.Errorf("Expected work-tree root %q from the subdirectory, got %q", strings.TrimSpace(outerTop), strings.TrimSpace(subTop))
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
+		t.Errorf("Expected the outer repository to be configured, got gitflow.version: %s", v)
+	}
+}
+
+// TestInitWithInitFlagRejectsInvalidTrunkName tests that an invalid trunk name
+// is rejected before 'git init' runs, so no broken repository is left behind.
+// Steps:
+// 1. Creates a temporary directory that is not a git repository
+// 2. Seeds a global git config with a user identity
+// 3. Runs 'git flow init --init --main "bad name" --no-create-branches'
+// 4. Verifies the command fails with exit code 2 and names the invalid branch
+// 5. Verifies the output does not leak an opaque 'exit status 128'
+// 6. Verifies no .git directory exists and the directory is still empty
+func TestInitWithInitFlagRejectsInvalidTrunkName(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	env, _ := identityConfigEnv(t, nil)
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--init", "--main", "bad name", "--no-create-branches")
+	if code := exitCodeOf(t, err); code != 2 {
+		t.Fatalf("Expected exit code 2, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "invalid branch name: bad name") {
+		t.Errorf("Expected output to contain 'invalid branch name: bad name', got: %s", output)
+	}
+	if strings.Contains(output, "exit status 128") {
+		t.Errorf("Expected no opaque 'exit status 128' in output, got: %s", output)
+	}
+	if hasGitDir(t, dir) {
+		t.Error("Expected no .git directory after a rejected trunk name")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("Failed to read directory: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("Expected the directory to stay empty, got %d entries", len(entries))
+	}
+}
+
+// TestInitWithInitFlagAndGlobalScopeCreatesRepository tests that repository
+// creation is gated only on --init, never on the configuration scope: --global
+// still creates the repository while writing the config globally.
+// Steps:
+// 1. Creates a temporary directory that is not a git repository
+// 2. Seeds a writable temporary global git config with a user identity
+// 3. Runs 'git flow init --defaults --init --global --no-create-branches'
+// 4. Verifies the command succeeds and a .git directory exists
+// 5. Verifies gitflow.version landed in the global config file
+// 6. Verifies config queries against the directory work (positive control)
+// 7. Verifies nothing was written to the repository's local scope
+func TestInitWithInitFlagAndGlobalScopeCreatesRepository(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	env, globalConfigFile := identityConfigEnv(t, nil)
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--init", "--global", "--no-create-branches")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+	}
+	if !hasGitDir(t, dir) {
+		t.Error("Expected a .git directory to be created")
+	}
+	if v := getGitConfigFromFile(t, globalConfigFile, "gitflow.version"); v != "1.0" {
+		t.Errorf("Expected gitflow.version '1.0' in the global config file, got: %s", v)
+	}
+	if _, err := testutil.RunGit(t, dir, "rev-parse", "--git-dir"); err != nil {
+		t.Fatalf("Positive control failed: config queries against %s do not work: %v", dir, err)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "" {
+		t.Errorf("Expected no local gitflow.version with --global, got: %s", v)
+	}
+}
+
+// TestInitWithInitFlagAbortsWhenAlreadyInitializedGlobally tests that an
+// already-initialized global configuration aborts before the repository is
+// created, so no stray .git is left behind.
+// Steps:
+// 1. Creates a temporary directory that is not a git repository
+// 2. Seeds a global git config with an identity and gitflow.version=1.0
+// 3. Runs 'git flow init --defaults --init'
+// 4. Verifies the command fails with exit code 6
+// 5. Verifies the output reports the global configuration
+// 6. Verifies no .git directory was created and the directory is still empty
+func TestInitWithInitFlagAbortsWhenAlreadyInitializedGlobally(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	env, _ := identityConfigEnv(t, map[string]string{"gitflow.version": "1.0"})
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--init")
+	if code := exitCodeOf(t, err); code != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "Git-flow is configured via global config") {
+		t.Errorf("Expected output to report the global configuration, got: %s", output)
+	}
+	if hasGitDir(t, dir) {
+		t.Error("Expected no .git directory: the already-initialized check must run before creation")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("Failed to read directory: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("Expected the directory to stay empty, got %d entries", len(entries))
+	}
+}
+
+// TestInitWithInitFlagAndSharedScopeWritesSharedConfig tests that --shared --init
+// authors the .gitflow file at the created repository's work-tree root and copies
+// it into local config, proving the re-resolved repository handle is correct.
+// Steps:
+// 1. Creates a temporary directory that is not a git repository
+// 2. Seeds a global git config with a user identity
+// 3. Runs 'git flow init --defaults --init --shared'
+// 4. Verifies the command succeeds and a .git directory exists
+// 5. Verifies a .gitflow file exists at the directory root with gitflow.version
+// 6. Verifies gitflow.version was also copied into local config
+// 7. Verifies the main and develop base branches were created
+func TestInitWithInitFlagAndSharedScopeWritesSharedConfig(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	env, _ := identityConfigEnv(t, nil)
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--init", "--shared")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+	}
+	if !hasGitDir(t, dir) {
+		t.Error("Expected a .git directory to be created")
+	}
+	sharedPath := filepath.Join(dir, ".gitflow")
+	if _, err := os.Stat(sharedPath); err != nil {
+		t.Fatalf("Expected a .gitflow file at %s: %v", sharedPath, err)
+	}
+	if v := getGitConfigFromFile(t, sharedPath, "gitflow.version"); v != "1.0" {
+		t.Errorf("Expected gitflow.version '1.0' in .gitflow, got: %s", v)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
+		t.Errorf("Expected gitflow.version '1.0' copied into local config, got: %s", v)
+	}
+	if !branchExists(t, dir, "main") {
+		t.Error("Expected 'main' branch to exist")
+	}
+	if !branchExists(t, dir, "develop") {
+		t.Error("Expected 'develop' branch to exist")
+	}
+}
+
+// seedSharedConfigFile writes a .gitflow file into dir carrying a key that
+// DefaultConfig() never produces, and returns its path plus the exact bytes
+// written. The marker key makes a merge (rather than a clean rewrite) visible.
+func seedSharedConfigFile(t *testing.T, dir string) (string, []byte) {
+	t.Helper()
+	content := []byte("[gitflow]\n\tversion = 1.0\n\tprecious = keepme\n")
+	path := filepath.Join(dir, ".gitflow")
+	if err := os.WriteFile(path, content, 0644); err != nil {
+		t.Fatalf("Failed to seed .gitflow: %v", err)
+	}
+	return path, content
+}
+
+// TestInitWithInitFlagAndSharedScopeRefusesExistingSharedConfig tests that
+// --shared --init honors the same pre-existing .gitflow guard as the in-repo
+// path: a directory that carries a .gitflow but no .git (a source tarball, say)
+// is refused without --force, and no repository is created for it.
+// Steps:
+// 1. Creates a temporary directory that is not a git repository
+// 2. Seeds a .gitflow there carrying a key the defaults never write
+// 3. Seeds a global git config with a user identity
+// 4. Runs 'git flow init --defaults --init --shared' without --force
+// 5. Verifies the command fails with exit code 6 and names --force
+// 6. Verifies the .gitflow file is byte-identical to the seeded one
+// 7. Verifies no .git directory was created
+// 8. Verifies .gitflow is still the only entry in the directory
+func TestInitWithInitFlagAndSharedScopeRefusesExistingSharedConfig(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	sharedPath, seeded := seedSharedConfigFile(t, dir)
+	env, _ := identityConfigEnv(t, nil)
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--init", "--shared")
+	if code := exitCodeOf(t, err); code != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "already configured via the shared .gitflow file") {
+		t.Errorf("Expected output to report the existing .gitflow, got: %s", output)
+	}
+	if !strings.Contains(output, "--force") {
+		t.Errorf("Expected output to name --force, got: %s", output)
+	}
+	after, readErr := os.ReadFile(sharedPath)
+	if readErr != nil {
+		t.Fatalf("Failed to read .gitflow: %v", readErr)
+	}
+	if string(after) != string(seeded) {
+		t.Errorf("Expected .gitflow to be left untouched, got:\n%s", after)
+	}
+	if v := getGitConfigFromFile(t, sharedPath, "gitflow.precious"); v != "keepme" {
+		t.Errorf("Expected the pre-existing gitflow.precious to survive, got: %s", v)
+	}
+	if hasGitDir(t, dir) {
+		t.Error("Expected no .git directory: the .gitflow guard must run before creation")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("Failed to read directory: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected .gitflow to stay the only entry, got %d entries", len(entries))
+	}
+}
+
+// TestInitWithInitFlagAndSharedScopeForceReplacesExistingSharedConfig tests that
+// --shared --init --force rewrites a pre-existing .gitflow cleanly instead of
+// merging into it, and still creates the repository.
+// Steps:
+// 1. Creates a temporary directory that is not a git repository
+// 2. Seeds a .gitflow there carrying a key the defaults never write
+// 3. Seeds a global git config with a user identity
+// 4. Runs 'git flow init --defaults --init --shared --force'
+// 5. Verifies the command succeeds and a .git directory exists
+// 6. Verifies the stale key is gone from .gitflow and from local config
+// 7. Verifies the git-flow keys were written to .gitflow and copied to local
+// 8. Verifies the main and develop base branches were created
+func TestInitWithInitFlagAndSharedScopeForceReplacesExistingSharedConfig(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	sharedPath, _ := seedSharedConfigFile(t, dir)
+	env, _ := identityConfigEnv(t, nil)
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--init", "--shared", "--force")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+	}
+	if !hasGitDir(t, dir) {
+		t.Error("Expected a .git directory to be created")
+	}
+	if v := getGitConfigFromFile(t, sharedPath, "gitflow.precious"); v != "" {
+		t.Errorf("Expected the stale gitflow.precious to be gone from .gitflow, got: %s", v)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.precious", "local"); v != "" {
+		t.Errorf("Expected no stale gitflow.precious in local config, got: %s", v)
+	}
+	if v := getGitConfigFromFile(t, sharedPath, "gitflow.version"); v != "1.0" {
+		t.Errorf("Expected gitflow.version '1.0' in .gitflow, got: %s", v)
+	}
+	if v := getGitConfigFromFile(t, sharedPath, "gitflow.branch.develop.parent"); v != "main" {
+		t.Errorf("Expected gitflow.branch.develop.parent 'main' in .gitflow, got: %s", v)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
+		t.Errorf("Expected gitflow.version '1.0' copied into local config, got: %s", v)
+	}
+	if !branchExists(t, dir, "main") {
+		t.Error("Expected 'main' branch to exist")
+	}
+	if !branchExists(t, dir, "develop") {
+		t.Error("Expected 'develop' branch to exist")
 	}
 }

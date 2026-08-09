@@ -74,7 +74,7 @@ func firstRunActivation(cmd *cobra.Command) error {
 	switch {
 	case config.SharedAutoInit(repo):
 		return activateAutoInit(repo)
-	case firstRunInteractive():
+	case stdinIsInteractive():
 		return activatePrompt(repo)
 	default:
 		fmt.Fprintf(os.Stderr, "Note: this repository has a shared %s configuration that has not been activated.\nRun 'git flow config sync' to activate it, or set gitflow.shared.autoInit=true to activate automatically.\n", config.SharedConfigFileName)
@@ -143,12 +143,14 @@ func activatePrompt(repo *git.Repo) error {
 	return nil
 }
 
-// firstRunInteractive reports whether the first-run activation decision should
-// treat stdin as interactive. It honors the test-only GIT_FLOW_ASSUME_INTERACTIVE
-// override (set to "1" to force interactive, since the subprocess test harness
-// cannot allocate a PTY); otherwise it uses the real terminal check, so a pipe or
-// /dev/null counts as non-interactive.
-func firstRunInteractive() bool {
+// stdinIsInteractive reports whether stdin should be treated as interactive,
+// i.e. whether it is safe to ask the user a question. It is shared by first-run
+// shared-config activation and by init's repository-creation prompt. It honors
+// the test-only GIT_FLOW_ASSUME_INTERACTIVE override (set to "1" to force
+// interactive, since the subprocess test harness cannot allocate a PTY);
+// otherwise it uses the real terminal check, so a pipe or /dev/null counts as
+// non-interactive.
+func stdinIsInteractive() bool {
 	if os.Getenv("GIT_FLOW_ASSUME_INTERACTIVE") == "1" {
 		return true
 	}

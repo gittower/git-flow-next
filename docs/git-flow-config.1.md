@@ -105,10 +105,14 @@ Branch names are matched **case-insensitively**. The case used when a branch is 
 Same options as `add base`:
 - **--upstream-strategy**, **--downstream-strategy**, **--auto-update**
 
+The **--auto-update** default listed under `add base` does **not** apply here. On `edit`, an omitted **--auto-update** preserves the value already stored; only a supplied flag changes it, in either direction — **--auto-update=false** turns it off, **--auto-update** or **--auto-update=true** turns it on. On `add` an omitted boolean means **false**, because there the flag default is the intended value for a branch being created.
+
 ### Edit Topic Branch (`edit topic`)
 
 Same options as `add topic`:
 - **--prefix**, **--starting-point**, **--upstream-strategy**, **--downstream-strategy**, **--tag**
+
+The **--tag** default listed under `add topic` does **not** apply here. On `edit`, an omitted **--tag** preserves the value already stored; only a supplied flag changes it, in either direction — **--tag=false** clears it, **--tag** or **--tag=true** sets it. On `add` an omitted boolean means **false**, because there the flag default is the intended value for a branch type being created.
 
 ### Rename and Delete Commands
 

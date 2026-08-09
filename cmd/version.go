@@ -19,7 +19,10 @@ var versionCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	Long:  `Display version information for git-flow-next.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("git-flow-next version %s\n", Version)
+		// Version number first, then a parenthesized edition marker: the same
+		// shape git-flow-avh uses ("1.12.3 (AVH Edition)"), so tooling that
+		// parses the first whitespace-separated token works unchanged.
+		fmt.Printf("%s (git-flow-next)\n", Version)
 		if BuildDate != "unknown" {
 			fmt.Printf("Build date: %s\n", BuildDate)
 		}

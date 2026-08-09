@@ -1,6 +1,8 @@
 package cmd_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -1442,6 +1444,303 @@ func TestConfigAddBaseUsesExistingRef(t *testing.T) {
 
 	cfg := gitflowBranchConfig(t, tempDir)
 	assertContainsLine(t, cfg, "gitflow.branch.qa.type base", "existing ref add")
+}
+
+// TestConfigEditTopicTagFalsePersists covers scenario 1: an explicit --tag=false
+// on 'config edit topic' must be persisted, clearing a stored true.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults (release.tag=true)
+// 2. Runs 'config edit topic release --tag=false'
+// 3. Verifies local gitflow.branch.release.tag is "false"
+func TestConfigEditTopicTagFalsePersists(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "edit", "topic", "release", "--tag=false")
+	if err != nil {
+		t.Fatalf("config edit topic --tag=false failed: %v\nOutput: %s", err, out)
+	}
+
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.release.tag"); v != "false" {
+		t.Errorf("Expected local release.tag=false, got %q\nOutput: %s", v, out)
+	}
+}
+
+// TestConfigEditTopicTagTruePersists covers scenario 2: an explicit --tag=true on
+// 'config edit topic' must be persisted, setting a stored false.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults (feature does not tag)
+// 2. Runs 'config edit topic feature --tag=true'
+// 3. Verifies local gitflow.branch.feature.tag is "true"
+func TestConfigEditTopicTagTruePersists(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "edit", "topic", "feature", "--tag=true")
+	if err != nil {
+		t.Fatalf("config edit topic --tag=true failed: %v\nOutput: %s", err, out)
+	}
+
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.feature.tag"); v != "true" {
+		t.Errorf("Expected local feature.tag=true, got %q\nOutput: %s", v, out)
+	}
+}
+
+// TestConfigEditTopicPreservesTagWhenFlagOmitted covers scenario 3: an omitted
+// --tag on 'config edit topic' must preserve the stored value.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults (release.tag=true)
+// 2. Runs 'config edit topic release --prefix=rel/' without --tag
+// 3. Verifies local release.prefix is "rel/" and release.tag is still "true"
+func TestConfigEditTopicPreservesTagWhenFlagOmitted(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "edit", "topic", "release", "--prefix=rel/")
+	if err != nil {
+		t.Fatalf("config edit topic --prefix=rel/ failed: %v\nOutput: %s", err, out)
+	}
+
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.release.prefix"); v != "rel/" {
+		t.Errorf("Expected local release.prefix=rel/, got %q\nOutput: %s", v, out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.release.tag"); v != "true" {
+		t.Errorf("Expected omitted --tag to preserve release.tag=true, got %q\nOutput: %s", v, out)
+	}
+}
+
+// TestConfigEditBasePreservesAutoUpdateWhenFlagOmitted covers scenario 4: an
+// omitted --auto-update on 'config edit base' must preserve the stored value.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults (develop.autoUpdate=true)
+// 2. Runs 'config edit base develop --upstream-strategy=merge' without --auto-update
+// 3. Verifies local develop.upstreamStrategy is "merge" and develop.autoUpdate is still "true"
+func TestConfigEditBasePreservesAutoUpdateWhenFlagOmitted(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "edit", "base", "develop", "--upstream-strategy=merge")
+	if err != nil {
+		t.Fatalf("config edit base --upstream-strategy=merge failed: %v\nOutput: %s", err, out)
+	}
+
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.develop.upstreamStrategy"); v != "merge" {
+		t.Errorf("Expected local develop.upstreamStrategy=merge, got %q\nOutput: %s", v, out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.develop.autoUpdate"); v != "true" {
+		t.Errorf("Expected omitted --auto-update to preserve develop.autoUpdate=true, got %q\nOutput: %s", v, out)
+	}
+}
+
+// TestConfigEditBaseAutoUpdateFalsePersists covers scenario 5: an explicit
+// --auto-update=false on 'config edit base' must still win over the stored true.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults (develop.autoUpdate=true)
+// 2. Runs 'config edit base develop --auto-update=false'
+// 3. Verifies local develop.autoUpdate is "false"
+func TestConfigEditBaseAutoUpdateFalsePersists(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "edit", "base", "develop", "--auto-update=false")
+	if err != nil {
+		t.Fatalf("config edit base --auto-update=false failed: %v\nOutput: %s", err, out)
+	}
+
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.develop.autoUpdate"); v != "false" {
+		t.Errorf("Expected local develop.autoUpdate=false, got %q\nOutput: %s", v, out)
+	}
+}
+
+// TestConfigEditBaseAutoUpdateTrueOverridesAddedFalse covers scenario 6: an edit
+// can flip a boolean added as false back to true.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Runs 'config add base staging main --auto-update=false'
+// 3. Runs 'config edit base staging --auto-update=true'
+// 4. Verifies local staging.autoUpdate is "true"
+func TestConfigEditBaseAutoUpdateTrueOverridesAddedFalse(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGitFlow(t, dir, "config", "add", "base", "staging", "main", "--auto-update=false"); err != nil {
+		t.Fatalf("config add base staging failed: %v\nOutput: %s", err, out)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "edit", "base", "staging", "--auto-update=true")
+	if err != nil {
+		t.Fatalf("config edit base --auto-update=true failed: %v\nOutput: %s", err, out)
+	}
+
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.staging.autoUpdate"); v != "true" {
+		t.Errorf("Expected local staging.autoUpdate=true, got %q\nOutput: %s", v, out)
+	}
+}
+
+// TestConfigEditTopicTagFalseShadowsGlobalTrue covers scenario 7: an explicit
+// local false must shadow a true inherited from the global config scope.
+// Steps:
+// 1. Isolates the global and system git config through the subprocess env
+// 2. Sets up a test repository and initializes git-flow with defaults
+// 3. Unsets the local release.tag key and sets gitflow.branch.release.tag=true globally
+// 4. Runs 'config edit topic release --tag=false'
+// 5. Verifies the local read is "false" and the merged read is "false" too
+func TestConfigEditTopicTagFalseShadowsGlobalTrue(t *testing.T) {
+	t.Parallel()
+	// Isolate global AND system config through the subprocess env so no ambient
+	// gitflow.* key can leak in, and nothing touches the developer's real config.
+	env := []string{
+		"GIT_CONFIG_GLOBAL=" + filepath.Join(t.TempDir(), "global-gitconfig"),
+		"GIT_CONFIG_SYSTEM=" + os.DevNull,
+	}
+
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGitWithEnv(t, dir, env, "config", "--local", "--unset", "gitflow.branch.release.tag"); err != nil {
+		t.Fatalf("Failed to unset local release.tag: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGitWithEnv(t, dir, env, "config", "--global", "gitflow.branch.release.tag", "true"); err != nil {
+		t.Fatalf("Failed to set global release.tag: %v\nOutput: %s", err, out)
+	}
+
+	out, err := runGitFlowWithEnv(t, dir, env, "config", "edit", "topic", "release", "--tag=false")
+	if err != nil {
+		t.Fatalf("config edit topic --tag=false failed: %v\nOutput: %s", err, out)
+	}
+
+	local, err := testutil.RunGitWithEnv(t, dir, env, "config", "--local", "--get", "gitflow.branch.release.tag")
+	if err != nil {
+		t.Fatalf("Failed to read local release.tag: %v\nOutput: %s", err, local)
+	}
+	if v := strings.TrimSpace(local); v != "false" {
+		t.Errorf("Expected local release.tag=false, got %q\nOutput: %s", v, out)
+	}
+
+	merged, err := testutil.RunGitWithEnv(t, dir, env, "config", "--get", "gitflow.branch.release.tag")
+	if err != nil {
+		t.Fatalf("Failed to read merged release.tag: %v\nOutput: %s", err, merged)
+	}
+	if v := strings.TrimSpace(merged); v != "false" {
+		t.Errorf("Expected the local false to shadow the global true, got merged %q\nOutput: %s", v, out)
+	}
+}
+
+// TestConfigAddTopicWritesExplicitTagFalse covers scenario 12: 'config add' still
+// treats an omitted boolean as false, and now writes that false explicitly.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Runs 'config add topic docs develop' without --tag
+// 3. Verifies local gitflow.branch.docs.tag is the explicit string "false"
+func TestConfigAddTopicWritesExplicitTagFalse(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "add", "topic", "docs", "develop")
+	if err != nil {
+		t.Fatalf("config add topic docs failed: %v\nOutput: %s", err, out)
+	}
+
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.docs.tag"); v != "false" {
+		t.Errorf("Expected local docs.tag=false written explicitly, got %q\nOutput: %s", v, out)
+	}
+}
+
+// TestConfigEditTopicBareTagFlagSetsTrue covers scenario 13: the bare --tag form
+// (no =value) counts as a supplied true.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults (feature does not tag)
+// 2. Runs 'config edit topic feature --tag'
+// 3. Verifies local gitflow.branch.feature.tag is "true"
+func TestConfigEditTopicBareTagFlagSetsTrue(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "edit", "topic", "feature", "--tag")
+	if err != nil {
+		t.Fatalf("config edit topic --tag failed: %v\nOutput: %s", err, out)
+	}
+
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.feature.tag"); v != "true" {
+		t.Errorf("Expected bare --tag to set feature.tag=true, got %q\nOutput: %s", v, out)
+	}
+}
+
+// TestConfigEditTopicPreservesOtherBranchTypeTags covers scenario 14: an edit
+// targeting one branch type must leave every other branch type's tag intact.
+// The writer rewrites all branches on every save, so the blast radius reaches
+// well beyond the edited branch.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Runs 'config edit topic feature --prefix=feat/'
+// 3. Verifies local release.tag and hotfix.tag are "true"
+// 4. Verifies local feature.tag, main.tag and develop.tag are "false"
+func TestConfigEditTopicPreservesOtherBranchTypeTags(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "edit", "topic", "feature", "--prefix=feat/")
+	if err != nil {
+		t.Fatalf("config edit topic --prefix=feat/ failed: %v\nOutput: %s", err, out)
+	}
+
+	for _, branch := range []string{"release", "hotfix"} {
+		if v := testutil.GitConfigValue(t, dir, "gitflow.branch."+branch+".tag"); v != "true" {
+			t.Errorf("Expected local %s.tag=true after an unrelated edit, got %q\nOutput: %s", branch, v, out)
+		}
+	}
+	for _, branch := range []string{"feature", "main", "develop"} {
+		if v := testutil.GitConfigValue(t, dir, "gitflow.branch."+branch+".tag"); v != "false" {
+			t.Errorf("Expected local %s.tag=false after an unrelated edit, got %q\nOutput: %s", branch, v, out)
+		}
+	}
 }
 
 // mustOpenRepo opens a git.Repo handle for dir, failing the test on error.
