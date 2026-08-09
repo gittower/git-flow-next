@@ -2118,7 +2118,9 @@ func TestInitInteractiveEmptyAnswerDoesNotCreateRepository(t *testing.T) {
 //  5. Verifies both the creation prompt and the configuration prompts were shown
 //  6. Verifies a repository now exists at the directory
 //  7. Verifies the custom-main and custom-dev branches were created
-//  8. Verifies gitflow.version and gitflow.branch.custom-main.type were written,
+//  8. Verifies no stray 'main' branch exists, proving the repository was created
+//     after the trunk was resolved rather than before
+//  9. Verifies gitflow.version and gitflow.branch.custom-main.type were written,
 //     proving the answers after the prompt were read
 func TestInitInteractiveAcceptCreatesRepository(t *testing.T) {
 	t.Parallel()
@@ -2154,6 +2156,12 @@ func TestInitInteractiveAcceptCreatesRepository(t *testing.T) {
 	}
 	if !branchExists(t, dir, "custom-dev") {
 		t.Error("Expected 'custom-dev' branch to exist")
+	}
+	// The trunk is only known once interactive configuration has run, so the
+	// repository must be created after it. Creating it earlier would fall back to
+	// the ambient init.defaultBranch and strand a 'main' branch here.
+	if branchExists(t, dir, "main") {
+		t.Error("Expected no stray 'main' branch: the repository must be created after the trunk is resolved")
 	}
 	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
 		t.Errorf("Expected gitflow.version to be '1.0', got: %s", v)
