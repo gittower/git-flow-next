@@ -72,6 +72,25 @@ func (r *Repo) gitCmd(args ...string) *exec.Cmd {
 	return gitCommand(r.workTree, args...)
 }
 
+// Init creates a new git repository in dir with initialBranch as its initial
+// branch, overriding any ambient init.defaultBranch. dir must already exist and
+// must not already be a repository (callers check that first). It returns git's
+// own output ("Initialized empty Git repository in ...") so the caller can show
+// it, since CombinedOutput would otherwise swallow it.
+func Init(dir string, initialBranch string) (string, error) {
+	if strings.TrimSpace(dir) == "" {
+		return "", fmt.Errorf("git.Init: directory must not be empty")
+	}
+	if strings.TrimSpace(initialBranch) == "" {
+		return "", fmt.Errorf("git.Init: initial branch must not be empty")
+	}
+	output, err := gitCommand(dir, "init", "--initial-branch="+initialBranch).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to initialize git repository in %s: %s: %w", dir, strings.TrimSpace(string(output)), err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 // Open resolves dir to a git repository and returns a handle carrying absolute
 // work-tree, git-dir, and common-git-dir paths. It errors on an empty dir or a
 // directory that is not inside a git work tree; it never falls back to the

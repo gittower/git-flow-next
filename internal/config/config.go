@@ -51,6 +51,24 @@ func (c *Config) ResolveBranchName(name string) (canonical string, found bool) {
 	return "", false
 }
 
+// TrunkBranch returns the configuration's trunk branch — the base branch with no
+// parent. When several base branches have no parent (no shipped preset produces
+// that) the lexicographically smallest name wins, so the result never depends on
+// Go's randomized map iteration order. It returns "" for a configuration with no
+// trunk.
+func (c *Config) TrunkBranch() string {
+	trunk := ""
+	for name, branch := range c.Branches {
+		if branch.Type != string(BranchTypeBase) || branch.Parent != "" {
+			continue
+		}
+		if trunk == "" || name < trunk {
+			trunk = name
+		}
+	}
+	return trunk
+}
+
 // MergeStrategy represents the strategy for merging branches
 type MergeStrategy string
 

@@ -21,7 +21,15 @@ func SharedConfigPath(repo *git.Repo) string {
 
 // SharedConfigExists reports whether a .gitflow file is present at the repo root.
 func SharedConfigExists(repo *git.Repo) bool {
-	info, err := os.Stat(SharedConfigPath(repo))
+	return SharedConfigExistsIn(repo.WorkTree())
+}
+
+// SharedConfigExistsIn reports whether a .gitflow file is present in dir. It
+// serves callers that have no repository handle yet — notably `init --shared
+// --init`, which must probe the invocation directory before creating the
+// repository that would become its work-tree root.
+func SharedConfigExistsIn(dir string) bool {
+	info, err := os.Stat(filepath.Join(dir, SharedConfigFileName))
 	return err == nil && !info.IsDir()
 }
 

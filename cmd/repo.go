@@ -37,6 +37,23 @@ func openRepo() (*git.Repo, error) {
 	return cachedRepo, cachedErr
 }
 
+// reopenRepo re-resolves the invocation directory after `git flow init --init`
+// has created the repository. openRepo memoizes its result — including the "not
+// a git repository" failure — so it must not be reused once the directory has
+// become a repository. This resolves afresh and primes the memo (marking it
+// resolved even if openRepo has not run yet) so any later openRepo caller in
+// this process observes the created repository.
+func reopenRepo() (*git.Repo, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	repo, openErr := git.Open(dir)
+	repoOnce.Do(func() {})
+	cachedRepo, cachedErr = repo, openErr
+	return repo, openErr
+}
+
 // mustOpenRepo opens the invocation repository or exits the process. A failure
 // here means the invocation directory is not inside a git repository — a git
 // error, not a "git-flow not initialized" condition (which is detected later,
