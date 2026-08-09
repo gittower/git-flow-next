@@ -136,6 +136,37 @@ func RunGitFlow(t *testing.T, dir string, args ...string) (string, error) {
 	return string(output), nil
 }
 
+// RunGitFlowStreams runs a git-flow command and returns stdout and stderr
+// separately. Use it when a test has to prove which stream carried the output;
+// RunGitFlow merges the two and cannot distinguish them.
+func RunGitFlowStreams(t *testing.T, dir string, args ...string) (string, string, error) {
+	cmd := exec.Command(gitFlowPath, args...)
+	cmd.Dir = dir
+	// Set GIT_EDITOR to colon (:) to prevent interactive editor from opening
+	// The colon is a shell builtin that does nothing and returns success
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=:")
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			// Report whatever the command actually printed, on either stream,
+			// so a failure is diagnosable even when it stays silent on stderr.
+			detail := strings.TrimSpace(strings.Join([]string{stderr.String(), stdout.String()}, "\n"))
+			if detail == "" {
+				detail = err.Error()
+			}
+			return stdout.String(), stderr.String(), &ExitError{
+				ExitCode: exitErr.ExitCode(),
+				Err:      fmt.Errorf("%s", detail),
+			}
+		}
+		return stdout.String(), stderr.String(), err
+	}
+	return stdout.String(), stderr.String(), nil
+}
+
 // RunGitFlowWithInput runs a git-flow command with the provided input and returns its output
 func RunGitFlowWithInput(t *testing.T, dir string, input string, args ...string) (string, error) {
 	cmd := exec.Command(gitFlowPath, args...)
