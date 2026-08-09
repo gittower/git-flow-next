@@ -419,3 +419,51 @@ func TestIntegrateFetchParentCheckedOutSurfacesFailure(t *testing.T) {
 		t.Errorf("Expected R (%s) absent from local main after the refused fetch", rCommit)
 	}
 }
+
+// TestIntegrateFetchConfigYesPullsRemoteChanges verifies that
+// gitflow.<base>.integrate.fetch=yes incorporates remote parent commits before
+// integrating, matching git-config's truthy "yes" spelling. The Layer-1 default
+// is false, so only a truthy config can pull R in.
+//
+// Steps:
+//  1. SetupTestRepoWithRemote; set gitflow.develop.integrate.fetch yes.
+//  2. Clone the remote and push commit R to main.
+//  3. Give local develop commit C not on local main; leave HEAD on develop.
+//  4. Run: git flow integrate develop (no fetch flag).
+//  5. Assert main contains both R (fetched) and C.
+func TestIntegrateFetchConfigYesPullsRemoteChanges(t *testing.T) {
+	t.Parallel()
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.develop.integrate.fetch", "yes"); err != nil {
+		t.Fatalf("Failed to set integrate.fetch config: %v", err)
+	}
+
+	// Second working copy that pushes R to main on the remote.
+	secondDir := t.TempDir()
+	if _, err := testutil.RunGit(t, secondDir, "clone", remoteDir, "."); err != nil {
+		t.Fatalf("Failed to clone remote: %v", err)
+	}
+	testutil.ConfigureGitIdentity(t, secondDir)
+	rCommit := integAddCommit(t, secondDir, "main", "remote.txt", "R", "Add R on remote main")
+	if _, err := testutil.RunGit(t, secondDir, "push", "origin", "main"); err != nil {
+		t.Fatalf("Failed to push R to remote: %v", err)
+	}
+
+	// Local develop gets commit C not on local main.
+	cCommit := integAddCommit(t, dir, "develop", "c.txt", "C", "Add C on develop")
+
+	out, err := testutil.RunGitFlow(t, dir, "integrate", "develop")
+	if err != nil {
+		t.Fatalf("integrate develop failed: %v\nOutput: %s", err, out)
+	}
+
+	if !integIsAncestor(t, dir, rCommit, "main") {
+		t.Errorf("Expected fetched commit R (%s) to be present on main with integrate.fetch=yes", rCommit)
+	}
+	if !integIsAncestor(t, dir, cCommit, "main") {
+		t.Errorf("Expected commit C (%s) to be present on main", cCommit)
+	}
+}

@@ -80,6 +80,23 @@ Many command options exist only at Layer 2 — they have no Layer 1 equivalent b
 ### Layer 3: Command-Line Flags
 Command-line flags always take the highest precedence and override both configuration layers. Use these for one-off overrides.
 
+### Boolean Values
+
+Every boolean option in this document accepts the full set of git-config(1) boolean spellings — Layer 1 branch properties and Layer 2 command options alike, however each one is annotated (*Type*: boolean, an inline "(boolean)" note, or a description in terms of **true**/**false**):
+
+- **True**: **true**, **yes**, **on**, and any non-zero integer (**1**, **5**, **-1**)
+- **False**: **false**, **no**, **off**, **0**, and an empty value
+
+Matching is case-insensitive, so **Yes**, **ON**, and **True** all work.
+
+An unrecognized value (for example **maybe**) is treated as **false**. This differs from git-config(1) itself, which reports a "bad boolean" error for such a value.
+
+Inverse options such as **no-rebase**, **no-squash**, **notag**, and **ff** are **separate configuration keys**, not falsy spellings of the positive option. Setting `gitflow.feature.finish.rebase = off` does not disable a rebase strategy inherited from Layer 1 — it merely declines to enable one. To disable it, set the inverse key instead:
+
+```bash
+git config gitflow.feature.finish.no-rebase true
+```
+
 ## GLOBAL CONFIGURATION
 
 ### Core Settings

@@ -94,14 +94,14 @@ func isHookPathKey(key string) bool {
 // repository's merged git config.
 func SharedTrustHooks(repo *git.Repo) bool {
 	v, err := repo.GetConfig("gitflow.shared.trustHooks")
-	return err == nil && v == "true"
+	return err == nil && ParseBool(v)
 }
 
 // SharedAutoInit reports whether gitflow.shared.autoInit is set true in the
 // repository's merged git config.
 func SharedAutoInit(repo *git.Repo) bool {
 	v, err := repo.GetConfig("gitflow.shared.autoInit")
-	return err == nil && v == "true"
+	return err == nil && ParseBool(v)
 }
 
 // SharedConfigValid parses the .gitflow file and reports whether it is a valid

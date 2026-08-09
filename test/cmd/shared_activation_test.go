@@ -337,3 +337,32 @@ func assertExitCode(t *testing.T, err error, want errors.ExitCode) {
 		t.Errorf("expected exit code %d, got %d", int(want), ee.ExitCode)
 	}
 }
+
+// TestFirstRunAutoInitYesActivates covers the git-config truthy "yes" spelling of
+// gitflow.shared.autoInit: a non-interactive run auto-copies with a notice.
+// Steps:
+// 1. Builds a fresh-clone fixture and sets gitflow.shared.autoInit=yes locally
+// 2. Runs 'feature start my-thing' non-interactively
+// 3. Verifies a one-line auto-init notice, local config copied, and the branch exists
+func TestFirstRunAutoInitYesActivates(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupFreshCloneWithShared(t, testutil.AuthorSharedConfig(t))
+	defer testutil.CleanupTestRepo(t, dir)
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "gitflow.shared.autoInit", "yes"); err != nil {
+		t.Fatalf("failed to set autoInit: %v", err)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "feature", "start", "my-thing")
+	if err != nil {
+		t.Fatalf("auto-init feature start failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "auto-initialized") || !strings.Contains(out, ".gitflow") {
+		t.Errorf("expected an auto-init notice naming .gitflow, got: %s", out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.feature.prefix"); v != "feature/" {
+		t.Errorf("expected local feature.prefix copied, got %q", v)
+	}
+	if !testutil.BranchExists(t, dir, "feature/my-thing") {
+		t.Error("expected feature/my-thing to be created")
+	}
+}

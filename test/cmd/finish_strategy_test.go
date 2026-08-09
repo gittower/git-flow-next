@@ -1677,3 +1677,131 @@ func TestFinishUpdateMessageCLIOverridesConfig(t *testing.T) {
 		t.Errorf("Expected CLI update message '%s' to override config, got '%s'", cliUpdateMessage, strings.TrimSpace(commitMsg))
 	}
 }
+
+// TestMergeStrategyConfigYesEnablesRebase tests that gitflow.feature.finish.rebase=yes
+// selects the rebase strategy, matching git-config's truthy "yes" spelling.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Sets gitflow.feature.finish.rebase=yes (Layer-1 default is merge)
+// 3. Creates a feature branch with a commit
+// 4. Adds a commit on develop
+// 5. Finishes without any flags
+// 6. Verifies the rebase strategy was used and both files exist on develop
+func TestMergeStrategyConfigYesEnablesRebase(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.finish.rebase", "yes"); err != nil {
+		t.Fatalf("Failed to set rebase config: %v", err)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "rebase-yes-test")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
+	}
+
+	testutil.WriteFile(t, dir, "feature.txt", "feature content")
+	if _, err := testutil.RunGit(t, dir, "add", "feature.txt"); err != nil {
+		t.Fatalf("Failed to add feature file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Add feature file"); err != nil {
+		t.Fatalf("Failed to commit feature file: %v", err)
+	}
+
+	if _, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to switch to develop: %v", err)
+	}
+	testutil.WriteFile(t, dir, "develop.txt", "develop content")
+	if _, err := testutil.RunGit(t, dir, "add", "develop.txt"); err != nil {
+		t.Fatalf("Failed to add develop file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Add develop file"); err != nil {
+		t.Fatalf("Failed to commit develop file: %v", err)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "rebase-yes-test")
+	if err != nil {
+		t.Fatalf("Failed to finish feature branch: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(output, "Merging using strategy: rebase") {
+		t.Errorf("Expected rebase strategy from rebase=yes config, got: %s", output)
+	}
+
+	if _, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	if !testutil.FileExists(t, dir, "feature.txt") {
+		t.Error("Expected feature.txt to exist in develop branch")
+	}
+	if !testutil.FileExists(t, dir, "develop.txt") {
+		t.Error("Expected develop.txt to exist in develop branch")
+	}
+}
+
+// TestMergeStrategyFalsyPositiveKeyDoesNotDisableRebase tests that a falsy value on
+// the positive rebase key does not flip a Layer-1 rebase strategy back to merge.
+// The positive key is one-directional by design; no-rebase is the way to disable it.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Sets gitflow.branch.feature.upstreamstrategy=rebase (Layer 1)
+// 3. Sets gitflow.feature.finish.rebase=off (Layer 2, falsy positive key)
+// 4. Creates a feature branch with a commit and adds a commit on develop
+// 5. Finishes without any flags
+// 6. Verifies the rebase strategy is still used
+func TestMergeStrategyFalsyPositiveKeyDoesNotDisableRebase(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.branch.feature.upstreamstrategy", "rebase"); err != nil {
+		t.Fatalf("Failed to set upstream strategy config: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.finish.rebase", "off"); err != nil {
+		t.Fatalf("Failed to set rebase config: %v", err)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "falsy-positive-test")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
+	}
+
+	testutil.WriteFile(t, dir, "feature.txt", "feature content")
+	if _, err := testutil.RunGit(t, dir, "add", "feature.txt"); err != nil {
+		t.Fatalf("Failed to add feature file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Add feature file"); err != nil {
+		t.Fatalf("Failed to commit feature file: %v", err)
+	}
+
+	if _, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to switch to develop: %v", err)
+	}
+	testutil.WriteFile(t, dir, "develop.txt", "develop content")
+	if _, err := testutil.RunGit(t, dir, "add", "develop.txt"); err != nil {
+		t.Fatalf("Failed to add develop file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Add develop file"); err != nil {
+		t.Fatalf("Failed to commit develop file: %v", err)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "falsy-positive-test")
+	if err != nil {
+		t.Fatalf("Failed to finish feature branch: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(output, "Merging using strategy: rebase") {
+		t.Errorf("Expected Layer-1 rebase to survive a falsy positive key, got: %s", output)
+	}
+}

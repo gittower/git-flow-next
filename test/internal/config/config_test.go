@@ -629,6 +629,81 @@ func TestConfigClearIsolatedToTargetRepo(t *testing.T) {
 	}
 }
 
+// TestParseBranchConfigLinesAutoUpdateYes tests that the autoupdate branch property
+// accepts git-config's "yes" spelling.
+// Steps:
+// 1. Builds raw config lines declaring develop as a base branch with autoupdate=yes
+// 2. Calls config.ParseBranchConfigLines on them
+// 3. Verifies develop's AutoUpdate is true
+func TestParseBranchConfigLinesAutoUpdateYes(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{
+		"gitflow.branch.develop.type base",
+		"gitflow.branch.develop.autoupdate yes",
+	}
+
+	result := config.ParseBranchConfigLines(lines)
+
+	develop, ok := result["develop"]
+	if !ok {
+		t.Fatalf("Expected a develop branch config, got keys %v", keysOf(result))
+	}
+	if !develop.AutoUpdate {
+		t.Error("Expected AutoUpdate to be true for autoupdate=yes")
+	}
+}
+
+// TestParseBranchConfigLinesTagYes tests that the tag branch property accepts
+// git-config's "yes" spelling.
+// Steps:
+// 1. Builds raw config lines declaring release as a topic branch with tag=yes
+// 2. Calls config.ParseBranchConfigLines on them
+// 3. Verifies release's Tag is true
+func TestParseBranchConfigLinesTagYes(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{
+		"gitflow.branch.release.type topic",
+		"gitflow.branch.release.tag yes",
+	}
+
+	result := config.ParseBranchConfigLines(lines)
+
+	release, ok := result["release"]
+	if !ok {
+		t.Fatalf("Expected a release branch config, got keys %v", keysOf(result))
+	}
+	if !release.Tag {
+		t.Error("Expected Tag to be true for tag=yes")
+	}
+}
+
+// TestParseBranchConfigLinesTagOff tests that the tag branch property treats
+// git-config's "off" spelling as false.
+// Steps:
+// 1. Builds raw config lines declaring release as a topic branch with tag=off
+// 2. Calls config.ParseBranchConfigLines on them
+// 3. Verifies release's Tag is false
+func TestParseBranchConfigLinesTagOff(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{
+		"gitflow.branch.release.type topic",
+		"gitflow.branch.release.tag off",
+	}
+
+	result := config.ParseBranchConfigLines(lines)
+
+	release, ok := result["release"]
+	if !ok {
+		t.Fatalf("Expected a release branch config, got keys %v", keysOf(result))
+	}
+	if release.Tag {
+		t.Error("Expected Tag to be false for tag=off")
+	}
+}
+
 func keysOf(m map[string]config.BranchConfig) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {

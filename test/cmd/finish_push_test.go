@@ -963,3 +963,245 @@ func TestFinishFetchShorthandForwardsFlag(t *testing.T) {
 		t.Errorf("Expected fetch to occur via shorthand --fetch (flag forwarded, overriding config). Output: %s", output)
 	}
 }
+
+// TestFinishPushConfigYesEnablesPush tests that gitflow.release.finish.push=yes
+// enables the push, matching git-config's truthy "yes" spelling. This is the
+// exact repro from issue #182.
+// Steps:
+// 1. Sets up a classic repo with origin
+// 2. Sets gitflow.release.finish.push=yes
+// 3. Creates release branch '1.0.0' with one commit
+// 4. Runs 'git flow release finish 1.0.0 --no-fetch' (no push flag)
+// 5. Verifies exit 0 and main and develop up to date with origin
+// 6. Verifies tag 1.0.0 exists on origin (derived from the resolved branch push)
+// 7. Verifies output contains the main, develop and tag push lines
+func TestFinishPushConfigYesEnablesPush(t *testing.T) {
+	t.Parallel()
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.release.finish.push", "yes"); err != nil {
+		t.Fatalf("Failed to configure push: %v", err)
+	}
+
+	createTopicCommit(t, dir, "release", "1.0.0", "release.txt", "release content")
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0", "--no-fetch")
+	if err != nil {
+		t.Fatalf("Failed to finish release: %v\nOutput: %s", err, output)
+	}
+
+	if got := testutil.CommitsAhead(t, dir, "origin/main", "main"); got != 0 {
+		t.Errorf("Expected main up to date with origin (push=yes), got %d ahead", got)
+	}
+	if got := testutil.CommitsAhead(t, dir, "origin/develop", "develop"); got != 0 {
+		t.Errorf("Expected develop up to date with origin (push=yes), got %d ahead", got)
+	}
+	if !testutil.RemoteTagExists(t, dir, "origin", "1.0.0") {
+		t.Error("Expected tag 1.0.0 to exist on origin (derived from push=yes)")
+	}
+	if !strings.Contains(output, pushMainLine) {
+		t.Errorf("Expected main push line. Output: %s", output)
+	}
+	if !strings.Contains(output, pushDevelLine) {
+		t.Errorf("Expected develop push line. Output: %s", output)
+	}
+	if !strings.Contains(output, pushTag100Line) {
+		t.Errorf("Expected tag push line. Output: %s", output)
+	}
+}
+
+// TestFinishPushConfigFalseDoesNotPush tests that gitflow.release.finish.push=false
+// still suppresses the push after boolean parsing changed.
+// Steps:
+// 1. Sets up a classic repo with origin
+// 2. Sets gitflow.release.finish.push=false
+// 3. Creates release branch '1.0.0' with one commit
+// 4. Runs 'git flow release finish 1.0.0 --no-fetch'
+// 5. Verifies exit 0 and main and develop ahead of origin (nothing pushed)
+// 6. Verifies tag 1.0.0 is NOT on origin and no push header appears
+func TestFinishPushConfigFalseDoesNotPush(t *testing.T) {
+	t.Parallel()
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.release.finish.push", "false"); err != nil {
+		t.Fatalf("Failed to configure push: %v", err)
+	}
+
+	createTopicCommit(t, dir, "release", "1.0.0", "release.txt", "release content")
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0", "--no-fetch")
+	if err != nil {
+		t.Fatalf("Failed to finish release: %v\nOutput: %s", err, output)
+	}
+
+	if got := testutil.CommitsAhead(t, dir, "origin/main", "main"); got == 0 {
+		t.Errorf("Expected main ahead of origin (push=false), got %d ahead", got)
+	}
+	if got := testutil.CommitsAhead(t, dir, "origin/develop", "develop"); got == 0 {
+		t.Errorf("Expected develop ahead of origin (push=false), got %d ahead", got)
+	}
+	if testutil.RemoteTagExists(t, dir, "origin", "1.0.0") {
+		t.Error("Expected tag 1.0.0 NOT to be on origin (push=false)")
+	}
+	if strings.Contains(output, pushHeader) {
+		t.Errorf("Expected no push with push=false. Output: %s", output)
+	}
+}
+
+// TestFinishPushConfigOffDoesNotPush tests that gitflow.release.finish.push=off
+// suppresses the push, matching git-config's falsy "off" spelling.
+// Steps:
+// 1. Sets up a classic repo with origin
+// 2. Sets gitflow.release.finish.push=off
+// 3. Creates release branch '1.0.0' with one commit
+// 4. Runs 'git flow release finish 1.0.0 --no-fetch'
+// 5. Verifies exit 0 and main and develop ahead of origin (nothing pushed)
+// 6. Verifies tag 1.0.0 is NOT on origin and no push header appears
+func TestFinishPushConfigOffDoesNotPush(t *testing.T) {
+	t.Parallel()
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.release.finish.push", "off"); err != nil {
+		t.Fatalf("Failed to configure push: %v", err)
+	}
+
+	createTopicCommit(t, dir, "release", "1.0.0", "release.txt", "release content")
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0", "--no-fetch")
+	if err != nil {
+		t.Fatalf("Failed to finish release: %v\nOutput: %s", err, output)
+	}
+
+	if got := testutil.CommitsAhead(t, dir, "origin/main", "main"); got == 0 {
+		t.Errorf("Expected main ahead of origin (push=off), got %d ahead", got)
+	}
+	if got := testutil.CommitsAhead(t, dir, "origin/develop", "develop"); got == 0 {
+		t.Errorf("Expected develop ahead of origin (push=off), got %d ahead", got)
+	}
+	if testutil.RemoteTagExists(t, dir, "origin", "1.0.0") {
+		t.Error("Expected tag 1.0.0 NOT to be on origin (push=off)")
+	}
+	if strings.Contains(output, pushHeader) {
+		t.Errorf("Expected no push with push=off. Output: %s", output)
+	}
+}
+
+// TestFinishPushTagConfigYesPushesTag tests that gitflow.release.finish.pushtag=yes
+// pushes the tag alongside the branches.
+// Steps:
+// 1. Sets up a classic repo with origin
+// 2. Sets gitflow.release.finish.push=true and gitflow.release.finish.pushtag=yes
+// 3. Creates release branch '1.0.0' with one commit
+// 4. Runs 'git flow release finish 1.0.0 --no-fetch'
+// 5. Verifies exit 0 and tag 1.0.0 exists on origin
+// 6. Verifies main and develop are up to date with origin
+func TestFinishPushTagConfigYesPushesTag(t *testing.T) {
+	t.Parallel()
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.release.finish.push", "true"); err != nil {
+		t.Fatalf("Failed to configure push: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.release.finish.pushtag", "yes"); err != nil {
+		t.Fatalf("Failed to configure pushtag: %v", err)
+	}
+
+	createTopicCommit(t, dir, "release", "1.0.0", "release.txt", "release content")
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0", "--no-fetch")
+	if err != nil {
+		t.Fatalf("Failed to finish release: %v\nOutput: %s", err, output)
+	}
+
+	if !testutil.RemoteTagExists(t, dir, "origin", "1.0.0") {
+		t.Error("Expected tag 1.0.0 to exist on origin (pushtag=yes)")
+	}
+	if got := testutil.CommitsAhead(t, dir, "origin/main", "main"); got != 0 {
+		t.Errorf("Expected main up to date with origin, got %d ahead", got)
+	}
+	if got := testutil.CommitsAhead(t, dir, "origin/develop", "develop"); got != 0 {
+		t.Errorf("Expected develop up to date with origin, got %d ahead", got)
+	}
+}
+
+// TestFinishPushTagConfigOffSuppressesTag tests that an explicitly falsy
+// gitflow.release.finish.pushtag=off beats the push-derived default true.
+// Steps:
+// 1. Sets up a classic repo with origin
+// 2. Sets gitflow.release.finish.push=true and gitflow.release.finish.pushtag=off
+// 3. Creates release branch '1.0.0' with one commit
+// 4. Runs 'git flow release finish 1.0.0 --no-fetch'
+// 5. Verifies exit 0 and main and develop up to date with origin (branches pushed)
+// 6. Verifies tag 1.0.0 is NOT on origin (the present-but-falsy key wins)
+func TestFinishPushTagConfigOffSuppressesTag(t *testing.T) {
+	t.Parallel()
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.release.finish.push", "true"); err != nil {
+		t.Fatalf("Failed to configure push: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.release.finish.pushtag", "off"); err != nil {
+		t.Fatalf("Failed to configure pushtag: %v", err)
+	}
+
+	createTopicCommit(t, dir, "release", "1.0.0", "release.txt", "release content")
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0", "--no-fetch")
+	if err != nil {
+		t.Fatalf("Failed to finish release: %v\nOutput: %s", err, output)
+	}
+
+	if got := testutil.CommitsAhead(t, dir, "origin/main", "main"); got != 0 {
+		t.Errorf("Expected main up to date with origin, got %d ahead", got)
+	}
+	if got := testutil.CommitsAhead(t, dir, "origin/develop", "develop"); got != 0 {
+		t.Errorf("Expected develop up to date with origin, got %d ahead", got)
+	}
+	if testutil.RemoteTagExists(t, dir, "origin", "1.0.0") {
+		t.Error("Expected tag 1.0.0 NOT to be on origin (pushtag=off)")
+	}
+}
+
+// TestFinishPushConfigYesNoPushFlagOverrides tests that --no-push still beats a
+// truthy non-"true" spelling of gitflow.feature.finish.push.
+// Steps:
+// 1. Sets up a single-track repo with origin tracking main
+// 2. Sets gitflow.feature.finish.push=yes
+// 3. Creates feature branch 'login' with one commit
+// 4. Runs 'git flow feature finish login --no-push --no-fetch'
+// 5. Verifies exit 0 and main ahead of origin (nothing pushed)
+// 6. Verifies output contains no "Pushing to remote" header
+func TestFinishPushConfigYesNoPushFlagOverrides(t *testing.T) {
+	t.Parallel()
+	dir, remoteDir := setupSingleTrackWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.finish.push", "yes"); err != nil {
+		t.Fatalf("Failed to configure push: %v", err)
+	}
+
+	createTopicCommit(t, dir, "feature", "login", "login.txt", "login content")
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "login", "--no-push", "--no-fetch")
+	if err != nil {
+		t.Fatalf("Failed to finish feature branch: %v\nOutput: %s", err, output)
+	}
+
+	if got := testutil.CommitsAhead(t, dir, "origin/main", "main"); got == 0 {
+		t.Errorf("Expected main ahead of origin (--no-push overrides push=yes), got %d ahead", got)
+	}
+	if strings.Contains(output, pushHeader) {
+		t.Errorf("Expected no push with --no-push. Output: %s", output)
+	}
+}

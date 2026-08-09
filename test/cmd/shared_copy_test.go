@@ -392,3 +392,30 @@ func TestSharedCustomDottedTypeAvailableBeforeActivation(t *testing.T) {
 		t.Error("expected qa.Release/x branch to be created with its dotted name preserved")
 	}
 }
+
+// TestSharedHookPathCopiedWhenTrustHooksYes covers the git-config truthy "yes"
+// spelling of gitflow.shared.trustHooks: the hook path is copied on activation.
+// Steps:
+// 1. Builds a fresh-clone fixture whose .gitflow sets gitflow.path.hooks
+// 2. Sets local gitflow.shared.trustHooks=yes and gitflow.shared.autoInit=true
+// 3. Runs 'feature start x' (activates)
+// 4. Verifies local config contains gitflow.path.hooks=/some/hooks
+func TestSharedHookPathCopiedWhenTrustHooksYes(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupFreshCloneWithShared(t, testutil.AuthorSharedConfig(t))
+	defer testutil.CleanupTestRepo(t, dir)
+	testutil.SharedConfigSet(t, dir, "gitflow.path.hooks", "/some/hooks")
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "gitflow.shared.trustHooks", "yes"); err != nil {
+		t.Fatalf("failed to set trustHooks: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "--local", "gitflow.shared.autoInit", "true"); err != nil {
+		t.Fatalf("failed to set autoInit: %v", err)
+	}
+
+	if out, err := testutil.RunGitFlow(t, dir, "feature", "start", "x"); err != nil {
+		t.Fatalf("feature start failed: %v\n%s", err, out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.path.hooks"); v != "/some/hooks" {
+		t.Errorf("expected local gitflow.path.hooks=/some/hooks when trusted, got %q", v)
+	}
+}

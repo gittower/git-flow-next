@@ -1053,3 +1053,35 @@ func TestStartDefaultUnreachableRemoteWarnsAndCreates(t *testing.T) {
 		t.Error("Expected feature/unreachable-default-test branch to exist")
 	}
 }
+
+// TestStartFetchConfigOffSkipsFetch tests that gitflow.feature.start.fetch=off skips
+// the fetch, matching git-config's falsy "off" spelling. Uses a remote-backed fixture
+// so the absence of "Fetching" reflects the config, not a missing remote.
+// Steps:
+// 1. Sets up a test repository with a remote and initializes git-flow
+// 2. Sets gitflow.feature.start.fetch=off; no flag
+// 3. Runs 'git flow feature start config-off-test'
+// 4. Verifies no "Fetching from" line appears
+// 5. Verifies the feature branch is created
+func TestStartFetchConfigOffSkipsFetch(t *testing.T) {
+	t.Parallel()
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.start.fetch", "off"); err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "config-off-test")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow feature start: %v\nOutput: %s", err, output)
+	}
+
+	if strings.Contains(output, "Fetching from") {
+		t.Errorf("Expected no fetch due to config off, but output indicates fetching: %s", output)
+	}
+	if !testutil.BranchExists(t, dir, "feature/config-off-test") {
+		t.Error("Expected feature/config-off-test branch to exist")
+	}
+}
