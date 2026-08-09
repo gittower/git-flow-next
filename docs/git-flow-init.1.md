@@ -14,7 +14,7 @@ Initialize git-flow configuration in the current Git repository. This command se
 
 **git-flow init** supports three initialization modes:
 
-1. **Interactive Mode** (default) - Presents a menu to choose between presets or custom configuration
+1. **Interactive Mode** (default) - Prompts for branch names and prefixes one question at a time, each showing its default in brackets that Enter accepts
 2. **Preset Mode** - Automatically applies a predefined workflow configuration  
 3. **Custom Mode** - Sets up only the trunk branch and shows configuration commands
 
@@ -86,6 +86,8 @@ These options control where git-flow configuration is stored. Only one scope opt
 **--tag**=*prefix*, **-t** *prefix*
 : Override version tag prefix (default: none)
 
+A prefix is stored exactly as given; no separator is appended. The trailing slash in the defaults is a naming convention, not a requirement — `feature/`, `feature_` and `feature-` are all valid and produce the branches `feature/login`, `feature_login` and `feature-login` respectively.
+
 ## PRESETS
 
 ### Classic GitFlow
@@ -118,20 +120,24 @@ Multi-environment workflow for staged deployments:
 
 ## INTERACTIVE MODE
 
-When run without options, **git-flow init** presents an interactive menu:
+When run without options, **git-flow init** asks eight questions in sequence, each showing its default in brackets. Press Enter to keep the default:
 
 ```
-? Choose initialization method:
-  ❯ Use preset workflow
-    Custom configuration
-
-? Choose a preset:
-  ❯ Classic GitFlow
-    GitHub Flow  
-    GitLab Flow
+Branch name for production releases [main]: 
+Branch name for development [develop]: 
+Feature branch prefix [feature/]: 
+Bugfix branch prefix [bugfix/]: 
+Release branch prefix [release/]: 
+Hotfix branch prefix [hotfix/]: 
+Support branch prefix [support/]: 
+Version tag prefix []: 
 ```
 
-After preset selection, you can customize branch names and prefixes.
+Answers are trimmed of surrounding whitespace and then stored verbatim. No separator is appended to a prefix, so answering the feature prompt with `feature_` stores exactly that prefix, and `git flow feature start login` then creates the branch `feature_login`.
+
+An answer that is empty after trimming leaves the default in place.
+
+If a git-flow-avh configuration is already present, **git-flow init** imports it instead of prompting.
 
 ## CUSTOM MODE
 
