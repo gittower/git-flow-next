@@ -151,9 +151,15 @@ func RunGitFlowStreams(t *testing.T, dir string, args ...string) (string, string
 	err := cmd.Run()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
+			// Report whatever the command actually printed, on either stream,
+			// so a failure is diagnosable even when it stays silent on stderr.
+			detail := strings.TrimSpace(strings.Join([]string{stderr.String(), stdout.String()}, "\n"))
+			if detail == "" {
+				detail = err.Error()
+			}
 			return stdout.String(), stderr.String(), &ExitError{
 				ExitCode: exitErr.ExitCode(),
-				Err:      fmt.Errorf("%s", stderr.String()),
+				Err:      fmt.Errorf("%s", detail),
 			}
 		}
 		return stdout.String(), stderr.String(), err
