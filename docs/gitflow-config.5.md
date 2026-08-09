@@ -190,6 +190,8 @@ Define how the branch type participates in the workflow:
 : Prefix for created tags (topic branches only).
 : *Default*: "" (no prefix)
 
+git-flow always writes **autoUpdate** and **tag** explicitly as **true** or **false**, so a configuration it wrote carries a line for both keys on every branch. This is informational only — an absent key still reads as **false**.
+
 ## COMMAND OVERRIDES
 
 Command overrides (Layer 2) control **how commands execute** for a branch type, using the pattern: **gitflow.*branchtype*.*command*.*option***
