@@ -219,73 +219,71 @@ func Load(repo *git.Repo) (*Config, error) {
 		return nil, fmt.Errorf("failed to load gitflow branch config: %w", err)
 	}
 
-	// Process branch configurations from command output.
-	//
-	// Branch subsection names (gitflow.branch.<name>) are treated
-	// case-insensitively for identity but their original case is preserved
-	// as canonical (mirrors core.ignorecase semantics). The first-seen
-	// casing of a branch name wins as the canonical key; later properties of
-	// the same branch fold into that entry. The name itself may contain dots
-	// (e.g. gitflow.branch.custom.main.type), so it is reconstructed from all
-	// segments between "gitflow.branch." and the final one. Property names
-	// (the last segment) are legitimately case-insensitive in git config and
-	// are lowercased so the BranchConfig field lookups below match regardless
-	// of stored case.
+	config.Branches = ParseBranchConfigLines(branchLines)
+
+	// If no branches were loaded, use default config
+	if len(config.Branches) == 0 {
+		return DefaultConfig(), nil
+	}
+
+	return config, nil
+}
+
+// ParseBranchConfigLines converts raw `git config --get-regexp gitflow.branch.`
+// output lines into BranchConfig objects keyed by canonical branch name.
+//
+// Branch subsection names (gitflow.branch.<name>) are treated case-insensitively
+// for identity but their original case is preserved as canonical (mirrors
+// core.ignorecase semantics). The first-seen casing of a branch name wins as the
+// canonical key; later properties of the same branch fold into that entry. The
+// name itself may contain dots (e.g. gitflow.branch.custom.main.type), so it is
+// reconstructed from all segments between "gitflow.branch." and the final one.
+// Property names (the last segment) are legitimately case-insensitive in git
+// config and are lowercased so the BranchConfig field lookups match regardless
+// of stored case. Lines that are not branch *definitions* (e.g. the runtime
+// gitflow.branch.<actual>.base key) are still parsed as properties but yield no
+// recognized BranchConfig field.
+func ParseBranchConfigLines(branchLines []string) map[string]BranchConfig {
 	branchMap := make(map[string]map[string]string)
 	// canonicalNames maps a lowercased fold key to the canonical (first-seen)
 	// branch name used as the branchMap key.
 	canonicalNames := make(map[string]string)
 
-	{
-		for _, line := range branchLines {
-			if line == "" {
-				continue
-			}
-
-			parts := strings.SplitN(line, " ", 2)
-			if len(parts) != 2 {
-				continue
-			}
-
-			key := parts[0]
-			value := parts[1]
-
-			// Parse key: gitflow.branch.<branchname>.<property>
-			//
-			// The branch name is a git config subsection and may contain
-			// dots (e.g. gitflow.branch.custom.main.type), so it can span
-			// several dot-separated segments. Git keeps the section
-			// (gitflow) and the variable name (the final segment) dot-free,
-			// so the property is always the last segment and the branch name
-			// is everything between "gitflow.branch." and it.
-			keyParts := strings.Split(key, ".")
-			if len(keyParts) < 4 {
-				continue
-			}
-
-			// Preserve the original branch-name case as canonical, folding
-			// case-insensitively so all properties of the same branch land in
-			// one entry keyed by the first-seen case.
-			rawBranchName := strings.Join(keyParts[2:len(keyParts)-1], ".")
-			foldKey := strings.ToLower(rawBranchName)
-			branchName, ok := canonicalNames[foldKey]
-			if !ok {
-				branchName = rawBranchName
-				canonicalNames[foldKey] = branchName
-			}
-			property := strings.ToLower(keyParts[len(keyParts)-1])
-
-			// Initialize branch map if needed
-			if _, ok := branchMap[branchName]; !ok {
-				branchMap[branchName] = make(map[string]string)
-			}
-
-			// Add property to branch map
-			branchMap[branchName][property] = value
+	for _, line := range branchLines {
+		if line == "" {
+			continue
 		}
+
+		parts := strings.SplitN(line, " ", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := parts[0]
+		value := parts[1]
+
+		// Parse key: gitflow.branch.<branchname>.<property>
+		keyParts := strings.Split(key, ".")
+		if len(keyParts) < 4 {
+			continue
+		}
+
+		rawBranchName := strings.Join(keyParts[2:len(keyParts)-1], ".")
+		foldKey := strings.ToLower(rawBranchName)
+		branchName, ok := canonicalNames[foldKey]
+		if !ok {
+			branchName = rawBranchName
+			canonicalNames[foldKey] = branchName
+		}
+		property := strings.ToLower(keyParts[len(keyParts)-1])
+
+		if _, ok := branchMap[branchName]; !ok {
+			branchMap[branchName] = make(map[string]string)
+		}
+		branchMap[branchName][property] = value
 	}
 
-	// Convert branch map to BranchConfig objects
+	branches := make(map[string]BranchConfig)
 	for branchName, properties := range branchMap {
 		branchConfig := BranchConfig{
 			Type:               properties["type"],
@@ -296,29 +294,20 @@ func Load(repo *git.Repo) (*Config, error) {
 			Prefix:             properties["prefix"],
 		}
 
-		// Handle boolean properties
 		if autoUpdate, ok := properties["autoupdate"]; ok {
 			branchConfig.AutoUpdate = autoUpdate == "true"
 		}
 		if tag, ok := properties["tag"]; ok {
 			branchConfig.Tag = tag == "true"
 		}
-
-		// Handle tag prefix
 		if tagPrefix, ok := properties["tagprefix"]; ok {
 			branchConfig.TagPrefix = tagPrefix
 		}
 
-		// Add branch config to config
-		config.Branches[branchName] = branchConfig
+		branches[branchName] = branchConfig
 	}
 
-	// If no branches were loaded, use default config
-	if len(config.Branches) == 0 {
-		return DefaultConfig(), nil
-	}
-
-	return config, nil
+	return branches
 }
 
 // IsInitialized checks if git-flow is initialized in the repository

@@ -16,6 +16,12 @@ It provides a set of commands to work with Git branches according to the git-flo
   git flow feature finish my-feature
   git flow release start 1.0.0
   git flow release finish 1.0.0`,
+	// First-run activation of a committable .gitflow file runs before any
+	// command. It is a no-op unless the repo is unconfigured and a valid .gitflow
+	// is present (see firstRunActivation).
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return firstRunActivation(cmd)
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		// If no subcommand is provided, print help
 		cmd.Help()

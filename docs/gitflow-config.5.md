@@ -785,6 +785,64 @@ git flow config add topic feature develop --prefix=feature/
     fetch = true
 ```
 
+## SHARED CONFIGURATION (.gitflow)
+
+git-flow can store its configuration in a committable **.gitflow** file at the repository top level so a whole team shares one workflow. The file uses the same **git-config** INI format and the same **gitflow.*** keys as **.git/config**:
+
+```ini
+[gitflow]
+    version = 1.0
+    initialized = true
+[gitflow "branch.main"]
+    type = base
+[gitflow "branch.develop"]
+    type = base
+    parent = main
+    autoUpdate = true
+[gitflow "branch.feature"]
+    type = topic
+    parent = develop
+    prefix = feature/
+```
+
+git-flow never reads the **.gitflow** file directly during branch operations. Instead it **copies** the shared-managed keys into the clone's local **.git/config**, so every read site — including the commands that read git config directly — sees the shared values, and native git precedence (local > global > system) still applies.
+
+Create and manage **.gitflow** with:
+
+- **git flow init --shared** — author the file and copy it into local config.
+- **git flow config sync** — re-copy **.gitflow** into local config (overwrite + stale-key removal).
+- **git flow config status** — report drift between local config and **.gitflow** (exit **6** on drift).
+- **git flow config** *add|edit|rename|delete* **... --shared** — edit **.gitflow** and re-sync local.
+
+### Shared-managed key set
+
+A **gitflow.*** key is *shared-managed* — copied between **.gitflow** and local config — unless it is:
+
+- a **gitflow.shared.*** control key (see below), or
+- per-branch runtime metadata **gitflow.branch.<branch>.base** (the start point recorded for a started topic branch).
+
+**gitflow.version** and **gitflow.initialized** are shared-managed. Keys outside the **gitflow.*** namespace (for example **core.*** or **alias.***) are never copied, even if present in **.gitflow**. Copying preserves multi-value keys (such as **gitflow.<type>.publish.push-option**) and their order.
+
+### Control keys
+
+These keys are read from local/global/system config (not from **.gitflow**) and are never copied:
+
+**gitflow.shared.autoInit**
+: When **true**, a fresh clone activates a present, valid **.gitflow** automatically (non-interactively) instead of prompting. Set it globally to opt in for all your clones.
+
+**gitflow.shared.trustHooks**
+: When **true**, the executable hook/filter path key **gitflow.path.hooks** is copied from **.gitflow** like any other key. When unset, that key is treated as absent from the effective shared set: it is neither copied in nor left behind (a previously-copied value is removed on the next sync), and non-interactive auto-init refuses outright when an untrusted shared hook path is present. This prevents a committed file from silently redirecting hook execution.
+
+### First-run activation
+
+When a repository is otherwise unconfigured (no **gitflow.version** and no valid git-flow/git-flow-avh branch configuration, ignoring **gitflow.shared.*** keys) and a valid **.gitflow** (one that declares **gitflow.version**) is present, the next git-flow command activates it:
+
+- **Interactive terminal** — prompts to initialize from **.gitflow**; declining leaves the repository unconfigured.
+- **gitflow.shared.autoInit=true** — copies automatically with a one-line notice (refusing if an untrusted hook path is present).
+- **Non-interactive, autoInit unset** — prints a hint and leaves the repository unconfigured.
+
+Activation never runs for **git flow init** itself, in a bare repository or outside a work tree, or when the repository is already configured (local config wins). A **.gitflow** that lacks **gitflow.version** is not offered as initialized, and an unparsable **.gitflow** produces a clear error naming the file. Linked worktrees share the common **.git/config** and therefore inherit the copy without a separate activation.
+
 ## SEE ALSO
 
 **git-flow**(1), **git-flow-config**(1), **git-flow-init**(1), **git-config**(1), **gitignore**(5)

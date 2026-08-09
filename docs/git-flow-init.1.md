@@ -6,7 +6,7 @@ git-flow-init - Initialize git-flow in a repository
 
 ## SYNOPSIS
 
-**git-flow init** [**-f**|**--force**] [**--preset**=*preset*] [**--custom**] [**--defaults**] [**--local**|**--global**|**--system**|**--file**=*path*] [*options*]
+**git-flow init** [**-f**|**--force**] [**--preset**=*preset*] [**--custom**] [**--defaults**] [**--shared**|**--local**|**--global**|**--system**|**--file**=*path*] [*options*]
 
 ## DESCRIPTION
 
@@ -42,6 +42,9 @@ Initialize git-flow configuration in the current Git repository. This command se
 ### Configuration Scope Options
 
 These options control where git-flow configuration is stored. Only one scope option may be specified at a time. When no scope option is given, git-flow reads from merged config (local > global > system precedence) and writes to local config.
+
+**--shared**
+: Author the configuration into a committable **.gitflow** file at the repository top level, then copy the **gitflow.*** keys into the repository's local **.git/config**. Committing **.gitflow** lets teammates share one git-flow configuration: on a fresh clone, git-flow offers to activate it (see **gitflow-config**(5), FIRST-RUN ACTIVATION). **--shared** is mutually exclusive with **--local**, **--global**, **--system**, and **--file**. Without **--force**, running **--shared** again when a **.gitflow** already exists fails and leaves the file untouched; with **--force** the file is rewritten and re-copied (removing any stale managed keys from local config).
 
 **--local**
 : Read and write configuration only in the repository's **.git/config** file. This is the default for writes when no scope option is specified.
@@ -214,6 +217,12 @@ git flow init --defaults --local
 Initialize with configuration file:
 ```bash
 git flow init --defaults --file=/path/to/custom-gitflow.config
+```
+
+Initialize a shared, committable configuration:
+```bash
+git flow init --defaults --shared
+git add .gitflow && git commit -m "Add shared git-flow configuration"
 ```
 
 Create local config when global config already exists:

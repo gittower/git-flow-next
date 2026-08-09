@@ -147,6 +147,99 @@ func (r *Repo) GetConfigRegexpLines(pattern string) ([]string, error) {
 	return strings.Split(string(output), "\n"), nil
 }
 
+// GetConfigLocalRegexpLines returns the raw output lines of `git config --local
+// --get-regexp <pattern>` for the repository's local config only (.git/config),
+// or an empty slice when nothing matches. Multi-value keys yield one line per
+// value, in file order. Used by the shared-config copy/status logic, which must
+// distinguish local keys from merged (global/system) ones.
+func (r *Repo) GetConfigLocalRegexpLines(pattern string) ([]string, error) {
+	output, err := r.gitCmd("config", "--local", "--get-regexp", pattern).Output()
+	if err != nil {
+		// exit 1 = no matching keys (a valid, possibly empty result).
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("failed to get local git config matching %s: %w", pattern, err)
+	}
+	return strings.Split(string(output), "\n"), nil
+}
+
+// AddConfig adds a value to a (possibly multi-value) Git config key in local
+// scope with `git config --add`. Unlike SetConfig it never replaces existing
+// values, so callers can reproduce an ordered multi-value list by unsetting then
+// adding each value in order.
+func (r *Repo) AddConfig(key, value string) error {
+	if _, err := r.gitCmd("config", "--local", "--add", key, value).Output(); err != nil {
+		return fmt.Errorf("failed to add git config %s: %w", key, err)
+	}
+	return nil
+}
+
+// UnsetAllConfigIfPresent removes all values of a key from local config with
+// `git config --local --unset-all`, treating an absent key (exit 5) as a no-op.
+// This is the multi-value-safe counterpart to UnsetConfigIfPresent.
+func (r *Repo) UnsetAllConfigIfPresent(key string) error {
+	_, err := r.gitCmd("config", "--local", "--unset-all", key).Output()
+	if err != nil {
+		// exit 5 = key does not exist in the given scope: nothing to remove.
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 5 {
+			return nil
+		}
+		return fmt.Errorf("failed to unset-all git config %s: %w", key, err)
+	}
+	return nil
+}
+
+// GetConfigFileRegexpLines returns the raw output lines of `git config --file
+// <filePath> --get-regexp <pattern>`, or an empty slice when nothing matches.
+// A non-"no match" failure (e.g. an unparsable file) is returned as an error so
+// callers can surface a clear message naming the file. Multi-value keys yield one
+// line per value, in file order.
+func GetConfigFileRegexpLines(filePath, pattern string) ([]string, error) {
+	output, err := gitCommand("", "config", "--file", filePath, "--get-regexp", pattern).Output()
+	if err != nil {
+		// exit 1 = no matching keys (a valid, possibly empty result).
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("failed to read git config from %s: %w", filePath, err)
+	}
+	return strings.Split(string(output), "\n"), nil
+}
+
+// GetConfigFileAllValues returns all values for a key from a file-scoped config,
+// in order, or an empty slice when unset.
+func GetConfigFileAllValues(filePath, key string) ([]string, error) {
+	output, err := gitCommand("", "config", "--file", filePath, "--get-all", key).Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("failed to read git config %s from %s: %w", key, filePath, err)
+	}
+	var values []string
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line != "" {
+			values = append(values, line)
+		}
+	}
+	return values, nil
+}
+
+// UnsetConfigSectionFile removes an entire section from a file-scoped config with
+// `git config --file <filePath> --remove-section <section>`, treating a missing
+// section (exit 128) as a no-op.
+func UnsetConfigSectionFile(filePath, section string) error {
+	_, err := gitCommand("", "config", "--file", filePath, "--remove-section", section).Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 128 {
+			return nil
+		}
+		return fmt.Errorf("failed to remove section %s from %s: %w", section, filePath, err)
+	}
+	return nil
+}
+
 // UnsetConfig unsets a Git config value
 func (r *Repo) UnsetConfig(key string) error {
 	if _, err := r.gitCmd("config", "--unset", key).Output(); err != nil {

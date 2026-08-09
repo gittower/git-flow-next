@@ -33,9 +33,21 @@ func RegisterTopicBranchCommands() {
 
 	// Get topic branch types from configuration
 	topicBranchTypes := []string{}
+	seen := map[string]bool{}
 	for branchName, branchConfig := range cfg.Branches {
 		if branchConfig.Type == string(config.BranchTypeTopic) {
 			topicBranchTypes = append(topicBranchTypes, branchName)
+			seen[branchName] = true
+		}
+	}
+
+	// Fold in topic types declared only in a present-but-not-yet-activated
+	// .gitflow, so a custom type defined in the shared file has a working command
+	// on a fresh clone before first-run activation copies it into local config.
+	for _, sharedType := range config.SharedTopicTypes(repo) {
+		if !seen[sharedType] {
+			topicBranchTypes = append(topicBranchTypes, sharedType)
+			seen[sharedType] = true
 		}
 	}
 
