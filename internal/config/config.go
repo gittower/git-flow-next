@@ -708,12 +708,13 @@ func SaveConfigWithScope(config *Config, scope git.ConfigScope, filePath string)
 			return fmt.Errorf("failed to set auto update for %s: %w", branchName, err)
 		}
 
-		// Set tag configuration only if true (false is default)
-		if branchConfig.Tag {
-			err = git.SetConfigWithScope(fmt.Sprintf("gitflow.branch.%s.tag", branchName), "true", scope, filePath)
-			if err != nil {
-				return fmt.Errorf("failed to set tag configuration for %s: %w", branchName, err)
-			}
+		// Set tag configuration. Written explicitly as true/false rather than
+		// omitted when false: an explicit local false must shadow a true inherited
+		// from an outer git config scope, and the writer stays a faithful
+		// serializer of the in-memory configuration with no special case.
+		err = git.SetConfigWithScope(fmt.Sprintf("gitflow.branch.%s.tag", branchName), strconv.FormatBool(branchConfig.Tag), scope, filePath)
+		if err != nil {
+			return fmt.Errorf("failed to set tag configuration for %s: %w", branchName, err)
 		}
 
 		// Set tag prefix if it exists

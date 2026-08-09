@@ -183,12 +183,14 @@ Define how the branch type participates in the workflow:
 : *Default*: false
 
 **tag**
-: Branch type produces tags on finish (topic branches only). Setting this to **true** means the branch type's process includes tagging — e.g., releases and hotfixes produce tags as part of their workflow.
+: Branch type produces tags on finish. Setting this to **true** means the branch type's process includes tagging — e.g., releases and hotfixes produce tags as part of their workflow. Only topic branches finish into a parent, so the key has an effect there; git-flow writes it for base branches as well, where it stays **false**.
 : *Default*: false
 
 **tagprefix**
 : Prefix for created tags (topic branches only).
 : *Default*: "" (no prefix)
+
+git-flow always writes **autoUpdate** and **tag** explicitly as **true** or **false**, so a configuration it wrote carries a line for both keys on every branch. An absent key still reads as **false**; the difference is that an explicit local **false** shadows a **true** inherited from an outer config scope, whereas an absent key does not. This applies to any configuration git-flow writes, including **git flow init**.
 
 ## COMMAND OVERRIDES
 
@@ -814,6 +816,8 @@ Create and manage **.gitflow** with:
 - **git flow config sync** — re-copy **.gitflow** into local config (overwrite + stale-key removal).
 - **git flow config status** — report drift between local config and **.gitflow** (exit **6** on drift).
 - **git flow config** *add|edit|rename|delete* **... --shared** — edit **.gitflow** and re-sync local.
+
+**Upgrading from an older version**: git-flow now writes **tag** on every branch, so a **.gitflow** authored before that change is missing those lines. Once a local write adds them, **git flow config status** reports drift on the **gitflow.branch.*.tag** keys and exits **6**. This resolves itself on the next **git flow config sync**, or on any **--shared** edit or **git flow init --shared**, which rewrites **.gitflow** with the explicit lines.
 
 ### Shared-managed key set
 

@@ -115,7 +115,7 @@ Examples:
 
 		upstreamStrategy, _ := cmd.Flags().GetString("upstream-strategy")
 		downstreamStrategy, _ := cmd.Flags().GetString("downstream-strategy")
-		autoUpdate, _ := cmd.Flags().GetBool("auto-update")
+		autoUpdate := changedBoolPtr(cmd, "auto-update")
 
 		shared, _ := cmd.Flags().GetBool("shared")
 		ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy, autoUpdate, shared)
@@ -138,7 +138,7 @@ Examples:
 		startingPoint, _ := cmd.Flags().GetString("starting-point")
 		upstreamStrategy, _ := cmd.Flags().GetString("upstream-strategy")
 		downstreamStrategy, _ := cmd.Flags().GetString("downstream-strategy")
-		tag, _ := cmd.Flags().GetBool("tag")
+		tag := changedBoolPtr(cmd, "tag")
 
 		shared, _ := cmd.Flags().GetBool("shared")
 		ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag, shared)
@@ -281,8 +281,9 @@ func ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy
 	}
 }
 
-// ConfigEditBaseCommand edits a base branch configuration
-func ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy string, autoUpdate bool, shared bool) {
+// ConfigEditBaseCommand edits a base branch configuration. A nil autoUpdate
+// means the flag was not provided, so the stored value is preserved.
+func ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy string, autoUpdate *bool, shared bool) {
 	repo := mustOpenRepo()
 	if err := executeConfigEditBase(repo, name, upstreamStrategy, downstreamStrategy, autoUpdate, shared); err != nil {
 		var exitCode errors.ExitCode
@@ -296,8 +297,9 @@ func ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy string, au
 	}
 }
 
-// ConfigEditTopicCommand edits a topic branch type configuration
-func ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool, shared bool) {
+// ConfigEditTopicCommand edits a topic branch type configuration. A nil tag
+// means the flag was not provided, so the stored value is preserved.
+func ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag *bool, shared bool) {
 	repo := mustOpenRepo()
 	if err := executeConfigEditTopic(repo, name, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag, shared); err != nil {
 		var exitCode errors.ExitCode
@@ -384,6 +386,18 @@ func ConfigListCommand() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(int(exitCode))
 	}
+}
+
+// changedBoolPtr returns the flag's value when it was supplied on the command
+// line, or nil when it was omitted so the caller preserves the stored value.
+// Cobra reports false for an untouched Bool flag, which is why the edit path
+// cannot distinguish "omitted" from "--flag=false" without Changed().
+func changedBoolPtr(cmd *cobra.Command, name string) *bool {
+	if !cmd.Flags().Changed(name) {
+		return nil
+	}
+	v, _ := cmd.Flags().GetBool(name)
+	return &v
 }
 
 // loadConfigForEdit loads the configuration a CRUD verb should edit: the .gitflow
@@ -619,7 +633,7 @@ func executeConfigAddTopic(repo *git.Repo, name, parent, prefix, startingPoint, 
 	return nil
 }
 
-func executeConfigEditBase(repo *git.Repo, name, upstreamStrategy, downstreamStrategy string, autoUpdate bool, shared bool) error {
+func executeConfigEditBase(repo *git.Repo, name, upstreamStrategy, downstreamStrategy string, autoUpdate *bool, shared bool) error {
 	// Validate that git-flow is initialized. Only gate LOCAL edits: for --shared
 	// the target is the .gitflow file (whose existence loadConfigForEdit enforces
 	// with the correct "run 'git flow init --shared'" suggestion), so a fresh
@@ -668,8 +682,11 @@ func executeConfigEditBase(repo *git.Repo, name, upstreamStrategy, downstreamStr
 		branchConfig.DownstreamStrategy = downstreamStrategy
 	}
 
-	// Update auto-update setting
-	branchConfig.AutoUpdate = autoUpdate
+	// Update auto-update setting only when the flag was supplied; an omitted
+	// flag preserves the stored value.
+	if autoUpdate != nil {
+		branchConfig.AutoUpdate = *autoUpdate
+	}
 
 	// Update configuration
 	cfg.Branches[name] = branchConfig
@@ -683,7 +700,7 @@ func executeConfigEditBase(repo *git.Repo, name, upstreamStrategy, downstreamStr
 	return nil
 }
 
-func executeConfigEditTopic(repo *git.Repo, name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag bool, shared bool) error {
+func executeConfigEditTopic(repo *git.Repo, name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag *bool, shared bool) error {
 	// Validate that git-flow is initialized. Only gate LOCAL edits: for --shared
 	// the target is the .gitflow file (whose existence loadConfigForEdit enforces
 	// with the correct "run 'git flow init --shared'" suggestion), so a fresh
@@ -744,7 +761,11 @@ func executeConfigEditTopic(repo *git.Repo, name, prefix, startingPoint, upstrea
 		branchConfig.DownstreamStrategy = downstreamStrategy
 	}
 
-	branchConfig.Tag = tag
+	// Update tag setting only when the flag was supplied; an omitted flag
+	// preserves the stored value.
+	if tag != nil {
+		branchConfig.Tag = *tag
+	}
 
 	// Update configuration
 	cfg.Branches[name] = branchConfig
