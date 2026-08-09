@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-09
+
+### Added
+
+- Shared, committable configuration: `init --shared` writes the git-flow setup to a `.gitflow` file at the repository root and copies it into local config, so a team's branch model can live in the repository instead of every clone
+- `--shared` on every `config add`, `edit`, `rename`, and `delete` verb edits the shared `.gitflow` file and re-syncs local config
+- `config sync` copies `.gitflow` into local config, and `config status` reports drift between the two (exit code 6 when they differ)
+- A fresh clone carrying a `.gitflow` is offered activation on first run — prompted when interactive, applied automatically with `gitflow.shared.autoInit`, and topic branch types declared only in the shared file get working commands before activation
+- Shell tab completion for both the `git-flow` and `git flow` invocations, covering bash, zsh, and fish
+- `init --init` creates the repository when run outside one, with an interactive prompt offering the same when the flag is absent; the new repository's initial branch is the resolved git-flow trunk rather than `init.defaultBranch`
+
+### Changed
+
+- **Breaking**: `git flow version` now prints `2.0.0 (git-flow-next)` instead of `git-flow-next version 2.0.0`, so the first whitespace-separated token is a bare version number as tooling written against git-flow-avh expects. Scripts matching the old string must be updated
+- Release archives now contain a plain `git-flow` / `git-flow.exe` binary instead of a version- and platform-suffixed filename, so it works as the `git flow` subcommand without renaming after extraction
+
+### Fixed
+
+- Boolean git-config values now follow git-config(1) rules: `yes`, `on`, and non-zero integers are truthy and matching is case-insensitive. Previously only the literal `true` counted, so a setting like `git config gitflow.release.finish.push yes` was silently a no-op
+- `config edit` no longer resets boolean settings that were not passed, so editing one field can no longer silently clear an unrelated one such as `autoUpdate`
+- Interactive `init` now stores entered branch prefixes verbatim instead of appending a slash, so answering `feature_` produces `feature_login` rather than `feature_/login`
+- Hooks and filters run from a linked worktree now resolve a relative `gitflow.path.hooks` or `core.hooksPath` against that worktree and execute with it as their working directory, instead of pointing at the main checkout
+- Commands run outside a git repository now report a git error suggesting `git init` (exit code 3) instead of a git-flow-not-initialized error steering to `git flow init`
+- Adding a base branch now rolls back its saved configuration when creating the git branch fails, leaving no orphaned config and keeping the command safe to retry
+- The `config` command group is no longer preempted by first-run shared-config activation, including its nested `add`, `edit`, `rename`, and `delete` subcommands
+- `--shared` edits now warn when an untrusted `gitflow.path.hooks` is withheld from local config, matching what `config sync` already reported
+- Declining the "create a repository?" prompt now reports a decline instead of an internal probe failure
+- git-flow-next now builds on every Go target OS; terminal detection previously had no implementation for aix, solaris, illumos, and plan9
+
 ## [1.2.0] - 2026-08-01
 
 ### Added
@@ -126,7 +155,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic updates to child branches (e.g., develop syncs from main)
 - Compatibility with existing git-flow-avh repositories
 
-[Unreleased]: https://github.com/gittower/git-flow-next/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/gittower/git-flow-next/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/gittower/git-flow-next/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/gittower/git-flow-next/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/gittower/git-flow-next/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/gittower/git-flow-next/compare/v0.3.0...v1.0.0

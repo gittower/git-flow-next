@@ -17,8 +17,12 @@ This list is regenerated from git history at release time — see
 
 - [Andrea Scarpino](https://github.com/ilpianista)
 - [Daniel Evers](https://github.com/dermojo)
+- [Guflly](https://github.com/Guflly)
 - [Jannatin Naim](https://github.com/JannatinNaim)
+- [Mrin2you](https://github.com/Mrin2you)
+- [Ralph Slooten](https://github.com/axllent)
 - [Ron Wolf](https://github.com/ron-wolf)
+- [sjh9714](https://github.com/sjh9714)
 
 ## Original git-flow Authors
 
