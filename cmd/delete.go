@@ -92,7 +92,7 @@ func performDelete(repo *git.Repo, branchType, name, fullBranchName string, bran
 	} else {
 		configKey := fmt.Sprintf("gitflow.%s.delete.fetch", branchType)
 		fetchConfig, err := repo.GetConfig(configKey)
-		if err == nil && fetchConfig == "true" {
+		if err == nil && config.ParseBool(fetchConfig) {
 			shouldFetch = true
 		}
 	}
@@ -106,7 +106,7 @@ func performDelete(repo *git.Repo, branchType, name, fullBranchName string, bran
 		// Check config if not specified
 		configKey := fmt.Sprintf("gitflow.%s.delete.force", branchType)
 		forceConfig, err := repo.GetConfig(configKey)
-		if err == nil && forceConfig == "true" {
+		if err == nil && config.ParseBool(forceConfig) {
 			forceDelete = true
 		}
 	}
@@ -120,7 +120,7 @@ func performDelete(repo *git.Repo, branchType, name, fullBranchName string, bran
 		// Check config if not specified
 		configKey := fmt.Sprintf("gitflow.branch.%s.deleteRemote", branchType)
 		remoteConfig, err := repo.GetConfig(configKey)
-		if err == nil && remoteConfig == "true" {
+		if err == nil && config.ParseBool(remoteConfig) {
 			deleteRemote = true
 		}
 	}

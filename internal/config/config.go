@@ -295,10 +295,10 @@ func ParseBranchConfigLines(branchLines []string) map[string]BranchConfig {
 		}
 
 		if autoUpdate, ok := properties["autoupdate"]; ok {
-			branchConfig.AutoUpdate = autoUpdate == "true"
+			branchConfig.AutoUpdate = ParseBool(autoUpdate)
 		}
 		if tag, ok := properties["tag"]; ok {
-			branchConfig.Tag = tag == "true"
+			branchConfig.Tag = ParseBool(tag)
 		}
 		if tagPrefix, ok := properties["tagprefix"]; ok {
 			branchConfig.TagPrefix = tagPrefix

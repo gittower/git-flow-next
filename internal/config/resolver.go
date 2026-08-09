@@ -311,7 +311,7 @@ func resolveFinishForceDelete(cfg *Config, branchType string, retentionOpts *Bra
 // getCommandConfigBool gets a boolean config value from preloaded config
 func getCommandConfigBool(cfg *Config, configKey string) bool {
 	value, exists := cfg.CommandConfig[configKey]
-	return exists && value == "true"
+	return exists && ParseBool(value)
 }
 
 // getCommandConfigString gets a string config value from preloaded config
@@ -462,7 +462,7 @@ func resolveShouldFetch(cfg *Config, branchType, cmd string, defaultFetch bool, 
 	// Layer 2: Command-specific config (can set true OR false)
 	configKey := fmt.Sprintf("gitflow.%s.%s.fetch", branchType, cmd)
 	if value, exists := cfg.CommandConfig[configKey]; exists {
-		shouldFetch = value == "true"
+		shouldFetch = ParseBool(value)
 	}
 
 	// Layer 3: Command-line flags override config
@@ -494,7 +494,7 @@ func resolveFinishNoVerify(cfg *Config, branchType string, noVerify *bool) bool 
 	// Note: Git config keys are stored lowercase, so we use "noverify" not "noVerify"
 	configKey := fmt.Sprintf("gitflow.%s.finish.noverify", branchType)
 	if value, exists := cfg.CommandConfig[configKey]; exists {
-		skipVerify = value == "true"
+		skipVerify = ParseBool(value)
 	}
 
 	// Layer 3: Command-line flags override config
@@ -537,7 +537,7 @@ func resolveFinishPushTag(cfg *Config, branchType string, resolvedPush bool, pus
 	// Layer 2: Command-specific config, honored only when the key exists so an
 	// unset key does not clobber the derived default.
 	if v, ok := cfg.CommandConfig[fmt.Sprintf("gitflow.%s.finish.pushtag", branchType)]; ok {
-		pushTagVal = v == "true"
+		pushTagVal = ParseBool(v)
 	}
 
 	// Layer 3: Command-line flags override config
@@ -611,7 +611,7 @@ func resolveIntegrateShouldTag(cfg *Config, branchName string, tagOpts *TagOptio
 
 	// Layer 2: command-specific config
 	if value, exists := cfg.CommandConfig[fmt.Sprintf("gitflow.%s.integrate.tag", branchName)]; exists {
-		shouldTag = value == "true"
+		shouldTag = ParseBool(value)
 	}
 
 	// Layer 3: command-line flags override config
@@ -692,7 +692,7 @@ func resolveIntegrateMessageFile(cfg *Config, branchName string, tagOpts *TagOpt
 func resolveIntegrateShouldFetch(cfg *Config, branchName string, fetch *bool) bool {
 	shouldFetch := false
 	if value, exists := cfg.CommandConfig[fmt.Sprintf("gitflow.%s.integrate.fetch", branchName)]; exists {
-		shouldFetch = value == "true"
+		shouldFetch = ParseBool(value)
 	}
 	if fetch != nil {
 		shouldFetch = *fetch
