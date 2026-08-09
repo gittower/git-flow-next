@@ -758,3 +758,61 @@ func TestFinishFeatureInvalidNoVerifyConfig(t *testing.T) {
 		t.Error("Feature branch should still exist when finish failed due to hook")
 	}
 }
+
+// TestFinishFeatureNoVerifyConfigOneBypassesHook tests that gitflow.feature.finish.noVerify=1
+// bypasses the hook, matching git-config's truthy non-zero-integer spelling.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Sets gitflow.feature.finish.noVerify=1 in git config
+// 3. Creates a feature branch and commits a test file
+// 4. Adds a different commit on develop to force a non-fast-forward merge
+// 5. Installs pre-merge-commit and pre-commit hooks that reject (exit code 1)
+// 6. Finishes the feature branch without any CLI flags
+// 7. Verifies the finish operation succeeds (hook bypassed via config)
+// 8. Verifies the feature branch is deleted
+// 9. Verifies changes are merged into develop
+func TestFinishFeatureNoVerifyConfigOneBypassesHook(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if _, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.finish.noVerify", "1"); err != nil {
+		t.Fatalf("Failed to set noVerify config: %v", err)
+	}
+
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "start", "config-one-test"); err != nil {
+		t.Fatalf("Failed to start feature: %v", err)
+	}
+
+	testutil.WriteFile(t, dir, "feature.txt", "feature content")
+	_, _ = testutil.RunGit(t, dir, "add", "feature.txt")
+	_, _ = testutil.RunGit(t, dir, "commit", "-m", "Add feature file")
+
+	// Add a commit to develop to force a non-fast-forward merge
+	_, _ = testutil.RunGit(t, dir, "checkout", "develop")
+	testutil.WriteFile(t, dir, "develop.txt", "develop content")
+	_, _ = testutil.RunGit(t, dir, "add", "develop.txt")
+	_, _ = testutil.RunGit(t, dir, "commit", "-m", "Add develop file")
+
+	_, _ = testutil.RunGit(t, dir, "checkout", "feature/config-one-test")
+
+	createRejectingHooks(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "--no-fetch", "config-one-test")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed with noVerify=1 config, but it failed: %v\nOutput: %s", err, output)
+	}
+
+	if testutil.BranchExists(t, dir, "feature/config-one-test") {
+		t.Error("Feature branch should be deleted after successful finish")
+	}
+
+	featureFile := filepath.Join(dir, "feature.txt")
+	if _, err := os.Stat(featureFile); os.IsNotExist(err) {
+		t.Error("Feature file should exist on develop after merge")
+	}
+}

@@ -1069,3 +1069,104 @@ func TestFinishParentAbsentOnRemoteIsBenign(t *testing.T) {
 		t.Error("Expected feature.txt to be merged into local develop")
 	}
 }
+
+// TestFinishFeatureFetchConfigOnFetches tests that gitflow.feature.finish.fetch=on
+// enables the fetch, matching git-config's truthy "on" spelling.
+// Steps:
+// 1. Sets up a test repository with a remote and initializes git-flow
+// 2. Configures gitflow.feature.finish.fetch = on
+// 3. Creates a feature branch and commits a test file
+// 4. Finishes the feature branch without any fetch flag
+// 5. Verifies "Fetching from remote" appears in output
+// 6. Verifies the feature branch is deleted and the file exists on develop
+func TestFinishFeatureFetchConfigOnFetches(t *testing.T) {
+	t.Parallel()
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.finish.fetch", "on"); err != nil {
+		t.Fatalf("Failed to configure fetch option: %v", err)
+	}
+
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "start", "test-config-on-fetch"); err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+
+	testutil.WriteFile(t, dir, "config-on-fetch-test.txt", "test content")
+	if _, err := testutil.RunGit(t, dir, "add", "config-on-fetch-test.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Add config on-fetch test file"); err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "test-config-on-fetch")
+	if err != nil {
+		t.Fatalf("Failed to finish feature branch: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(output, "Fetching from remote") {
+		t.Errorf("Expected fetch to occur with fetch=on. Output: %s", output)
+	}
+	if testutil.BranchExists(t, dir, "feature/test-config-on-fetch") {
+		t.Error("Expected feature branch to be deleted")
+	}
+	if _, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	if !testutil.FileExists(t, dir, "config-on-fetch-test.txt") {
+		t.Error("Expected config-on-fetch-test.txt to exist in develop branch")
+	}
+}
+
+// TestFinishFeatureFetchConfigNoSkipsFetch tests that gitflow.feature.finish.fetch=no
+// skips the fetch, matching git-config's falsy "no" spelling. Distinguishes a falsy
+// value from an unset key, which would fetch (the finish default is true).
+// Steps:
+// 1. Sets up a test repository with a remote and initializes git-flow
+// 2. Configures gitflow.feature.finish.fetch = no
+// 3. Creates a feature branch and commits a test file
+// 4. Finishes the feature branch without any fetch flag
+// 5. Verifies "Fetching from remote" does NOT appear in output
+// 6. Verifies the feature branch is deleted and the file exists on develop
+func TestFinishFeatureFetchConfigNoSkipsFetch(t *testing.T) {
+	t.Parallel()
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.finish.fetch", "no"); err != nil {
+		t.Fatalf("Failed to configure fetch option: %v", err)
+	}
+
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "start", "test-config-no-fetch-word"); err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+
+	testutil.WriteFile(t, dir, "config-no-fetch-word-test.txt", "test content")
+	if _, err := testutil.RunGit(t, dir, "add", "config-no-fetch-word-test.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Add config no-fetch word test file"); err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "test-config-no-fetch-word")
+	if err != nil {
+		t.Fatalf("Failed to finish feature branch: %v\nOutput: %s", err, output)
+	}
+
+	if strings.Contains(output, "Fetching from remote") {
+		t.Errorf("Expected no fetch with fetch=no. Output: %s", output)
+	}
+	if testutil.BranchExists(t, dir, "feature/test-config-no-fetch-word") {
+		t.Error("Expected feature branch to be deleted")
+	}
+	if _, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop: %v", err)
+	}
+	if !testutil.FileExists(t, dir, "config-no-fetch-word-test.txt") {
+		t.Error("Expected config-no-fetch-word-test.txt to exist in develop branch")
+	}
+}

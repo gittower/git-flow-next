@@ -314,3 +314,44 @@ func TestIntegrateMessageSetsTagMessage(t *testing.T) {
 		t.Errorf("Expected tag message to contain 'integrate note', got: %s", msg)
 	}
 }
+
+// TestIntegrateTagConfigOnCreatesTag verifies that gitflow.<base>.integrate.tag=on
+// creates the configured tag, matching git-config's truthy "on" spelling.
+//
+// Steps:
+//  1. init --defaults; add C to develop; set integrate.tag on and
+//     integrate.tagname v3.0.0 (no --tag/--notag).
+//  2. Run: git flow integrate develop.
+//  3. Assert annotated tag v3.0.0 on main's tip.
+func TestIntegrateTagConfigOnCreatesTag(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+
+	integAddCommit(t, dir, "develop", "c.txt", "C", "Add C on develop")
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.develop.integrate.tag", "on"); err != nil {
+		t.Fatalf("Failed to set integrate.tag config: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.develop.integrate.tagname", "v3.0.0"); err != nil {
+		t.Fatalf("Failed to set integrate.tagname config: %v", err)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "integrate", "develop")
+	if err != nil {
+		t.Fatalf("integrate develop failed: %v\nOutput: %s", err, out)
+	}
+
+	if !integTagExists(t, dir, "v3.0.0") {
+		t.Fatal("Expected configured tag v3.0.0 to be created with integrate.tag=on")
+	}
+	if !integTagIsAnnotated(t, dir, "v3.0.0") {
+		t.Error("Expected v3.0.0 to be an annotated tag")
+	}
+	if integRevParse(t, dir, "v3.0.0^{commit}") != integRevParse(t, dir, "main") {
+		t.Error("Expected v3.0.0 to point at main's tip")
+	}
+}

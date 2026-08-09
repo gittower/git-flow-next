@@ -1695,3 +1695,133 @@ func TestDeleteHotfixWithoutInitialization(t *testing.T) {
 		t.Errorf("Expected 'not initialized' error, got: %s", output)
 	}
 }
+
+// TestDeleteForceConfigYesForceDeletes tests that gitflow.feature.delete.force=yes
+// enables force deletion, matching git-config's truthy "yes" spelling.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Sets gitflow.feature.delete.force=yes
+// 3. Creates a feature branch with an unmerged commit
+// 4. Deletes without --force flag
+// 5. Verifies the branch is deleted
+func TestDeleteForceConfigYesForceDeletes(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.delete.force", "yes"); err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "test-force-yes")
+	if err != nil {
+		t.Fatalf("Failed to create feature branch: %v\nOutput: %s", err, output)
+	}
+
+	testutil.WriteFile(t, dir, "force-yes.txt", "unmerged content")
+	if _, err := testutil.RunGit(t, dir, "add", "force-yes.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Add unmerged file"); err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "feature", "delete", "test-force-yes")
+	if err != nil {
+		t.Fatalf("Expected delete to succeed with force=yes config: %v\nOutput: %s", err, output)
+	}
+
+	if testutil.BranchExists(t, dir, "feature/test-force-yes") {
+		t.Error("Expected feature branch to be deleted")
+	}
+}
+
+// TestDeleteFetchConfigOnFetches tests that gitflow.feature.delete.fetch=on triggers
+// the fetch, matching git-config's truthy "on" spelling.
+// Steps:
+// 1. Sets up a test repository with remote (includes git-flow init)
+// 2. Starts a feature branch
+// 3. Sets gitflow.feature.delete.fetch to on
+// 4. Runs 'git flow feature delete test-fetch-on' (no flag)
+// 5. Verifies output contains "Fetching from remote"
+// 6. Verifies the branch is deleted
+func TestDeleteFetchConfigOnFetches(t *testing.T) {
+	t.Parallel()
+	dir, remoteDir := testutil.SetupTestRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "start", "test-fetch-on"); err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.delete.fetch", "on"); err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "test-fetch-on")
+	if err != nil {
+		t.Fatalf("Failed to delete feature branch: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(output, "Fetching from remote") {
+		t.Errorf("Expected fetch to occur with fetch=on config. Output: %s", output)
+	}
+	if testutil.BranchExists(t, dir, "feature/test-fetch-on") {
+		t.Error("Expected feature branch to be deleted")
+	}
+}
+
+// TestDeleteRemoteConfigOneDeletesRemote tests that gitflow.branch.feature.deleteRemote=1
+// enables remote deletion, matching git-config's truthy non-zero-integer spelling.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow
+// 2. Sets gitflow.branch.feature.deleteRemote=1
+// 3. Creates a feature branch
+// 4. Adds a bare remote and pushes the branch, verifying it exists there
+// 5. Deletes the branch without --remote flag
+// 6. Verifies the branch is deleted both locally and on the remote
+func TestDeleteRemoteConfigOneDeletesRemote(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if _, err := testutil.RunGitFlow(t, dir, "init"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v", err)
+	}
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.branch.feature.deleteRemote", "1"); err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "start", "test-remote-one"); err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+
+	bareDir, err := testutil.AddRemote(t, dir, "origin", true)
+	if err != nil {
+		t.Fatalf("Failed to add remote: %v", err)
+	}
+	defer testutil.CleanupTestRepo(t, bareDir)
+
+	remoteBranch := "feature/test-remote-one"
+	if !testutil.BranchExists(t, bareDir, remoteBranch) {
+		t.Fatalf("Feature branch not found on remote")
+	}
+
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "delete", "test-remote-one"); err != nil {
+		t.Fatalf("Failed to delete feature branch: %v", err)
+	}
+
+	if testutil.BranchExists(t, dir, remoteBranch) {
+		t.Error("Feature branch still exists locally")
+	}
+	if testutil.BranchExists(t, bareDir, remoteBranch) {
+		t.Error("Feature branch still exists on remote")
+	}
+}
