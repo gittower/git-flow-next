@@ -303,7 +303,7 @@ func TestInitInteractive(t *testing.T) {
 	defer testutil.CleanupTestRepo(t, dir)
 
 	// Run git-flow init with input
-	input := "custom-main\ncustom-dev\nf/\nr/\nh/\ns/\n"
+	input := "custom-main\ncustom-dev\nf/\nb/\nr/\nh/\ns/\n\n"
 	output, err := runGitFlowWithInput(t, dir, input, "init")
 	if err != nil {
 		t.Fatalf("Failed to run git-flow init: %v\nOutput: %s", err, output)

@@ -160,8 +160,9 @@ Define where the branch type fits in the hierarchy:
 : *Default*: Same as parent
 
 **prefix**
-: Prefix for branch names (topic branches only).
+: Prefix for branch names (topic branches only). The value is a literal string prepended to the short branch name, used exactly as configured. The trailing slash in the defaults is a naming convention, not a requirement: **prefix = feature_** makes `git flow feature start login` create the branch **feature_login**.
 : *Default*: *branchname*/ (e.g., "feature/")
+: *Example*: `git flow config edit topic feature --prefix=feature_`
 
 ### Process Characteristics
 

@@ -634,9 +634,6 @@ func interactiveClassicCustomization() config.ConfigOverrides {
 	featurePrefix, _ := reader.ReadString('\n')
 	featurePrefix = strings.TrimSpace(featurePrefix)
 	if featurePrefix != "" {
-		if !strings.HasSuffix(featurePrefix, "/") {
-			featurePrefix += "/"
-		}
 		overrides.FeaturePrefix = featurePrefix
 	}
 
@@ -644,9 +641,6 @@ func interactiveClassicCustomization() config.ConfigOverrides {
 	releasePrefix, _ := reader.ReadString('\n')
 	releasePrefix = strings.TrimSpace(releasePrefix)
 	if releasePrefix != "" {
-		if !strings.HasSuffix(releasePrefix, "/") {
-			releasePrefix += "/"
-		}
 		overrides.ReleasePrefix = releasePrefix
 	}
 
@@ -654,9 +648,6 @@ func interactiveClassicCustomization() config.ConfigOverrides {
 	hotfixPrefix, _ := reader.ReadString('\n')
 	hotfixPrefix = strings.TrimSpace(hotfixPrefix)
 	if hotfixPrefix != "" {
-		if !strings.HasSuffix(hotfixPrefix, "/") {
-			hotfixPrefix += "/"
-		}
 		overrides.HotfixPrefix = hotfixPrefix
 	}
 
@@ -686,9 +677,6 @@ func interactiveGitHubCustomization() config.ConfigOverrides {
 	featurePrefix, _ := reader.ReadString('\n')
 	featurePrefix = strings.TrimSpace(featurePrefix)
 	if featurePrefix != "" {
-		if !strings.HasSuffix(featurePrefix, "/") {
-			featurePrefix += "/"
-		}
 		overrides.FeaturePrefix = featurePrefix
 	}
 
@@ -725,9 +713,6 @@ func interactiveGitLabCustomization() config.ConfigOverrides {
 	featurePrefix, _ := reader.ReadString('\n')
 	featurePrefix = strings.TrimSpace(featurePrefix)
 	if featurePrefix != "" {
-		if !strings.HasSuffix(featurePrefix, "/") {
-			featurePrefix += "/"
-		}
 		overrides.FeaturePrefix = featurePrefix
 	}
 
@@ -735,9 +720,6 @@ func interactiveGitLabCustomization() config.ConfigOverrides {
 	hotfixPrefix, _ := reader.ReadString('\n')
 	hotfixPrefix = strings.TrimSpace(hotfixPrefix)
 	if hotfixPrefix != "" {
-		if !strings.HasSuffix(hotfixPrefix, "/") {
-			hotfixPrefix += "/"
-		}
 		overrides.HotfixPrefix = hotfixPrefix
 	}
 
@@ -770,9 +752,6 @@ func interactiveConfig() config.ConfigOverrides {
 	featurePrefix, _ := reader.ReadString('\n')
 	featurePrefix = strings.TrimSpace(featurePrefix)
 	if featurePrefix != "" {
-		if !strings.HasSuffix(featurePrefix, "/") {
-			featurePrefix += "/"
-		}
 		overrides.FeaturePrefix = featurePrefix
 	}
 
@@ -781,9 +760,6 @@ func interactiveConfig() config.ConfigOverrides {
 	bugfixPrefix, _ := reader.ReadString('\n')
 	bugfixPrefix = strings.TrimSpace(bugfixPrefix)
 	if bugfixPrefix != "" {
-		if !strings.HasSuffix(bugfixPrefix, "/") {
-			bugfixPrefix += "/"
-		}
 		overrides.BugfixPrefix = bugfixPrefix
 	}
 
@@ -792,9 +768,6 @@ func interactiveConfig() config.ConfigOverrides {
 	releasePrefix, _ := reader.ReadString('\n')
 	releasePrefix = strings.TrimSpace(releasePrefix)
 	if releasePrefix != "" {
-		if !strings.HasSuffix(releasePrefix, "/") {
-			releasePrefix += "/"
-		}
 		overrides.ReleasePrefix = releasePrefix
 	}
 
@@ -803,9 +776,6 @@ func interactiveConfig() config.ConfigOverrides {
 	hotfixPrefix, _ := reader.ReadString('\n')
 	hotfixPrefix = strings.TrimSpace(hotfixPrefix)
 	if hotfixPrefix != "" {
-		if !strings.HasSuffix(hotfixPrefix, "/") {
-			hotfixPrefix += "/"
-		}
 		overrides.HotfixPrefix = hotfixPrefix
 	}
 
@@ -814,9 +784,6 @@ func interactiveConfig() config.ConfigOverrides {
 	supportPrefix, _ := reader.ReadString('\n')
 	supportPrefix = strings.TrimSpace(supportPrefix)
 	if supportPrefix != "" {
-		if !strings.HasSuffix(supportPrefix, "/") {
-			supportPrefix += "/"
-		}
 		overrides.SupportPrefix = supportPrefix
 	}
 

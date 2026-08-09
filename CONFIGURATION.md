@@ -51,7 +51,9 @@ Define where the branch type fits in the hierarchy:
 | `type` | Branch type classification | `base`, `topic` | Required |
 | `parent` | Parent branch for this branch type | Branch name | Varies by type |
 | `startPoint` | Branch to start new branches from | Branch name | Same as parent |
-| `prefix` | Branch name prefix (topic only) | String ending in `/` | `<type>/` |
+| `prefix` | Branch name prefix (topic only) | String | `<type>/` |
+
+The `prefix` value is a literal string prepended to the short branch name, used exactly as configured. The trailing slash in the defaults is a naming convention, not a requirement: with `prefix = feature_`, `git flow feature start login` creates the branch `feature_login`.
 
 ### Process Characteristics
 
