@@ -307,6 +307,99 @@ func TestConfigEditBaseSharedUpdatesFileAndLocal(t *testing.T) {
 	}
 }
 
+// TestConfigEditTopicSharedTagFalsePersists covers scenario 8: an explicit
+// --tag=false with --shared must clear the stored true in .gitflow and land in
+// local through the shared→local re-sync.
+// Steps:
+// 1. init --shared --defaults (.gitflow has release.tag=true)
+// 2. Runs 'config edit topic release --tag=false --shared'
+// 3. Verifies release.tag is "false" in both .gitflow and local
+func TestConfigEditTopicSharedTagFalsePersists(t *testing.T) {
+	t.Parallel()
+	dir := initSharedDefaults(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "edit", "topic", "release", "--tag=false", "--shared")
+	if err != nil {
+		t.Fatalf("config edit topic --tag=false --shared failed: %v\n%s", err, out)
+	}
+
+	if v := testutil.SharedConfigValue(t, dir, "gitflow.branch.release.tag"); v != "false" {
+		t.Errorf("expected .gitflow release.tag=false, got %q\n%s", v, out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.release.tag"); v != "false" {
+		t.Errorf("expected local release.tag=false after re-sync, got %q\n%s", v, out)
+	}
+}
+
+// TestConfigEditTopicSharedPreservesTagWhenFlagOmitted covers scenario 9: an
+// omitted --tag with --shared must preserve the stored value in both stores.
+// Steps:
+// 1. init --shared --defaults (.gitflow has release.tag=true)
+// 2. Runs 'config edit topic release --prefix=rel/ --shared' without --tag
+// 3. Verifies release.prefix is "rel/" and release.tag is still "true" in both stores
+func TestConfigEditTopicSharedPreservesTagWhenFlagOmitted(t *testing.T) {
+	t.Parallel()
+	dir := initSharedDefaults(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "edit", "topic", "release", "--prefix=rel/", "--shared")
+	if err != nil {
+		t.Fatalf("config edit topic --prefix=rel/ --shared failed: %v\n%s", err, out)
+	}
+
+	if v := testutil.SharedConfigValue(t, dir, "gitflow.branch.release.prefix"); v != "rel/" {
+		t.Errorf("expected .gitflow release.prefix=rel/, got %q\n%s", v, out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.release.prefix"); v != "rel/" {
+		t.Errorf("expected local release.prefix=rel/, got %q\n%s", v, out)
+	}
+	if v := testutil.SharedConfigValue(t, dir, "gitflow.branch.release.tag"); v != "true" {
+		t.Errorf("expected omitted --tag to preserve .gitflow release.tag=true, got %q\n%s", v, out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.release.tag"); v != "true" {
+		t.Errorf("expected omitted --tag to preserve local release.tag=true, got %q\n%s", v, out)
+	}
+}
+
+// TestConfigEditBaseSharedPreservesAutoUpdateWhenFlagOmitted covers scenario 10:
+// an omitted --auto-update with --shared must preserve the stored value in both
+// stores, and non-tagging types gain an explicit tag=false in both.
+// Steps:
+// 1. init --shared --defaults (develop.autoUpdate=true)
+// 2. Runs 'config edit base develop --upstream-strategy=merge --shared' without --auto-update
+// 3. Verifies develop.upstreamStrategy is "merge" and develop.autoUpdate is still "true" in both stores
+// 4. Verifies feature.tag is the explicit "false" in both stores
+func TestConfigEditBaseSharedPreservesAutoUpdateWhenFlagOmitted(t *testing.T) {
+	t.Parallel()
+	dir := initSharedDefaults(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	out, err := testutil.RunGitFlow(t, dir, "config", "edit", "base", "develop", "--upstream-strategy=merge", "--shared")
+	if err != nil {
+		t.Fatalf("config edit base --upstream-strategy=merge --shared failed: %v\n%s", err, out)
+	}
+
+	if v := testutil.SharedConfigValue(t, dir, "gitflow.branch.develop.upstreamStrategy"); v != "merge" {
+		t.Errorf("expected .gitflow develop.upstreamStrategy=merge, got %q\n%s", v, out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.develop.upstreamStrategy"); v != "merge" {
+		t.Errorf("expected local develop.upstreamStrategy=merge, got %q\n%s", v, out)
+	}
+	if v := testutil.SharedConfigValue(t, dir, "gitflow.branch.develop.autoUpdate"); v != "true" {
+		t.Errorf("expected omitted --auto-update to preserve .gitflow develop.autoUpdate=true, got %q\n%s", v, out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.develop.autoUpdate"); v != "true" {
+		t.Errorf("expected omitted --auto-update to preserve local develop.autoUpdate=true, got %q\n%s", v, out)
+	}
+	if v := testutil.SharedConfigValue(t, dir, "gitflow.branch.feature.tag"); v != "false" {
+		t.Errorf("expected .gitflow feature.tag=false written explicitly, got %q\n%s", v, out)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.branch.feature.tag"); v != "false" {
+		t.Errorf("expected local feature.tag=false written explicitly, got %q\n%s", v, out)
+	}
+}
+
 // TestConfigRenameBaseSharedFileOnly covers scenario 30base-c: config rename base
 // --shared renames the section in .gitflow and re-syncs local.
 // Steps:

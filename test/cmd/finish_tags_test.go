@@ -269,6 +269,57 @@ func TestFinishReleaseWithNoTag(t *testing.T) {
 	}
 }
 
+// TestFinishReleaseNoTagAfterConfigEditTagFalse covers scenario 11: clearing the
+// tag setting via 'config edit topic release --tag=false' must take effect at
+// finish, not just in the stored configuration.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Runs 'config edit topic release --tag=false'
+// 3. Creates a release branch and commits a file on it
+// 4. Runs 'release finish 1.0.0'
+// 5. Verifies the repository has no tags at all
+func TestFinishReleaseNoTagAfterConfigEditTagFalse(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "config", "edit", "topic", "release", "--tag=false")
+	if err != nil {
+		t.Fatalf("Failed to clear the release tag setting: %v\nOutput: %s", err, output)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "release", "start", "1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to create release branch: %v\nOutput: %s", err, output)
+	}
+
+	testutil.WriteFile(t, dir, "release.txt", "release content")
+	if _, err := testutil.RunGit(t, dir, "add", "release.txt"); err != nil {
+		t.Fatalf("Failed to add file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Add release file"); err != nil {
+		t.Fatalf("Failed to commit file: %v", err)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to finish release branch: %v\nOutput: %s", err, output)
+	}
+
+	tags, err := testutil.RunGit(t, dir, "tag", "--list")
+	if err != nil {
+		t.Fatalf("Failed to list tags: %v", err)
+	}
+	if strings.TrimSpace(tags) != "" {
+		t.Errorf("Expected no tag to be created after --tag=false, got tags: %q\nOutput: %s", strings.TrimSpace(tags), output)
+	}
+}
+
 // TestFinishReleaseWithMessageFile tests finishing a release branch using a message file.
 // Steps:
 // 1. Sets up a test repository and initializes git-flow
