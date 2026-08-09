@@ -788,17 +788,33 @@ func TestFinishFeatureNoVerifyConfigOneBypassesHook(t *testing.T) {
 		t.Fatalf("Failed to start feature: %v", err)
 	}
 
-	testutil.WriteFile(t, dir, "feature.txt", "feature content")
-	_, _ = testutil.RunGit(t, dir, "add", "feature.txt")
-	_, _ = testutil.RunGit(t, dir, "commit", "-m", "Add feature file")
+	if err := testutil.WriteFile(t, dir, "feature.txt", "feature content"); err != nil {
+		t.Fatalf("Failed to write feature file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "add", "feature.txt"); err != nil {
+		t.Fatalf("Failed to stage feature file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Add feature file"); err != nil {
+		t.Fatalf("Failed to commit feature file: %v", err)
+	}
 
 	// Add a commit to develop to force a non-fast-forward merge
-	_, _ = testutil.RunGit(t, dir, "checkout", "develop")
-	testutil.WriteFile(t, dir, "develop.txt", "develop content")
-	_, _ = testutil.RunGit(t, dir, "add", "develop.txt")
-	_, _ = testutil.RunGit(t, dir, "commit", "-m", "Add develop file")
+	if _, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to check out develop: %v", err)
+	}
+	if err := testutil.WriteFile(t, dir, "develop.txt", "develop content"); err != nil {
+		t.Fatalf("Failed to write develop file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "add", "develop.txt"); err != nil {
+		t.Fatalf("Failed to stage develop file: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "Add develop file"); err != nil {
+		t.Fatalf("Failed to commit develop file: %v", err)
+	}
 
-	_, _ = testutil.RunGit(t, dir, "checkout", "feature/config-one-test")
+	if _, err := testutil.RunGit(t, dir, "checkout", "feature/config-one-test"); err != nil {
+		t.Fatalf("Failed to check out feature branch: %v", err)
+	}
 
 	createRejectingHooks(t, dir)
 
