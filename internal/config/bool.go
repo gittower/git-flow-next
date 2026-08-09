@@ -11,9 +11,11 @@ import (
 // Unlike git-config(1), which errors on an unparseable value, an unrecognized
 // value resolves to false — the resolvers have no channel to surface the error.
 //
-// The value is not trimmed: git rejects a whitespace-padded boolean as a bad
-// value, and strconv.Atoi rejects padded integers, so padded input follows the
-// unrecognized-value rule.
+// The value is deliberately not trimmed: a whitespace-padded value matches no
+// spelling and strconv.Atoi rejects it, so it follows the unrecognized-value
+// rule above. Whether padded input can reach here at all differs by read path
+// — repo.GetConfig trims, while the resolver and branch-property paths pass
+// the raw value through.
 func ParseBool(value string) bool {
 	switch strings.ToLower(value) {
 	case "true", "yes", "on":

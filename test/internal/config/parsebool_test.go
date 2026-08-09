@@ -100,9 +100,10 @@ func TestParseBoolUnrecognizedValue(t *testing.T) {
 }
 
 // TestParseBoolWhitespacePaddedValue tests that ParseBool itself does not trim its input.
-// git-config(1) rejects whitespace-padded booleans as bad values, so the helper's
-// contract is to treat them as unrecognized. This is a statement about the helper
-// only: both callers trim upstream, so a padded value may never reach it padded.
+// A padded value matches no spelling and strconv.Atoi rejects it, so the helper's
+// contract is to treat it as unrecognized. This is a statement about the helper
+// only: whether padded input can reach it differs by read path — repo.GetConfig
+// trims, while the resolver and branch-property paths pass the raw value through.
 // Steps:
 // 1. Calls config.ParseBool with " yes", "true " and " 1"
 // 2. Verifies all three resolve to false
