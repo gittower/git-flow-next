@@ -281,7 +281,8 @@ func ConfigAddTopicCommand(name, parent, prefix, startingPoint, upstreamStrategy
 	}
 }
 
-// ConfigEditBaseCommand edits a base branch configuration
+// ConfigEditBaseCommand edits a base branch configuration. A nil autoUpdate
+// means the flag was not provided, so the stored value is preserved.
 func ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy string, autoUpdate *bool, shared bool) {
 	repo := mustOpenRepo()
 	if err := executeConfigEditBase(repo, name, upstreamStrategy, downstreamStrategy, autoUpdate, shared); err != nil {
@@ -296,7 +297,8 @@ func ConfigEditBaseCommand(name, upstreamStrategy, downstreamStrategy string, au
 	}
 }
 
-// ConfigEditTopicCommand edits a topic branch type configuration
+// ConfigEditTopicCommand edits a topic branch type configuration. A nil tag
+// means the flag was not provided, so the stored value is preserved.
 func ConfigEditTopicCommand(name, prefix, startingPoint, upstreamStrategy, downstreamStrategy string, tag *bool, shared bool) {
 	repo := mustOpenRepo()
 	if err := executeConfigEditTopic(repo, name, prefix, startingPoint, upstreamStrategy, downstreamStrategy, tag, shared); err != nil {
