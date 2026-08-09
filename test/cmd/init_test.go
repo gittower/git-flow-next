@@ -2024,7 +2024,7 @@ func TestInitWithInitFlagFailsWithoutIdentity(t *testing.T) {
 // 3. Runs 'git flow init' answering 'n'
 // 4. Verifies the command fails with exit code 3
 // 5. Verifies the prompt text was shown
-// 6. Verifies the decline message names both 'git init' and '--init'
+// 6. Verifies the decline message names both 'git init' and '--init', and that it does not read as an internal check failure
 // 7. Verifies no .git directory exists and the directory is still empty
 // 8. Verifies configuration prompting was never reached
 func TestInitInteractiveDeclineDoesNotCreateRepository(t *testing.T) {
@@ -2040,11 +2040,11 @@ func TestInitInteractiveDeclineDoesNotCreateRepository(t *testing.T) {
 	if !strings.Contains(output, "Create one? [y/N]") {
 		t.Errorf("Expected the creation prompt in output, got: %s", output)
 	}
-	if !strings.Contains(output, "git init") {
-		t.Errorf("Expected the decline message to name 'git init', got: %s", output)
+	if !strings.Contains(output, "no git repository. Run 'git init' first, or re-run with --init") {
+		t.Errorf("Expected the decline message naming 'git init' and '--init', got: %s", output)
 	}
-	if !strings.Contains(output, "--init") {
-		t.Errorf("Expected the decline message to name '--init', got: %s", output)
+	if strings.Contains(output, "failed to check if git repository") {
+		t.Errorf("Expected a decline message, not an internal check failure, got: %s", output)
 	}
 	if hasGitDir(t, dir) {
 		t.Error("Expected no .git directory after declining")
@@ -2069,7 +2069,7 @@ func TestInitInteractiveDeclineDoesNotCreateRepository(t *testing.T) {
 // 3. Runs 'git flow init' answering with an empty line
 // 4. Verifies the command fails with exit code 3
 // 5. Verifies the prompt text was shown
-// 6. Verifies the decline message names both 'git init' and '--init'
+// 6. Verifies the decline message names both 'git init' and '--init', and that it does not read as an internal check failure
 // 7. Verifies no .git directory exists and the directory is still empty
 // 8. Verifies configuration prompting was never reached
 func TestInitInteractiveEmptyAnswerDoesNotCreateRepository(t *testing.T) {
@@ -2085,11 +2085,11 @@ func TestInitInteractiveEmptyAnswerDoesNotCreateRepository(t *testing.T) {
 	if !strings.Contains(output, "Create one? [y/N]") {
 		t.Errorf("Expected the creation prompt in output, got: %s", output)
 	}
-	if !strings.Contains(output, "git init") {
-		t.Errorf("Expected the decline message to name 'git init', got: %s", output)
+	if !strings.Contains(output, "no git repository. Run 'git init' first, or re-run with --init") {
+		t.Errorf("Expected the decline message naming 'git init' and '--init', got: %s", output)
 	}
-	if !strings.Contains(output, "--init") {
-		t.Errorf("Expected the decline message to name '--init', got: %s", output)
+	if strings.Contains(output, "failed to check if git repository") {
+		t.Errorf("Expected a decline message, not an internal check failure, got: %s", output)
 	}
 	if hasGitDir(t, dir) {
 		t.Error("Expected no .git directory after declining")

@@ -147,7 +147,7 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 		case stdinIsInteractive() && confirmCreateRepository():
 			createRepo = true
 		case stdinIsInteractive():
-			return &errors.GitError{Operation: "check if git repository", Err: fmt.Errorf("no git repository. Run 'git init' first, or re-run with --init")}
+			return &errors.RepositoryCreationDeclinedError{}
 		default:
 			return &errors.GitError{Operation: "check if git repository", Err: fmt.Errorf("not a git repository. Please run 'git init' first")}
 		}

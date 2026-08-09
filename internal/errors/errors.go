@@ -582,6 +582,22 @@ func (e *AlreadyInitializedError) ExitCode() ExitCode {
 	return ExitCodeValidationError
 }
 
+// RepositoryCreationDeclinedError indicates the user answered no to the prompt
+// offering to create a git repository. Nothing failed here — the user declined —
+// so the message is printed verbatim instead of being wrapped in GitError's
+// "failed to <operation>" phrasing. The exit code matches the non-interactive
+// "not a git repository" path so callers see one code for "no repository to
+// work in", however that conclusion was reached.
+type RepositoryCreationDeclinedError struct{}
+
+func (e *RepositoryCreationDeclinedError) Error() string {
+	return "no git repository. Run 'git init' first, or re-run with --init"
+}
+
+func (e *RepositoryCreationDeclinedError) ExitCode() ExitCode {
+	return ExitCodeGitError
+}
+
 // MissingUserIdentityError indicates git user.name/user.email are not configured
 type MissingUserIdentityError struct{}
 
