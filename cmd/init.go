@@ -10,6 +10,7 @@ import (
 	"github.com/gittower/git-flow-next/internal/config"
 	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/internal/git"
+	"github.com/gittower/git-flow-next/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -32,6 +33,11 @@ Configuration scope options control where settings are stored:
   --file=<path>       Store in specified file
   --shared            Write a committable .gitflow file and copy it into local config
 
+Outside a git repository, --init creates one in the current directory and then
+initializes git-flow in it; without --init an interactive run asks first, and a
+non-interactive run fails. The created repository's initial branch is the
+resolved git-flow trunk.
+
 Use --custom for interactive custom configuration.
 If git-flow-avh configuration exists, it will be imported.`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -53,13 +59,14 @@ If git-flow-avh configuration exists, it will be imported.`,
 		systemScope, _ := cmd.Flags().GetBool("system")
 		fileScope, _ := cmd.Flags().GetString("file")
 		sharedScope, _ := cmd.Flags().GetBool("shared")
-		InitCommand(useDefaults, !noCreateBranches, force, preset, custom, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix, localScope, globalScope, systemScope, fileScope, sharedScope)
+		initRepo, _ := cmd.Flags().GetBool("init")
+		InitCommand(useDefaults, !noCreateBranches, force, preset, custom, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix, localScope, globalScope, systemScope, fileScope, sharedScope, initRepo)
 	},
 }
 
 // InitCommand is the implementation of the init command
-func InitCommand(useDefaults, createBranches, force bool, preset string, custom bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string, localScope, globalScope, systemScope bool, fileScope string, sharedScope bool) {
-	if err := initFlow(useDefaults, createBranches, force, preset, custom, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix, localScope, globalScope, systemScope, fileScope, sharedScope); err != nil {
+func InitCommand(useDefaults, createBranches, force bool, preset string, custom bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string, localScope, globalScope, systemScope bool, fileScope string, sharedScope bool, initRepo bool) {
+	if err := initFlow(useDefaults, createBranches, force, preset, custom, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix, localScope, globalScope, systemScope, fileScope, sharedScope, initRepo); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -72,7 +79,7 @@ func InitCommand(useDefaults, createBranches, force bool, preset string, custom 
 }
 
 // initFlow performs the actual initialization logic and returns any errors
-func initFlow(useDefaults, createBranches, force bool, preset string, custom bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string, localScope, globalScope, systemScope bool, fileScope string, sharedScope bool) error {
+func initFlow(useDefaults, createBranches, force bool, preset string, custom bool, mainBranch, developBranch, featurePrefix, bugfixPrefix, releasePrefix, hotfixPrefix, supportPrefix, tagPrefix string, localScope, globalScope, systemScope bool, fileScope string, sharedScope bool, initRepo bool) error {
 	// Validate mutual exclusivity of scope flags. --shared is not a git config
 	// scope; it selects "write structured config to <toplevel>/.gitflow, then
 	// copy gitflow.* into local .git/config", so it cannot be combined with the
@@ -126,14 +133,32 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 
 	// Open a handle for the invocation directory. A failure here means we are not
 	// inside a git work tree — the same condition the old git.IsGitRepo() guarded.
+	// Outside a repository, --init (or an affirmative answer to the prompt on
+	// interactive stdin) authorizes creating one; the repository itself is created
+	// further down, once configuration resolution has determined the trunk branch
+	// that becomes its initial branch.
 	repo, err := openRepo()
+	createRepo := false
 	if err != nil {
-		return &errors.GitError{Operation: "check if git repository", Err: fmt.Errorf("not a git repository. Please run 'git init' first")}
+		repo = nil
+		switch {
+		case initRepo:
+			createRepo = true
+		case stdinIsInteractive() && confirmCreateRepository():
+			createRepo = true
+		case stdinIsInteractive():
+			return &errors.GitError{Operation: "check if git repository", Err: fmt.Errorf("no git repository. Run 'git init' first, or re-run with --init")}
+		default:
+			return &errors.GitError{Operation: "check if git repository", Err: fmt.Errorf("not a git repository. Please run 'git init' first")}
+		}
 	}
 
 	// Shared scope has its own "already configured" detection based on the
-	// presence of the committed .gitflow file, not on git config scopes.
-	if sharedScope {
+	// presence of the committed .gitflow file, not on git config scopes. Outside a
+	// repository there is no work tree to look for .gitflow in, so the probe is
+	// skipped; a stray untracked .gitflow in a directory the user just asked to
+	// turn into a repository will be overwritten, which is acceptable.
+	if sharedScope && repo != nil {
 		if config.SharedConfigExists(repo) && !force {
 			fmt.Fprintln(os.Stderr, "Git-flow is already configured via the shared .gitflow file. Use --force to rewrite it.")
 			return &errors.AlreadyInitializedError{}
@@ -205,8 +230,15 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 	// Check if any configuration options are provided
 	hasConfigFlags := mainBranch != "" || developBranch != "" || featurePrefix != "" || bugfixPrefix != "" || releasePrefix != "" || hotfixPrefix != "" || supportPrefix != "" || tagPrefix != ""
 
-	// Check if git-flow-avh config exists and no explicit options are provided
-	if config.CheckGitFlowAVHConfig(repo) && preset == "" && !custom && !useDefaults && !hasConfigFlags {
+	// Check if git-flow-avh config exists and no explicit options are provided.
+	//
+	// AVH detection needs a repository handle, and on the --init path there is no
+	// repository yet (it cannot be created until configuration resolution has
+	// determined the trunk). Skipping it is correct rather than merely pragmatic: a
+	// brand-new repository has no local config, so the only AVH keys it could ever
+	// see would come from global/system config, which is not a repository being
+	// migrated from git-flow-avh.
+	if repo != nil && config.CheckGitFlowAVHConfig(repo) && preset == "" && !custom && !useDefaults && !hasConfigFlags {
 		fmt.Println("Found existing git-flow-avh configuration, importing...")
 		var err error
 		cfg, err = config.ImportGitFlowAVHConfig(repo)
@@ -256,6 +288,40 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 	// Apply overrides if any were provided
 	if mainBranch != "" || developBranch != "" || featurePrefix != "" || bugfixPrefix != "" || releasePrefix != "" || hotfixPrefix != "" || supportPrefix != "" || tagPrefix != "" {
 		cfg = config.ApplyOverrides(cfg, overrides)
+	}
+
+	// Create the repository now that configuration resolution has settled: the
+	// initial branch must be the resolved git-flow trunk, overriding any ambient
+	// init.defaultBranch. This has to happen before the identity fast-fail and the
+	// config save below, both of which need a live repository / a .git directory.
+	if createRepo {
+		trunk := cfg.TrunkBranch()
+		if trunk == "" {
+			return &errors.InvalidInputError{Message: "cannot create a repository: the resolved configuration has no trunk branch"}
+		}
+		// Validate before calling git: `git init --initial-branch=<bad name>` fails
+		// with exit 128 but still leaves a .git directory behind, so a rejected name
+		// would otherwise strand a broken repository in the user's directory.
+		if err := util.ValidateBranchName(trunk); err != nil {
+			return &errors.InvalidBranchNameError{BranchName: trunk}
+		}
+		dir, err := os.Getwd()
+		if err != nil {
+			return &errors.GitError{Operation: "determine current directory", Err: err}
+		}
+		output, err := git.Init(dir, trunk)
+		if err != nil {
+			return &errors.GitError{Operation: "initialize git repository", Err: err}
+		}
+		if output != "" {
+			fmt.Println(output)
+		}
+		// NOT openRepo(): it memoizes the pre-creation "not a git repository"
+		// failure for the lifetime of the process (see cmd/repo.go).
+		repo, err = reopenRepo()
+		if err != nil {
+			return &errors.GitError{Operation: "open created repository", Err: err}
+		}
 	}
 
 	// Fail fast if an initial commit would be created but no git identity is
@@ -319,6 +385,21 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 
 	fmt.Println("Git flow has been initialized")
 	return nil
+}
+
+// confirmCreateRepository asks whether to create a git repository in the
+// invocation directory. It is only reached outside a repository, on interactive
+// stdin, without --init. It uses fmt.Scanln rather than bufio.NewReader(os.Stdin)
+// on purpose: a bufio reader would buffer far more than one line of piped stdin,
+// and the separate reader created later in interactiveConfig would never see the
+// remaining answers. fmt.Scanln also yields the right default — a bare Enter
+// leaves the response empty, which declines.
+func confirmCreateRepository() bool {
+	fmt.Print("No git repository here. Create one? [y/N]: ")
+	var response string
+	fmt.Scanln(&response)
+	response = strings.ToLower(strings.TrimSpace(response))
+	return response == "y" || response == "yes"
 }
 
 // createGitFlowBranches creates the base branches if they don't exist
@@ -753,6 +834,7 @@ func init() {
 	initCmd.Flags().StringP("hotfix", "x", "", "Hotfix branch prefix")
 	initCmd.Flags().StringP("support", "s", "", "Support branch prefix")
 	initCmd.Flags().StringP("tag", "t", "", "Version tag prefix")
+	initCmd.Flags().Bool("init", false, "Create a git repository in the current directory if there is none")
 
 	// Configuration scope options
 	initCmd.Flags().Bool("local", false, "Store configuration in repository's .git/config")
