@@ -82,7 +82,7 @@ Command-line flags always take the highest precedence and override both configur
 
 ### Boolean Values
 
-Every option documented below as *Type*: boolean — both Layer 1 branch properties and Layer 2 command options — accepts the full set of git-config(1) boolean spellings:
+Every boolean option in this document accepts the full set of git-config(1) boolean spellings — Layer 1 branch properties and Layer 2 command options alike, however each one is annotated (*Type*: boolean, an inline "(boolean)" note, or a description in terms of **true**/**false**):
 
 - **True**: **true**, **yes**, **on**, and any non-zero integer (**1**, **5**, **-1**)
 - **False**: **false**, **no**, **off**, **0**, and an empty value
