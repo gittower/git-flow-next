@@ -39,7 +39,7 @@ This implementation maintains compatibility with existing git-flow repositories 
 : Integrate a base branch into its parent (e.g. develop into main). See **git-flow-integrate**(1).
 
 **version**
-: Show version information.
+: Show version information. Prints `<version> (git-flow-next)`, so tooling that parses the first whitespace-separated token reads a bare version number.
 
 ### Topic Branch Commands
 
