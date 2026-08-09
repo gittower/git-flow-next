@@ -154,12 +154,26 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 	}
 
 	// Shared scope has its own "already configured" detection based on the
-	// presence of the committed .gitflow file, not on git config scopes. Outside a
-	// repository there is no work tree to look for .gitflow in, so the probe is
-	// skipped; a stray untracked .gitflow in a directory the user just asked to
-	// turn into a repository will be overwritten, which is acceptable.
-	if sharedScope && repo != nil {
-		if config.SharedConfigExists(repo) && !force {
+	// presence of the committed .gitflow file, not on git config scopes. On the
+	// create path there is no repository yet, so the probe looks in the invocation
+	// directory — the work-tree root the repository is about to get. It has to run
+	// before creation, both so a refusal leaves no stray .git behind and because
+	// `git config --file` merges into an existing .gitflow instead of truncating
+	// it: without this guard a pre-existing file (a source tarball shipping
+	// .gitflow but no .git, say) would silently blend its stale keys into the new
+	// configuration.
+	if sharedScope && !force {
+		sharedExists := false
+		if repo != nil {
+			sharedExists = config.SharedConfigExists(repo)
+		} else {
+			dir, err := os.Getwd()
+			if err != nil {
+				return &errors.GitError{Operation: "determine current directory", Err: err}
+			}
+			sharedExists = config.SharedConfigExistsIn(dir)
+		}
+		if sharedExists {
 			fmt.Fprintln(os.Stderr, "Git-flow is already configured via the shared .gitflow file. Use --force to rewrite it.")
 			return &errors.AlreadyInitializedError{}
 		}

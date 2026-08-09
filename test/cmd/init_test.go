@@ -2379,3 +2379,115 @@ func TestInitWithInitFlagAndSharedScopeWritesSharedConfig(t *testing.T) {
 		t.Error("Expected 'develop' branch to exist")
 	}
 }
+
+// seedSharedConfigFile writes a .gitflow file into dir carrying a key that
+// DefaultConfig() never produces, and returns its path plus the exact bytes
+// written. The marker key makes a merge (rather than a clean rewrite) visible.
+func seedSharedConfigFile(t *testing.T, dir string) (string, []byte) {
+	t.Helper()
+	content := []byte("[gitflow]\n\tversion = 1.0\n\tprecious = keepme\n")
+	path := filepath.Join(dir, ".gitflow")
+	if err := os.WriteFile(path, content, 0644); err != nil {
+		t.Fatalf("Failed to seed .gitflow: %v", err)
+	}
+	return path, content
+}
+
+// TestInitWithInitFlagAndSharedScopeRefusesExistingSharedConfig tests that
+// --shared --init honors the same pre-existing .gitflow guard as the in-repo
+// path: a directory that carries a .gitflow but no .git (a source tarball, say)
+// is refused without --force, and no repository is created for it.
+// Steps:
+// 1. Creates a temporary directory that is not a git repository
+// 2. Seeds a .gitflow there carrying a key the defaults never write
+// 3. Seeds a global git config with a user identity
+// 4. Runs 'git flow init --defaults --init --shared' without --force
+// 5. Verifies the command fails with exit code 6 and names --force
+// 6. Verifies the .gitflow file is byte-identical to the seeded one
+// 7. Verifies no .git directory was created
+// 8. Verifies .gitflow is still the only entry in the directory
+func TestInitWithInitFlagAndSharedScopeRefusesExistingSharedConfig(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	sharedPath, seeded := seedSharedConfigFile(t, dir)
+	env, _ := identityConfigEnv(t, nil)
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--init", "--shared")
+	if code := exitCodeOf(t, err); code != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", code, output)
+	}
+	if !strings.Contains(output, "already configured via the shared .gitflow file") {
+		t.Errorf("Expected output to report the existing .gitflow, got: %s", output)
+	}
+	if !strings.Contains(output, "--force") {
+		t.Errorf("Expected output to name --force, got: %s", output)
+	}
+	after, readErr := os.ReadFile(sharedPath)
+	if readErr != nil {
+		t.Fatalf("Failed to read .gitflow: %v", readErr)
+	}
+	if string(after) != string(seeded) {
+		t.Errorf("Expected .gitflow to be left untouched, got:\n%s", after)
+	}
+	if v := getGitConfigFromFile(t, sharedPath, "gitflow.precious"); v != "keepme" {
+		t.Errorf("Expected the pre-existing gitflow.precious to survive, got: %s", v)
+	}
+	if hasGitDir(t, dir) {
+		t.Error("Expected no .git directory: the .gitflow guard must run before creation")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("Failed to read directory: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("Expected .gitflow to stay the only entry, got %d entries", len(entries))
+	}
+}
+
+// TestInitWithInitFlagAndSharedScopeForceReplacesExistingSharedConfig tests that
+// --shared --init --force rewrites a pre-existing .gitflow cleanly instead of
+// merging into it, and still creates the repository.
+// Steps:
+// 1. Creates a temporary directory that is not a git repository
+// 2. Seeds a .gitflow there carrying a key the defaults never write
+// 3. Seeds a global git config with a user identity
+// 4. Runs 'git flow init --defaults --init --shared --force'
+// 5. Verifies the command succeeds and a .git directory exists
+// 6. Verifies the stale key is gone from .gitflow and from local config
+// 7. Verifies the git-flow keys were written to .gitflow and copied to local
+// 8. Verifies the main and develop base branches were created
+func TestInitWithInitFlagAndSharedScopeForceReplacesExistingSharedConfig(t *testing.T) {
+	t.Parallel()
+	dir := setupNonRepoDir(t)
+	sharedPath, _ := seedSharedConfigFile(t, dir)
+	env, _ := identityConfigEnv(t, nil)
+
+	output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--init", "--shared", "--force")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+	}
+	if !hasGitDir(t, dir) {
+		t.Error("Expected a .git directory to be created")
+	}
+	if v := getGitConfigFromFile(t, sharedPath, "gitflow.precious"); v != "" {
+		t.Errorf("Expected the stale gitflow.precious to be gone from .gitflow, got: %s", v)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.precious", "local"); v != "" {
+		t.Errorf("Expected no stale gitflow.precious in local config, got: %s", v)
+	}
+	if v := getGitConfigFromFile(t, sharedPath, "gitflow.version"); v != "1.0" {
+		t.Errorf("Expected gitflow.version '1.0' in .gitflow, got: %s", v)
+	}
+	if v := getGitConfigFromFile(t, sharedPath, "gitflow.branch.develop.parent"); v != "main" {
+		t.Errorf("Expected gitflow.branch.develop.parent 'main' in .gitflow, got: %s", v)
+	}
+	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
+		t.Errorf("Expected gitflow.version '1.0' copied into local config, got: %s", v)
+	}
+	if !branchExists(t, dir, "main") {
+		t.Error("Expected 'main' branch to exist")
+	}
+	if !branchExists(t, dir, "develop") {
+		t.Error("Expected 'develop' branch to exist")
+	}
+}
