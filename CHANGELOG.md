@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `checkout` is worktree-aware: when the branch has a worktree, it reports the path and offers it to the calling shell instead of switching the current worktree's branch. `--worktree` creates a missing worktree first and records git-flow as its creator, `--clobber` clears a plain directory out of the way, `--no-cd` suppresses only the shell handover, and `--quiet` drops the shell-init tip
+- `shell-init {bash|zsh|fish}` prints a shell wrapper that turns that handover into an automatic `cd`. It defines both a `git` and a `git-flow` function, so the documented `git flow …` form navigates too, and it scopes the navigation variable to a single command rather than exporting it
+- `worktree add` now points at `shell-init` when the navigation channel is unused, and gains `--quiet` to suppress that tip
+
+### Fixed
+
+- The EXIT STATUS section of the `git flow <type> checkout` manpage documented codes 1/2/3/4 that the command has never returned; it now documents the actual 2/3/5/6
+
 ## [2.0.0] - 2026-08-09
 
 ### Added

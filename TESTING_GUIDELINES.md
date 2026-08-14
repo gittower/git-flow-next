@@ -466,6 +466,10 @@ To test a specific prebuilt binary instead (e.g. a release artifact), set the `G
 GIT_FLOW_PATH=/path/to/git-flow go test ./test/cmd/
 ```
 
+### Required Shells
+
+The shell-init wrapper tests execute the emitted scripts against their real interpreters, so **bash, zsh and fish must be installed** to run the suite (`brew install fish`, `sudo apt-get install -y zsh fish`). A missing shell **fails** the affected tests rather than skipping them: a skip would leave the suite green while two of the three emitted scripts were never executed once, which is exactly how a fish syntax error or a `$status`-clobbering statement would reach a release. `testutil.RunShell` handles the invocation; `testutil.RequireShell` produces the failure with the install command in it.
+
 ### CRITICAL: Use Test Helpers, Not Bash Piping
 
 **IMPORTANT**: When running git-flow commands that require interactive input, always use the `runGitFlowWithInput` helper function instead of bash piping.

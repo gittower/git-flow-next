@@ -6,7 +6,7 @@ git-flow-worktree - Manage worktrees for branches
 
 ## SYNOPSIS
 
-**git-flow worktree add** *branch* [**--path** *path*] [**--no-cd**]
+**git-flow worktree add** *branch* [**--path** *path*] [**--no-cd**] [**--quiet**]
 
 **git-flow worktree remove** *branch* [**--force**] [**--no-cd**]
 
@@ -52,6 +52,9 @@ git-flow records the worktrees it creates by writing a provenance marker in Git 
 **--no-cd**
 : Do not write a navigation destination for the calling shell, even when **GIT_FLOW_CD_FILE** is set (**add** and **remove**).
 
+**--quiet**, **-q**
+: Do not print the tip naming **git flow shell-init** (**add** only).
+
 ## ENVIRONMENT
 
 **GIT_FLOW_CD_FILE**
@@ -62,6 +65,8 @@ git-flow records the worktrees it creates by writing a provenance marker in Git 
 : The destination is written **only after** the operation it follows has succeeded, so a refused or failed command leaves the file empty. **--no-cd** suppresses the write even when the variable is set. A failure to write the destination is **not fatal**: the operation still succeeds and a warning is printed to standard error.
 
 : When the variable is unset — an ordinary shell, a script, CI — nothing is written and the command prints the human `cd` hint it would print anyway. Nothing machine-readable ever goes to standard output, so a caller that does not use the channel never sees a protocol line.
+
+: **add** also prints a tip naming **git flow shell-init**, but only in that same state: a caller that set the variable has the wrapper installed already, and the advice would be noise. **--quiet** suppresses the tip outright. See **git-flow-shell-init**(1).
 
 ## EXAMPLES
 
@@ -138,7 +143,7 @@ git config gitflow.worktreePath '~/worktrees/{{ topicType }}/{{ branchName }}'
 
 ## SEE ALSO
 
-**git-flow**(1), **gitflow-config**(5), **git-worktree**(1)
+**git-flow**(1), **git-flow-checkout**(1), **git-flow-shell-init**(1), **gitflow-config**(5), **git-worktree**(1)
 
 ## NOTES
 
