@@ -51,7 +51,8 @@ directories of the computed path are created as needed.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		path, _ := cmd.Flags().GetString("path")
 		noCD, _ := cmd.Flags().GetBool("no-cd")
-		WorktreeAddCommand(args[0], path, noCD)
+		quiet, _ := cmd.Flags().GetBool("quiet")
+		WorktreeAddCommand(args[0], path, noCD, quiet)
 	},
 }
 
@@ -112,9 +113,9 @@ Nothing is created and nothing is changed.`,
 }
 
 // WorktreeAddCommand is the implementation of 'git flow worktree add'.
-func WorktreeAddCommand(branch string, path string, noCD bool) {
+func WorktreeAddCommand(branch string, path string, noCD bool, quiet bool) {
 	runWorktreeCommand(func(repo *git.Repo) error {
-		return executeWorktreeAdd(repo, branch, path, noCD)
+		return executeWorktreeAdd(repo, branch, path, noCD, quiet)
 	})
 }
 
@@ -185,7 +186,7 @@ func loadWorktreeConfig(repo *git.Repo) (*config.Config, error) {
 }
 
 // executeWorktreeAdd creates a worktree for an existing branch.
-func executeWorktreeAdd(repo *git.Repo, branch string, pathFlag string, noCD bool) error {
+func executeWorktreeAdd(repo *git.Repo, branch string, pathFlag string, noCD bool, quiet bool) error {
 	cfg, err := loadWorktreeConfig(repo)
 	if err != nil {
 		return err
@@ -216,6 +217,7 @@ func executeWorktreeAdd(repo *git.Repo, branch string, pathFlag string, noCD boo
 
 	fmt.Printf("Created worktree for branch '%s' at %s\n", branch, target)
 	fmt.Printf("To switch to it: cd %s\n", target)
+	printShellInitTip(quiet)
 
 	if !noCD {
 		// Written only now, after the worktree exists.
@@ -449,6 +451,24 @@ func resolveWorktreeTarget(cfg *config.Config, repo *git.Repo, branch string, pa
 	return path, nil
 }
 
+// printShellInitTip points the user at 'git flow shell-init' after a navigation
+// they now have to perform by hand.
+//
+// It prints only when the navigation channel is unused: a caller that set
+// GIT_FLOW_CD_FILE has the wrapper installed already, and telling them to
+// install it would be noise on every navigating command. The decision is made on
+// the resolved destination file rather than on whether the variable exists,
+// because an empty value means the same thing as an absent one.
+//
+// <shell> is printed verbatim: 'git flow shell-init' with no argument errors
+// with usage, so naming a placeholder is what keeps the tip honest.
+func printShellInitTip(quiet bool) {
+	if quiet || navigate.DestinationFile() != "" {
+		return
+	}
+	fmt.Println("Tip: run 'git flow shell-init <shell>' for automatic directory switching")
+}
+
 // createWorktreeAt creates the worktree for branch and records git-flow as its
 // creator, returning the path it was created at.
 //
@@ -566,6 +586,7 @@ func pathIsOccupied(path string) (bool, error) {
 func init() {
 	worktreeAddCmd.Flags().String("path", "", "Create the worktree at this path instead of the computed one")
 	worktreeAddCmd.Flags().Bool("no-cd", false, "Do not write a navigation destination for the calling shell")
+	worktreeAddCmd.Flags().BoolP("quiet", "q", false, "Do not print the shell-init tip")
 
 	worktreeRemoveCmd.Flags().Bool("force", false, "Remove even with uncommitted or untracked changes")
 	worktreeRemoveCmd.Flags().Bool("no-cd", false, "Do not write a navigation destination for the calling shell")
