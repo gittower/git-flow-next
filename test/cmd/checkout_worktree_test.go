@@ -484,6 +484,18 @@ func TestCheckoutStaleWorktreeEntryFails(t *testing.T) {
 	if err := os.RemoveAll(wtPath); err != nil {
 		t.Fatalf("Failed to remove the worktree directory: %v", err)
 	}
+	assertStaleWorktreeRefused(t, dir, wtPath, branchBefore)
+}
+
+// assertStaleWorktreeRefused runs the checkout and verifies the recorded path was
+// refused rather than offered to the shell. It is shared by the three ways a
+// worktree directory stops being that worktree: removed outright, replaced by an
+// unrelated directory, or replaced by a file.
+//
+// The CD-file assertion is the one that matters: SC-7's whole point is that
+// git-flow must not exit 0 with a destination the shell cannot use.
+func assertStaleWorktreeRefused(t *testing.T, dir string, wtPath string, branchBefore string) {
+	t.Helper()
 	cdFile := cdFilePath(t)
 
 	_, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x")
@@ -500,6 +512,60 @@ func TestCheckoutStaleWorktreeEntryFails(t *testing.T) {
 	if got := testutil.GetCurrentBranch(t, dir); got != branchBefore {
 		t.Errorf("Expected the main worktree to stay on %q, got %q", branchBefore, got)
 	}
+}
+
+// TestCheckoutReplacedWorktreeDirectoryFails covers SC-7 where the recorded path
+// still EXISTS but is no longer the worktree: a plain directory took its place.
+// A guard that only tested existence navigated the shell into it and exited 0.
+// Steps:
+// 1. Initializes git-flow, creates feature/x and a worktree for it
+// 2. Deletes the worktree directory and puts an unrelated plain directory at the same path
+// 3. Runs 'git flow feature checkout x' with GIT_FLOW_CD_FILE set
+// 4. Verifies exit code 3 and that stderr names the recorded path and 'git flow worktree prune'
+// 5. Verifies the CD file is still zero-length, so the shell was never sent there
+// 6. Verifies the main worktree's branch was not switched
+func TestCheckoutReplacedWorktreeDirectoryFails(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	branchBefore := testutil.GetCurrentBranch(t, dir)
+	if err := os.RemoveAll(wtPath); err != nil {
+		t.Fatalf("Failed to remove the worktree directory: %v", err)
+	}
+	writeObstruction(t, wtPath, "unrelated.txt", "not a worktree")
+
+	assertStaleWorktreeRefused(t, dir, wtPath, branchBefore)
+}
+
+// TestCheckoutReplacedWorktreeFileFails covers SC-7 where the recorded path was
+// replaced by a REGULAR FILE. This is SC-7's stated rationale exactly: existence
+// alone let git-flow exit 0 while the wrapper reported 'cannot enter <path>'.
+// Steps:
+// 1. Initializes git-flow, creates feature/x and a worktree for it
+// 2. Deletes the worktree directory and writes a regular file at the same path
+// 3. Runs 'git flow feature checkout x' with GIT_FLOW_CD_FILE set
+// 4. Verifies exit code 3 and that stderr names the recorded path and 'git flow worktree prune'
+// 5. Verifies the CD file is still zero-length, so the shell was never sent there
+// 6. Verifies the main worktree's branch was not switched
+func TestCheckoutReplacedWorktreeFileFails(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	branchBefore := testutil.GetCurrentBranch(t, dir)
+	if err := os.RemoveAll(wtPath); err != nil {
+		t.Fatalf("Failed to remove the worktree directory: %v", err)
+	}
+	if err := os.WriteFile(wtPath, []byte("not a worktree"), 0644); err != nil {
+		t.Fatalf("Failed to write the replacing file: %v", err)
+	}
+
+	assertStaleWorktreeRefused(t, dir, wtPath, branchBefore)
 }
 
 // TestCheckoutClobberRefusesFile covers SC-4: --clobber refuses a file at the

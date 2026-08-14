@@ -49,7 +49,7 @@ A branch that has a worktree lives somewhere else on disk, and Git allows a bran
 |---|---|---|
 | The branch has a worktree elsewhere (linked or the main one) | either | Navigate to it. The current worktree's branch is unchanged |
 | The branch's worktree **is** the worktree you are in | either | Ordinary checkout — `Switched to branch '<name>'`, nothing written to the channel |
-| The branch has a worktree whose directory is gone | either | Error naming **git flow worktree prune**; nothing is written |
+| The branch has a worktree whose directory is gone, or was replaced by something that is not a worktree | either | Error naming **git flow worktree prune**; nothing is written |
 | The branch has no worktree | no | Ordinary checkout |
 | The branch has no worktree | yes | Create it, record it as git-flow-created, then navigate |
 
@@ -244,7 +244,7 @@ git checkout feature/branch -- specific-file.txt
 : Invalid topic branch type
 
 **3**
-: A Git operation failed — an ambiguous branch name, a failed checkout, or a worktree whose directory is gone
+: A Git operation failed — an ambiguous branch name, a failed checkout, or a worktree that is no longer at its recorded path
 
 **5**
 : Branch not found

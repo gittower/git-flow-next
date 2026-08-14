@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gittower/git-flow-next/internal/config"
@@ -121,13 +122,14 @@ func executeCheckout(repo *git.Repo, branchType string, nameOrPrefix string, opt
 	}
 
 	if entry != nil {
-		// A registered worktree whose directory is gone must never be handed to
+		// A registered worktree that is no longer there must never be handed to
 		// the shell as a destination: git-flow would exit 0 while the shell
-		// failed to enter it.
-		if _, statErr := os.Stat(entry.Path); statErr != nil {
-			if !os.IsNotExist(statErr) {
-				return &errors.GitError{Operation: "inspect the worktree directory", Err: statErr}
-			}
+		// failed to enter it, or entered something unrelated.
+		present, presentErr := worktreeIsPresent(entry.Path)
+		if presentErr != nil {
+			return &errors.GitError{Operation: "inspect the worktree directory", Err: presentErr}
+		}
+		if !present {
 			return &errors.GitError{
 				Operation: fmt.Sprintf("check out branch '%s'", fullBranchName),
 				Err:       fmt.Errorf("its worktree at %s is gone; 'git flow worktree prune' drops stale entries", entry.Path),
@@ -165,6 +167,40 @@ func executeCheckout(repo *git.Repo, branchType string, nameOrPrefix string, opt
 
 	fmt.Printf("Switched to branch '%s'\n", fullBranchName)
 	return nil
+}
+
+// worktreeIsPresent reports whether the directory a worktree entry records is
+// still that worktree.
+//
+// Existence alone is not enough. A user who deletes a worktree directory by hand
+// and puts something else at that exact path leaves an entry pointing at a plain
+// directory or a file, and handing either to the shell is the failure SC-7 exists
+// to prevent: git-flow exits 0 while the shell either cannot enter the path at
+// all or lands somewhere that is not the worktree.
+//
+// The .git entry settles it without a git subprocess: a linked worktree carries a
+// .git FILE and the main worktree a .git DIRECTORY, so an Lstat that refuses only
+// on absence accepts both — the same idiom clobberTarget uses.
+func worktreeIsPresent(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	// Checked before the join, so a regular file at path is answered here rather
+	// than by an ENOTDIR that os.IsNotExist does not recognize.
+	if !info.IsDir() {
+		return false, nil
+	}
+	if _, err := os.Lstat(filepath.Join(path, ".git")); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // navigateToWorktree reports the branch's worktree and offers it to the calling
