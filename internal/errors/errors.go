@@ -687,6 +687,26 @@ func (e *WorktreeDirtyError) ExitCode() ExitCode {
 	return ExitCodeValidationError
 }
 
+// ClobberRefusedError indicates --clobber was asked to remove something it must
+// not: the flag exists to clear a stale directory out of the way, and every
+// other occupant of the target path is either somebody's data or somebody's
+// repository.
+//
+// Reason is the second half of the message rather than a code, so the three
+// refusals read as one family in the terminal.
+type ClobberRefusedError struct {
+	Path   string
+	Reason string
+}
+
+func (e *ClobberRefusedError) Error() string {
+	return fmt.Sprintf("refusing to remove %s: %s", e.Path, e.Reason)
+}
+
+func (e *ClobberRefusedError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
 // MissingUserIdentityError indicates git user.name/user.email are not configured
 type MissingUserIdentityError struct{}
 
