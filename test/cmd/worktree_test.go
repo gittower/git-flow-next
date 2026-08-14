@@ -448,7 +448,7 @@ func TestWorktreePruneRequiresInitialization(t *testing.T) {
 // TestWorktreeAddCreatesWorktree covers scenario 4: add creates the worktree at
 // the computed path.
 // Steps:
-// 1. Sets up a repository, runs 'git flow feature start x' and checks out main
+// 1. Sets up a repository and creates feature/x without checking it out
 // 2. Runs 'git flow worktree add feature/x'
 // 3. Verifies the computed (nested) path exists and contains a .git file
 // 4. Verifies git worktree list reports the path with [feature/x]
@@ -626,6 +626,43 @@ func TestWorktreeAddTargetPathOccupied(t *testing.T) {
 	}
 	if testutil.GitConfigHasPrefix(t, dir, "gitflow.worktree.") {
 		t.Error("Expected no gitflow.worktree.* key to be written")
+	}
+}
+
+// TestWorktreeAddIntoExistingEmptyDirectorySucceeds pins the boundary of scenario
+// 9 recorded in decisions.md §12: an existing EMPTY directory is not "occupied"
+// and is accepted as the target, matching plain 'git worktree add'. Without this
+// test a regression to refusing empty directories would pass the whole suite,
+// since the occupancy test above uses a non-empty directory.
+// Steps:
+// 1. Pre-creates the computed path as an empty directory
+// 2. Runs 'git flow worktree add feature/x'
+// 3. Verifies exit code 0 and that the worktree was registered at that path
+// 4. Verifies the provenance marker was written like any other add
+func TestWorktreeAddIntoExistingEmptyDirectorySucceeds(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+
+	wtPath := computedWorktreePath(t, dir, "feature/x")
+	if err := os.MkdirAll(wtPath, 0755); err != nil {
+		t.Fatalf("Failed to create the empty target directory: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "worktree", "add", "feature/x")
+	if err != nil {
+		t.Fatalf("Expected add into an empty directory to succeed: %v\nOutput: %s", err, output)
+	}
+	if !strings.Contains(gitWorktreeList(t, dir), wtPath) {
+		t.Errorf("Expected a worktree registered at %s, got: %s", wtPath, gitWorktreeList(t, dir))
+	}
+	if _, err := os.Stat(filepath.Join(wtPath, ".git")); err != nil {
+		t.Errorf("Expected the worktree to be checked out into the existing directory: %v", err)
+	}
+	if v := testutil.GitConfigValue(t, dir, "gitflow.worktree.feature/x.managed"); v != "true" {
+		t.Errorf("Expected gitflow.worktree.feature/x.managed=true, got %q", v)
 	}
 }
 
@@ -1098,7 +1135,15 @@ func TestWorktreeListTagsUnmanagedWorktree(t *testing.T) {
 		t.Fatalf("worktree list failed: %v\nOutput: %s", err, output)
 	}
 
-	for _, row := range worktreeRows(output) {
+	// Assert the row count before inspecting rows: without it a regression that
+	// dropped the unmanaged row entirely would leave the loop with nothing to
+	// contradict and the test would pass having asserted nothing.
+	rows := worktreeRows(output)
+	if len(rows) != 2 {
+		t.Fatalf("Expected exactly two rows, got %d: %s", len(rows), output)
+	}
+
+	for _, row := range rows {
 		fields := strings.Fields(row)
 		switch fields[0] {
 		case "feature/a":
@@ -1377,20 +1422,17 @@ func TestWorktreeAddWritesCDFile(t *testing.T) {
 }
 
 // TestWorktreeAddWithoutCDFileEnv covers scenario 24: with the variable unset the
-// command prints exactly its confirmation and cd hint, and writes no file.
+// command prints exactly its confirmation and cd hint, and nothing else.
 // Steps:
-// 1. Chooses a CD file path but deliberately does NOT pass GIT_FLOW_CD_FILE
-// 2. Runs 'git flow worktree add feature/x' with the channel explicitly empty
-// 3. Verifies stdout equals exactly the confirmation and cd hint lines
-// 4. Verifies the chosen file was never created
+// 1. Runs 'git flow worktree add feature/x' with GIT_FLOW_CD_FILE explicitly empty
+// 2. Verifies stdout equals exactly the confirmation and cd hint lines, proving no machine-readable protocol line rides along
+// 3. Verifies stderr is empty, so nothing was diverted there either
 func TestWorktreeAddWithoutCDFileEnv(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
 	defer os.RemoveAll(worktreeRootFor(dir))
 	createFreeBranch(t, dir, "feature/x")
-
-	unused := filepath.Join(t.TempDir(), "never-written")
 
 	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, nil, "worktree", "add", "feature/x")
 	if err != nil {
@@ -1403,8 +1445,8 @@ func TestWorktreeAddWithoutCDFileEnv(t *testing.T) {
 	if stdout != want {
 		t.Errorf("Expected stdout %q, got %q", want, stdout)
 	}
-	if _, err := os.Stat(unused); !os.IsNotExist(err) {
-		t.Errorf("Expected no CD file to be created at %q", unused)
+	if stderr != "" {
+		t.Errorf("Expected no output on stderr, got %q", stderr)
 	}
 }
 

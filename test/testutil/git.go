@@ -204,9 +204,7 @@ func RunGitFlowWithInput(t *testing.T, dir string, input string, args ...string)
 	cmd := exec.Command(gitFlowPath, args...)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(input)
-	// Set GIT_EDITOR to colon (:) to prevent interactive editor from opening
-	// The colon is a shell builtin that does nothing and returns success
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=:")
+	cmd.Env = gitFlowEnv(nil)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -232,7 +230,7 @@ func RunGitFlowInteractive(t *testing.T, dir string, input string, args ...strin
 	cmd := exec.Command(gitFlowPath, args...)
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(input)
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=:", "GIT_FLOW_ASSUME_INTERACTIVE=1")
+	cmd.Env = append(gitFlowEnv(nil), "GIT_FLOW_ASSUME_INTERACTIVE=1")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

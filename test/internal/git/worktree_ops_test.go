@@ -181,7 +181,15 @@ func TestListWorktreesIgnoresUnknownPorcelainLines(t *testing.T) {
 	if out, err := testutil.RunGit(t, dir, "worktree", "lock", wtPath); err != nil {
 		t.Fatalf("git worktree lock failed: %v\nOutput: %s", err, out)
 	}
-	t.Cleanup(func() { _, _ = testutil.RunGit(t, dir, "worktree", "unlock", wtPath) })
+	// Registered as a defer, not t.Cleanup: defers run LIFO before any t.Cleanup,
+	// so this one runs while the repository still exists, whereas CleanupTestRepo
+	// above (registered first, so it runs last) has by then removed it. That
+	// ordering is what lets the unlock failure be reported rather than discarded.
+	defer func() {
+		if out, err := testutil.RunGit(t, dir, "worktree", "unlock", wtPath); err != nil {
+			t.Errorf("Failed to unlock the worktree: %v\nOutput: %s", err, out)
+		}
+	}()
 
 	entries, err := repo.ListWorktrees()
 	if err != nil {
