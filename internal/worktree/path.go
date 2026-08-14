@@ -133,13 +133,21 @@ func splitTopicBranch(cfg *config.Config, branch string) (topicType string, bran
 	return topicType, branchName
 }
 
-// tildeRest reports whether path is home-rooted ("~" or "~/…") and returns the
-// part after the tilde. A "~user" form is deliberately not expanded: git-flow
-// has no portable way to resolve another user's home, and leaving it alone is
-// better than silently rooting it in the current user's home.
+// tildeRest reports whether path is home-rooted ("~" or "~" followed by a host
+// path separator) and returns the part after the tilde. os.IsPathSeparator does
+// the separator test so a Windows user can write '~\wt\{{ branch }}' and get the
+// same expansion as '~/wt/{{ branch }}', while on Unix a backslash stays what it
+// is there — an ordinary character in a filename.
+//
+// A "~user" form is deliberately not expanded: git-flow has no portable way to
+// resolve another user's home, and leaving it alone is better than silently
+// rooting it in the current user's home.
 func tildeRest(path string) (rest string, ok bool) {
-	if path != "~" && !strings.HasPrefix(path, "~/") {
+	if path == "~" {
+		return "", true
+	}
+	if len(path) < 2 || path[0] != '~' || !os.IsPathSeparator(path[1]) {
 		return "", false
 	}
-	return strings.TrimPrefix(strings.TrimPrefix(path, "~"), "/"), true
+	return path[2:], true
 }

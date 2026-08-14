@@ -3,6 +3,7 @@ package worktree_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/gittower/git-flow-next/internal/config"
@@ -94,6 +95,65 @@ func TestComputePathExpandsTilde(t *testing.T) {
 	want := filepath.Join(home, "wt", "feature", "x")
 	if got != want {
 		t.Errorf("Expected %q, got %q", want, got)
+	}
+}
+
+// TestComputePathExpandsBareTilde verifies a template that is nothing but '~'
+// resolves to the home directory itself, the boundary of the '~/…' form above.
+// Steps:
+// 1. Creates a repository with git-flow defaults
+// 2. Overrides HOME for the test process (so no t.Parallel)
+// 3. Sets gitflow.worktreePath to '~'
+// 4. Verifies ComputePath returns <HOME>
+func TestComputePathExpandsBareTilde(t *testing.T) {
+	dir := setupInitializedRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	setTemplate(t, dir, "~")
+	repo, cfg := openConfigured(t, dir)
+
+	got, err := worktree.ComputePath(cfg, repo, "feature/x")
+	if err != nil {
+		t.Fatalf("ComputePath failed: %v", err)
+	}
+
+	if got != home {
+		t.Errorf("Expected %q, got %q", home, got)
+	}
+}
+
+// TestComputePathBackslashTildeIsLiteralOnUnix verifies the tilde is only
+// home-rooted when the character after it is a HOST path separator. On Unix a
+// backslash is an ordinary filename character, so '~\wt' must stay a relative
+// path rather than expanding. The Windows half of that rule — where '~\wt' DOES
+// expand — cannot be exercised here, since CI runs ubuntu-latest only.
+// Steps:
+// 1. Creates a repository with git-flow defaults, skipping on Windows
+// 2. Overrides HOME for the test process (so no t.Parallel)
+// 3. Sets gitflow.worktreePath to a backslash-separated '~\wt'
+// 4. Verifies the result is rooted in the repository, not in HOME
+func TestComputePathBackslashTildeIsLiteralOnUnix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a backslash is a path separator on Windows, where '~\\wt' expands by design")
+	}
+	dir := setupInitializedRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	setTemplate(t, dir, `~\wt`)
+	repo, cfg := openConfigured(t, dir)
+
+	got, err := worktree.ComputePath(cfg, repo, "feature/x")
+	if err != nil {
+		t.Fatalf("ComputePath failed: %v", err)
+	}
+
+	want := filepath.Join(testutil.EvalPath(t, dir), `~\wt`)
+	if got != want {
+		t.Errorf("Expected the backslash form to stay literal at %q, got %q", want, got)
 	}
 }
 
