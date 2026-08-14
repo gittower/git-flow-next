@@ -924,14 +924,18 @@ func TestWorktreeRemoveWithoutWorktree(t *testing.T) {
 // TestWorktreeRemoveRefusesMainWorktree covers scenario 16: the main worktree is
 // never removed, and that refusal beats the "nothing to remove" path.
 // Steps:
-// 1. Sets up a repository with main checked out in the main worktree
-// 2. Runs 'git flow worktree remove main'
-// 3. Verifies exit code 6 and a message about the main worktree
-// 4. Verifies the repository directory still exists and is a worktree
+//  1. Sets up a repository and checks out main in the main worktree
+//     ('git flow init' leaves develop checked out, so this is explicit)
+//  2. Runs 'git flow worktree remove main'
+//  3. Verifies exit code 6 and a message about the main worktree
+//  4. Verifies the repository directory still exists and is a worktree
 func TestWorktreeRemoveRefusesMainWorktree(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
+	if out, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to check out main: %v\nOutput: %s", err, out)
+	}
 
 	output, err := testutil.RunGitFlow(t, dir, "worktree", "remove", "main")
 	if got := worktreeExitCode(err); got != 6 {
