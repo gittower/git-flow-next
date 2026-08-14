@@ -860,8 +860,9 @@ Create and manage **.gitflow** with:
 
 A **gitflow.*** key is *shared-managed* — copied between **.gitflow** and local config — unless it is:
 
-- a **gitflow.shared.*** control key (see below), or
-- per-branch runtime metadata **gitflow.branch.<branch>.base** (the start point recorded for a started topic branch).
+- a **gitflow.shared.*** control key (see below),
+- per-branch runtime metadata **gitflow.branch.<branch>.base** (the start point recorded for a started topic branch), or
+- a worktree provenance marker **gitflow.worktree.<branch>.managed** (repository-local state recording which worktrees git-flow created — see **git-flow-worktree**(1)).
 
 **gitflow.version** and **gitflow.initialized** are shared-managed. Keys outside the **gitflow.*** namespace (for example **core.*** or **alias.***) are never copied, even if present in **.gitflow**. Copying preserves multi-value keys (such as **gitflow.<type>.publish.push-option**) and their order.
 
@@ -887,7 +888,7 @@ Activation never runs for **git flow init** itself, in a bare repository or outs
 
 ## SEE ALSO
 
-**git-flow**(1), **git-flow-config**(1), **git-flow-init**(1), **git-config**(1), **gitignore**(5)
+**git-flow**(1), **git-flow-config**(1), **git-flow-init**(1), **git-flow-worktree**(1), **git-config**(1), **gitignore**(5)
 
 ## NOTES
 

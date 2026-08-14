@@ -55,13 +55,13 @@ git-flow records the worktrees it creates by writing a provenance marker in Git 
 ## ENVIRONMENT
 
 **GIT_FLOW_CD_FILE**
-: When set to a writable path, a command that navigates writes its absolute destination there. git-flow runs as a subprocess and cannot change its parent shell's working directory, so the shell wrapper points this variable at a temporary file for the invocation and changes directory when the file is non-empty. The variable is an input git-flow reads, never one it sets, which is why it is not a Git config key: it describes one invocation's calling environment, not a repository preference.
+: When set to a writable path, a command that navigates writes its absolute destination there. git-flow runs as a subprocess and cannot change its parent shell's working directory, so this variable is how a caller asks for that destination in a form it can act on: point the variable at a file, run the command, then read the file and change directory yourself. The variable is an input git-flow reads, never one it sets, which is why it is not a Git config key: it describes one invocation's calling environment, not a repository preference.
 
 : **add** writes the new worktree's path once it exists. **remove** writes only when it would otherwise strand the user: if the current directory is inside the worktree being removed, it writes the main worktree's path, so the shell is never left in a deleted directory. Run from anywhere else, **remove** writes nothing.
 
 : The destination is written **only after** the operation it follows has succeeded, so a refused or failed command leaves the file empty. **--no-cd** suppresses the write even when the variable is set. A failure to write the destination is **not fatal**: the operation still succeeds and a warning is printed to standard error.
 
-: When the variable is unset — no wrapper, a script, CI — nothing is written and the command prints the human `cd` hint it would print anyway. Nothing machine-readable goes to standard output, so a user without the wrapper never sees a protocol line.
+: When the variable is unset — an ordinary shell, a script, CI — nothing is written and the command prints the human `cd` hint it would print anyway. Nothing machine-readable ever goes to standard output, so a caller that does not use the channel never sees a protocol line.
 
 ## EXAMPLES
 
@@ -84,7 +84,7 @@ List the linked worktrees:
 ```bash
 $ git flow worktree list
 feature/user-auth  /home/you/my-project-worktrees/feature/user-auth
-feature/api-v2     /home/you/elsewhere/api-v2                        (unmanaged)
+feature/api-v2     /home/you/elsewhere/api-v2  (unmanaged)
 ```
 
 Remove a worktree, keeping the branch:
@@ -107,6 +107,14 @@ Change the path template for this repository:
 git config gitflow.worktreePath '../{{ repo }}-worktrees/{{ branch }}'
 git config gitflow.worktreePath '~/worktrees/{{ topicType }}/{{ branchName }}'
 ```
+
+## CONFIGURATION
+
+**gitflow.worktreePath**
+: Template for the path of a branch's worktree. Supports **{{ repo }}** (the main worktree's directory name), **{{ branch }}** (the full branch name), **{{ branchName }}** (the branch without its topic prefix) and **{{ topicType }}** (the topic branch type, empty for a non-topic branch), in the spaced (`{{ branch }}`) and unspaced (`{{branch}}`) form alike. A leading `~` expands to the home directory; a relative template resolves against the main worktree root. Defaults to `../{{ repo }}-worktrees/{{ branch }}`. See **gitflow-config**(5).
+
+**gitflow.worktree.*branch*.managed**
+: The provenance marker **add** writes and **remove** clears. This is repository-local state written by git-flow, not a setting to configure by hand: it is what **list** reads to decide whether a worktree is tagged `(unmanaged)`. It is read from and written to **local** config only, and is excluded from the shared-config set, so it never reaches a committed `.gitflow`.
 
 ## EXIT STATUS
 
@@ -134,9 +142,10 @@ git config gitflow.worktreePath '~/worktrees/{{ topicType }}/{{ branchName }}'
 
 ## NOTES
 
-- **Requires Git 2.17 or newer.** `git worktree remove` and `git worktree move` were added in 2.17; the older operations this command builds on go back further, but the command as a whole needs 2.17. There is no runtime version check — on an older Git you see Git's own error.
+- **Requires Git 2.17 or newer.** `git worktree remove`, which **remove** builds on, was added in 2.17; the other operations used here go back further, but the command as a whole needs 2.17. There is no runtime version check — on an older Git you see Git's own error.
 - A relative **--path** is invocation-directory-relative, while a relative **gitflow.worktreePath** template is main-worktree-relative. See **OPTIONS**.
 - Provenance comes from the marker only, never from the shape of the path.
 - The main worktree is never removed and never detached.
 - A **--path** inside the repository work tree is allowed, matching Git's own behavior; the worktree simply shows up as an untracked directory.
+- An existing **empty** directory is accepted as the target of **add**, again matching Git's own behavior; only a file or a directory with content in it counts as occupied and is refused.
 - A worktree whose directory is already gone counts as clean, so **remove** does not demand **--force** for it.

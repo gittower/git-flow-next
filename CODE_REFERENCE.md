@@ -180,6 +180,7 @@ Layer 2 controls *how commands execute* (operational knobs). Not all options hav
 | `init.go` | Initialize git-flow |
 | `config.go` | Manage configuration |
 | `overview.go` | Show git-flow status |
+| `worktree.go` | Manage worktrees by branch name (add/remove/list/prune/path) |
 | `version.go` | Display version |
 | `shorthand.go` | Quick commands (work on current branch) |
 

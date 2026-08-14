@@ -3,10 +3,10 @@
 //
 // git-flow runs as a subprocess and cannot change its parent shell's working
 // directory. A command that would move the user therefore writes its destination
-// to the file named by GIT_FLOW_CD_FILE, and the shell wrapper changes directory
-// when that file is non-empty. The variable is an input git-flow reads, never one
-// it sets: it describes one invocation's calling environment, not a repository
-// preference, which is why it is not a git config key.
+// to the file named by GIT_FLOW_CD_FILE, leaving the caller that set the variable
+// to read the file and change directory itself. The variable is an input git-flow
+// reads, never one it sets: it describes one invocation's calling environment,
+// not a repository preference, which is why it is not a git config key.
 package navigate
 
 import (
