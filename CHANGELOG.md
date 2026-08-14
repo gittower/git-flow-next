@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- The EXIT STATUS section of the `git flow <type> checkout` manpage documented codes 1/2/3/4 that the command has never returned; it now documents the actual 2/3/5/6
+- The EXIT STATUS section of the `git flow <type> checkout` manpage documented codes 1/2/3/4 that the command has never returned; it now documents the actual 1/2/3/5/6
 
 ## [2.0.0] - 2026-08-09
 

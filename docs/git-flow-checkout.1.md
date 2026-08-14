@@ -240,6 +240,9 @@ git checkout feature/branch -- specific-file.txt
 **0**
 : Successful checkout or navigation
 
+**1**
+: Usage error, such as more than one branch name on the command line
+
 **2**
 : Invalid topic branch type
 
