@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"io"
 	"os"
 
@@ -27,7 +28,11 @@ var shellInitCmd = &cobra.Command{
 		case "fish":
 			script = fishShellInit
 		default:
-			return nil
+			// Unreachable while ValidArgs and these cases agree. It is an error
+			// rather than a silent no-op so that adding a fourth shell to one
+			// without the other fails on the spot instead of printing nothing and
+			// exiting 0, which reads to the user as a broken install.
+			return fmt.Errorf("unsupported shell %q", args[0])
 		}
 		// io.WriteString rather than a Fprint: the scripts contain printf
 		// directives of their own, which a formatting call would misread.
