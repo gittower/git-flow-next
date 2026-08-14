@@ -64,14 +64,24 @@ func parseConfigEntries(lines []string) []configEntry {
 //
 // A key is shared-managed iff it is under gitflow. AND is not a gitflow.shared.*
 // control key AND is not per-branch runtime metadata (gitflow.branch.<name>.base,
-// written by Repo.SetBaseBranch). gitflow.version and gitflow.initialized are
-// shared-managed. Everything outside gitflow.* (core.*, alias.*, …) is not.
+// written by Repo.SetBaseBranch) AND is not worktree provenance state
+// (gitflow.worktree.<branch>.managed). gitflow.version and gitflow.initialized
+// are shared-managed. Everything outside gitflow.* (core.*, alias.*, …) is not.
 func IsSharedManagedKey(key string) bool {
 	k := strings.ToLower(key)
 	if !strings.HasPrefix(k, "gitflow.") {
 		return false
 	}
 	if strings.HasPrefix(k, "gitflow.shared.") {
+		return false
+	}
+	// Worktree provenance: gitflow.worktree.<actual-branch>.managed, written by
+	// git-flow when it creates a worktree. It is machine-local state describing
+	// this checkout, not a setting a team shares — copying it into .gitflow would
+	// publish one developer's worktree layout and make it read as drift for
+	// everyone else. The trailing dot matters: gitflow.worktreePath IS a setting
+	// and stays shared-managed.
+	if strings.HasPrefix(k, "gitflow.worktree.") {
 		return false
 	}
 	// Per-branch runtime metadata: gitflow.branch.<actual-branch>.base. The
