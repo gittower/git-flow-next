@@ -236,7 +236,7 @@ func WriteExecutable(t *testing.T, path string, content string) {
 // a pipe into source for fish.
 func ShellInstallLine(shell string) string {
 	if shell == "fish" {
-		return "git-flow shell-init fish | source"
+		return "git flow shell-init fish | source"
 	}
-	return fmt.Sprintf("eval \"$(git-flow shell-init %s)\"", shell)
+	return fmt.Sprintf("eval \"$(git flow shell-init %s)\"", shell)
 }

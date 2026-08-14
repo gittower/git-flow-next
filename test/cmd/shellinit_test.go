@@ -222,7 +222,7 @@ func TestShellInitFishScriptSyntaxValid(t *testing.T) {
 // the invalid identifier is evaluated without the POSIX guard.
 // Steps:
 // 1. Starts bash with --posix, rc files disabled
-// 2. Evaluates the output of 'git-flow shell-init bash'
+// 2. Evaluates the output of 'git flow shell-init bash'
 // 3. Echoes SOURCED and checks that a git function is installed
 // 4. Verifies exit code 0 and that both markers are present
 func TestShellInitBashScriptSourcesUnderPosixMode(t *testing.T) {
@@ -234,7 +234,7 @@ func TestShellInitBashScriptSourcesUnderPosixMode(t *testing.T) {
 		// The command TYPE is what is asserted: a bare 'type git' succeeds for
 		// the ordinary git executable on PATH, so it would pass for a script
 		// that skips the git() function entirely in POSIX mode.
-		Script: `eval "$(git-flow shell-init bash)"; echo SOURCED; test "$(type -t git)" = function && echo HAVE-GIT-FN`,
+		Script: `eval "$(git flow shell-init bash)"; echo SOURCED; test "$(type -t git)" = function && echo HAVE-GIT-FN`,
 	})
 
 	if res.ExitCode != 0 {
