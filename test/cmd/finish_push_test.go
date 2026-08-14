@@ -1205,3 +1205,99 @@ func TestFinishPushConfigYesNoPushFlagOverrides(t *testing.T) {
 		t.Errorf("Expected no push with --no-push. Output: %s", output)
 	}
 }
+
+// setupAVHRepoWithRemote creates a repository initialised with git-flow-avh
+// style config (gitflow.prefix.* keys, no gitflow.version) and a bare remote
+// with main and develop pushed and tracked.
+//
+// This intentionally duplicates parts of testutil.SetupTestRepoWithRemote
+// because that helper runs "git flow init --defaults", which writes
+// gitflow.version and routes through Load() instead of ImportGitFlowAVHConfig.
+// An AVH-only repo must have no gitflow.version so the AVH import path is used.
+func setupAVHRepoWithRemote(t *testing.T) (string, string) {
+	t.Helper()
+	dir := testutil.SetupTestRepo(t)
+
+	// Set git-flow-avh config keys (no gitflow.version)
+	avhKeys := map[string]string{
+		"gitflow.branch.master":  "main",
+		"gitflow.branch.develop": "develop",
+		"gitflow.prefix.feature": "feature/",
+		"gitflow.prefix.release": "release/",
+		"gitflow.prefix.hotfix":  "hotfix/",
+		"gitflow.prefix.support": "support/",
+	}
+	for k, v := range avhKeys {
+		if _, err := testutil.RunGit(t, dir, "config", k, v); err != nil {
+			testutil.CleanupTestRepo(t, dir)
+			t.Fatalf("Failed to set avh config %s: %v", k, err)
+		}
+	}
+
+	// Create develop branch
+	if _, err := testutil.RunGit(t, dir, "checkout", "-b", "develop"); err != nil {
+		testutil.CleanupTestRepo(t, dir)
+		t.Fatalf("Failed to create develop: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		testutil.CleanupTestRepo(t, dir)
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+
+	// Add remote and push both branches
+	remoteDir, err := testutil.AddRemote(t, dir, "origin", false)
+	if err != nil {
+		testutil.CleanupTestRepo(t, dir)
+		t.Fatalf("Failed to add remote: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "push", "-u", "origin", "main"); err != nil {
+		testutil.CleanupTestRepo(t, dir)
+		testutil.CleanupTestRepo(t, remoteDir)
+		t.Fatalf("Failed to push main: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "push", "-u", "origin", "develop"); err != nil {
+		testutil.CleanupTestRepo(t, dir)
+		testutil.CleanupTestRepo(t, remoteDir)
+		t.Fatalf("Failed to push develop: %v", err)
+	}
+
+	return dir, remoteDir
+}
+
+// TestFinishPushAVHRepoConfigEnablesPush verifies that Layer 2 command config
+// (gitflow.feature.finish.push=true) triggers a push in a repo initialised with
+// git-flow-avh style config (no gitflow.version).
+// Steps:
+// 1. Sets up a repo with avh-style config and a remote tracking main and develop
+// 2. Sets gitflow.feature.finish.push=true
+// 3. Creates feature branch with one commit
+// 4. Finishes the feature without --push flag
+// 5. Verifies develop is up to date with origin (config alone triggers push)
+// 6. Verifies output contains the push header and develop push line
+func TestFinishPushAVHRepoConfigEnablesPush(t *testing.T) {
+	t.Parallel()
+	dir, remoteDir := setupAVHRepoWithRemote(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.feature.finish.push", "true"); err != nil {
+		t.Fatalf("Failed to configure push: %v", err)
+	}
+
+	createTopicCommit(t, dir, "feature", "login", "login.txt", "login content")
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "login", "--no-fetch")
+	if err != nil {
+		t.Fatalf("Failed to finish feature in AVH repo: %v\nOutput: %s", err, output)
+	}
+
+	if got := testutil.CommitsAhead(t, dir, "origin/develop", "develop"); got != 0 {
+		t.Errorf("Expected develop up to date with origin (AVH repo, config push), got %d ahead. Output: %s", got, output)
+	}
+	if !strings.Contains(output, pushHeader) {
+		t.Errorf("Expected push header in output. Output: %s", output)
+	}
+	if !strings.Contains(output, pushDevelLine) {
+		t.Errorf("Expected develop push line in output. Output: %s", output)
+	}
+}

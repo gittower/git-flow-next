@@ -408,6 +408,33 @@ func TestGitFlowAVHRemoteImport(t *testing.T) {
 	assert.Equal(t, "avh-remote", cfg.Remote, "git-flow-avh remote should be imported")
 }
 
+// TestGitFlowAVHCommandConfigImport verifies that ImportGitFlowAVHConfig
+// populates CommandConfig with Layer 2 command-specific settings.
+// Steps:
+// 1. Sets up a test repository with git-flow-avh style config
+// 2. Sets gitflow.release.finish.push=true and gitflow.feature.start.fetch=true
+// 3. Imports git-flow-avh config through a git.Repo handle
+// 4. Verifies both settings are present in CommandConfig
+func TestGitFlowAVHCommandConfigImport(t *testing.T) {
+	t.Parallel()
+	dir := setupTestRepo(t)
+	defer cleanupTestRepo(t, dir)
+
+	setConfig(t, dir, "gitflow.prefix.feature", "feature/")
+	setConfig(t, dir, "gitflow.release.finish.push", "true")
+	setConfig(t, dir, "gitflow.feature.start.fetch", "true")
+
+	cfg, err := config.ImportGitFlowAVHConfig(openRepo(t, dir))
+	if err != nil {
+		t.Fatalf("Failed to import git-flow-avh config: %v", err)
+	}
+
+	assert.Equal(t, "true", cfg.CommandConfig["gitflow.release.finish.push"],
+		"release.finish.push should be loaded into CommandConfig")
+	assert.Equal(t, "true", cfg.CommandConfig["gitflow.feature.start.fetch"],
+		"feature.start.fetch should be loaded into CommandConfig")
+}
+
 // TestLoadConfigPreservesBranchNameCase verifies that the canonical casing of a
 // branch name is preserved and remains case-insensitively resolvable.
 // Steps:

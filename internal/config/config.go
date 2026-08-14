@@ -218,7 +218,7 @@ func Load(repo *git.Repo) (*Config, error) {
 		Branches:      make(map[string]BranchConfig),
 	}
 
-	// Load all gitflow.* command-specific config at once
+	// Load all gitflow.* config at once
 	allGitflowConfig, err := loadAllGitflowConfig(repo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load gitflow config: %w", err)
@@ -408,9 +408,18 @@ func CheckGitFlowAVHConfig(repo *git.Repo) bool {
 func ImportGitFlowAVHConfig(repo *git.Repo) (*Config, error) {
 	config := DefaultConfig()
 
+	// Load all gitflow.* config at once so that command-specific
+	// settings like gitflow.release.finish.push are honoured even
+	// when the repo was initialised with git-flow-avh.
+	allGitflowConfig, err := loadAllGitflowConfig(repo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load gitflow config: %w", err)
+	}
+	config.CommandConfig = allGitflowConfig
+
 	// Check for custom remote in git-flow-avh config
-	remote, err := repo.GetConfig("gitflow.origin")
-	if err == nil && remote != "" {
+	remote, ok := allGitflowConfig["gitflow.origin"]
+	if ok && remote != "" {
 		config.Remote = remote
 	}
 
