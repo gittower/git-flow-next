@@ -253,6 +253,7 @@ func TestCheckoutWorktreeOccupiedPathFails(t *testing.T) {
 // 4. Verifies exit code 0 and that the stale file is gone
 // 5. Verifies a worktree exists at the path, the marker is written and the CD file holds the path
 // 6. Verifies stdout reports the creation
+// 7. Verifies stdout announces the removal, so the one destructive operation in the command cannot go silent
 func TestCheckoutWorktreeClobberReplacesStaleDirectory(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
@@ -282,6 +283,11 @@ func TestCheckoutWorktreeClobberReplacesStaleDirectory(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "Created worktree for branch 'feature/x' at "+wtPath) {
 		t.Errorf("Expected stdout to report the creation, got %q", stdout)
+	}
+	// Without this the suite would accept a --clobber that removed the directory
+	// silently: the only other test touching this line pins its ABSENCE.
+	if !strings.Contains(stdout, "Removed "+wtPath+" to make room for the worktree") {
+		t.Errorf("Expected stdout to announce the removal, got %q", stdout)
 	}
 }
 
