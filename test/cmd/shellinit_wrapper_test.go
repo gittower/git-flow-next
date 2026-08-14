@@ -230,7 +230,7 @@ func assertWrapperWithoutNavigationKeepsDirectory(t *testing.T, shell string) {
 	if got := lastLine(res.Stdout); got != start {
 		t.Errorf("Expected the shell to stay in %q, got %q", start, got)
 	}
-	if !strings.Contains(res.Stdout, "version") {
+	if !strings.Contains(res.Stdout, "git-flow-next") {
 		t.Errorf("Expected the version output to reach the terminal, got %q", res.Stdout)
 	}
 	assertWrapperTempFiles(t, res, 2)
