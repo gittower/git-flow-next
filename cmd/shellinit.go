@@ -35,7 +35,8 @@ var shellInitCmd = &cobra.Command{
 			return fmt.Errorf("unsupported shell %q", args[0])
 		}
 		// io.WriteString rather than a Fprint: the scripts contain printf
-		// directives of their own, which a formatting call would misread.
+		// directives of their own, and go vet flags an fmt.Fprint whose argument
+		// looks like a format string ("possible Printf formatting directive").
 		_, err := io.WriteString(os.Stdout, script)
 		return err
 	},
