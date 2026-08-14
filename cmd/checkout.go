@@ -8,12 +8,31 @@ import (
 	"github.com/gittower/git-flow-next/internal/config"
 	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/internal/git"
+	"github.com/gittower/git-flow-next/internal/navigate"
 )
 
+// CheckoutOptions carries the flags of 'git flow <type> checkout'. They are
+// grouped because they travel together through one call; individually they are
+// unrelated switches.
+type CheckoutOptions struct {
+	// Worktree creates the branch's worktree when it does not exist yet.
+	Worktree bool
+	// NoCD suppresses the navigation-destination write, and nothing else: the
+	// branch switch and the printed path both still happen.
+	NoCD bool
+	// Clobber allows a plain directory in the way of a new worktree to be
+	// removed. It only means anything alongside Worktree.
+	Clobber bool
+	// Quiet suppresses the shell-init tip.
+	Quiet bool
+	// ShowCommands echoes the git command before running it.
+	ShowCommands bool
+}
+
 // CheckoutCommand handles checking out a topic branch
-func CheckoutCommand(branchType string, nameOrPrefix string, showCommands bool) {
+func CheckoutCommand(branchType string, nameOrPrefix string, opts CheckoutOptions) {
 	repo := mustOpenRepo()
-	if err := executeCheckout(repo, branchType, nameOrPrefix, showCommands); err != nil {
+	if err := executeCheckout(repo, branchType, nameOrPrefix, opts); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -26,7 +45,7 @@ func CheckoutCommand(branchType string, nameOrPrefix string, showCommands bool) 
 }
 
 // executeCheckout performs the actual branch checkout logic and returns any errors
-func executeCheckout(repo *git.Repo, branchType string, nameOrPrefix string, showCommands bool) error {
+func executeCheckout(repo *git.Repo, branchType string, nameOrPrefix string, opts CheckoutOptions) error {
 	// Load configuration
 	cfg, err := config.Load(repo)
 	if err != nil {
@@ -94,17 +113,80 @@ func executeCheckout(repo *git.Repo, branchType string, nameOrPrefix string, sho
 		}
 	}
 
+	// The worktree lookup runs on the RESOLVED name, never on what the user
+	// typed: 'checkout user' must find feature/user-auth's worktree.
+	entry, err := repo.WorktreeForBranch(fullBranchName)
+	if err != nil {
+		return &errors.GitError{Operation: "look up worktree for branch", Err: err}
+	}
+
+	if entry != nil {
+		// A registered worktree whose directory is gone must never be handed to
+		// the shell as a destination: git-flow would exit 0 while the shell
+		// failed to enter it.
+		if _, statErr := os.Stat(entry.Path); statErr != nil {
+			if !os.IsNotExist(statErr) {
+				return &errors.GitError{Operation: "inspect the worktree directory", Err: statErr}
+			}
+			return &errors.GitError{
+				Operation: fmt.Sprintf("check out branch '%s'", fullBranchName),
+				Err:       fmt.Errorf("its worktree at %s is gone; 'git flow worktree prune' drops stale entries", entry.Path),
+			}
+		}
+
+		// Navigating to the worktree the command already runs in would replace
+		// today's output with navigation lines and ask the shell to cd where it
+		// already is. So the ordinary case — checking out the branch you are on
+		// — stays exactly as it was, and only a genuine move navigates.
+		if !git.SamePath(entry.Path, repo.WorkTree()) {
+			return navigateToWorktree(fullBranchName, entry.Path, false, opts)
+		}
+	} else if opts.Worktree {
+		// --clobber reaches createWorktreeAt only from here: with no creation
+		// requested there is nothing to clobber, so the flag is ignored.
+		target, err := createWorktreeAt(cfg, repo, fullBranchName, "", opts.Clobber)
+		if err != nil {
+			return err
+		}
+		return navigateToWorktree(fullBranchName, target, true, opts)
+	}
+
 	// Show git command if requested
-	if showCommands {
+	if opts.ShowCommands {
 		fmt.Printf("$ git checkout %s\n", fullBranchName)
 	}
 
-	// Checkout the branch
+	// Checkout the branch. This stays 'git checkout' rather than 'git switch',
+	// which would raise the required Git version from 2.17 to 2.23.
 	err = repo.Checkout(fullBranchName)
 	if err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("checkout branch '%s'", fullBranchName), Err: err}
 	}
 
 	fmt.Printf("Switched to branch '%s'\n", fullBranchName)
+	return nil
+}
+
+// navigateToWorktree reports the branch's worktree and offers it to the calling
+// shell. The branch is never checked out in the current worktree — git allows a
+// branch in only one worktree at a time, and the destination already has it.
+//
+// The destination is written only after the worktree is known to exist, and a
+// write failure warns rather than failing a command that otherwise succeeded:
+// the user still has the path on screen.
+func navigateToWorktree(branch string, path string, created bool, opts CheckoutOptions) error {
+	if created {
+		fmt.Printf("Created worktree for branch '%s' at %s\n", branch, path)
+	} else {
+		fmt.Printf("Worktree for branch '%s' at %s\n", branch, path)
+	}
+	fmt.Printf("To switch to it: cd %s\n", path)
+	printShellInitTip(opts.Quiet)
+
+	if !opts.NoCD {
+		if err := navigate.WriteDestination(path); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		}
+	}
 	return nil
 }

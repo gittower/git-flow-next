@@ -371,14 +371,23 @@ func registerBranchCommand(branchType string) {
 			if len(args) > 0 {
 				nameOrPrefix = args[0]
 			}
-			showCommands, _ := cmd.Flags().GetBool("showcommands")
-			CheckoutCommand(branchType, nameOrPrefix, showCommands)
+			opts := CheckoutOptions{}
+			opts.Worktree, _ = cmd.Flags().GetBool("worktree")
+			opts.NoCD, _ = cmd.Flags().GetBool("no-cd")
+			opts.Clobber, _ = cmd.Flags().GetBool("clobber")
+			opts.Quiet, _ = cmd.Flags().GetBool("quiet")
+			opts.ShowCommands, _ = cmd.Flags().GetBool("showcommands")
+			CheckoutCommand(branchType, nameOrPrefix, opts)
 			return nil
 		},
 	}
 
 	// Add flags
 	checkoutCmd.Flags().Bool("showcommands", false, "Show git commands while executing them")
+	checkoutCmd.Flags().BoolP("worktree", "w", false, "Create the branch's worktree if it does not exist, then navigate to it")
+	checkoutCmd.Flags().Bool("no-cd", false, "Do not write a navigation destination for the calling shell")
+	checkoutCmd.Flags().Bool("clobber", false, "Remove a plain directory in the way of a new worktree (with --worktree)")
+	checkoutCmd.Flags().BoolP("quiet", "q", false, "Do not print the shell-init tip")
 
 	branchCmd.AddCommand(checkoutCmd)
 
