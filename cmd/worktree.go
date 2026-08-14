@@ -270,8 +270,14 @@ func executeWorktreeRemove(repo *git.Repo, branch string, force bool, noCD bool)
 		return &errors.WorktreeNotFoundError{Branch: branch}
 	}
 
+	// Anything other than a missing directory — an unreadable parent, most likely —
+	// is surfaced here rather than being read as "the directory is there", which
+	// would only fail further down with a message about something else.
 	directoryExists := true
-	if _, statErr := os.Stat(entry.Path); os.IsNotExist(statErr) {
+	if _, statErr := os.Stat(entry.Path); statErr != nil {
+		if !os.IsNotExist(statErr) {
+			return &errors.GitError{Operation: "inspect the worktree directory", Err: statErr}
+		}
 		directoryExists = false
 	}
 
