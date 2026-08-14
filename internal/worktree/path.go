@@ -64,8 +64,6 @@ func ComputePath(cfg *config.Config, repo *git.Repo, branch string) (string, err
 		}
 	})
 
-	// An empty {{ topicType }} leaves a doubled or trailing separator behind;
-	// filepath.Join and filepath.Clean both collapse it.
 	if rest, ok := tildeRest(expanded); ok {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -74,6 +72,9 @@ func ComputePath(cfg *config.Config, repo *git.Repo, branch string) (string, err
 		return filepath.Join(home, filepath.FromSlash(rest)), nil
 	}
 
+	// Each of the three returns below normalizes the expanded template: an empty
+	// {{ topicType }} leaves a doubled or trailing separator behind, and
+	// filepath.Join and filepath.Clean both collapse it.
 	path := filepath.FromSlash(expanded)
 	if filepath.IsAbs(path) {
 		return filepath.Clean(path), nil

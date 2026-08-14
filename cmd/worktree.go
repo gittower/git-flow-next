@@ -290,6 +290,10 @@ func executeWorktreeRemove(repo *git.Repo, branch string, force bool, noCD bool)
 	// Decide everything that depends on the current directory BEFORE the removal
 	// deletes it: whether the user is standing inside the target, and where the
 	// destination file is.
+	// A failing Getwd means the current directory is already unreadable or gone,
+	// so treat the user as not standing inside the target: writing a destination
+	// on a guess would move a shell that never asked to be moved, while not
+	// writing one costs at most a manual cd.
 	strandedUser := false
 	if cwd, err := os.Getwd(); err == nil {
 		strandedUser = git.IsWithin(cwd, entry.Path)
@@ -447,8 +451,10 @@ func executeWorktreePath(repo *git.Repo, branch string) error {
 // against the main worktree root. The asymmetry is deliberate: a template is a
 // repository-wide setting, a typed path is one command's argument.
 func resolveWorktreeTarget(cfg *config.Config, repo *git.Repo, branch string, pathFlag string) (string, error) {
-	if strings.TrimSpace(pathFlag) != "" {
-		return normalizeInvocationPath(pathFlag), nil
+	// Use the TRIMMED value, the same one the emptiness test looks at: surrounding
+	// whitespace in a hand-typed path is a typo, not a directory name.
+	if trimmed := strings.TrimSpace(pathFlag); trimmed != "" {
+		return normalizeInvocationPath(trimmed), nil
 	}
 	path, err := worktree.ComputePath(cfg, repo, branch)
 	if err != nil {
