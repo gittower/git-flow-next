@@ -131,6 +131,26 @@ git config gitflow.path.hooks .githooks
 git config --global gitflow.path.hooks .githooks
 ```
 
+**gitflow.worktreePath**
+: Template for the path of a branch's worktree, used by **git-flow-worktree**(1). Supports the variables **{{ repo }}** (the main worktree's directory name), **{{ branch }}** (the full branch name), **{{ branchName }}** (the branch without its topic prefix), and **{{ topicType }}** (the topic branch type, empty for a non-topic branch), in both the spaced (`{{ branch }}`) and unspaced (`{{branch}}`) form. A leading `~` expands to the user's home directory. A relative template resolves against the **main worktree root**, not the current worktree, so the answer does not change when a command runs from inside a linked worktree. The computed path is always absolute, uses the host's path separators, and a branch name containing a slash produces nested directories.
+: *Default*: `../{{ repo }}-worktrees/{{ branch }}`
+
+```bash
+# Sibling directory of the repository (the default)
+git config gitflow.worktreePath '../{{ repo }}-worktrees/{{ branch }}'
+
+# One directory per topic type under a home-rooted tree
+git config gitflow.worktreePath '~/worktrees/{{ topicType }}/{{ branchName }}'
+
+# Global default for all repositories
+git config --global gitflow.worktreePath '~/worktrees/{{ repo }}/{{ branch }}'
+```
+
+### Worktree provenance: state, not settings
+
+**gitflow.worktree.*branch*.managed**
+: Set to `true` when git-flow creates a worktree for *branch*, and cleared when git-flow removes it. This is **repository-local state written by git-flow, not a setting users configure**: it records which worktrees git-flow created so later commands can clean up their own and leave the user's alone. It is excluded from the shared-config set, so it is never copied into a committed `.gitflow`, never reported as configuration drift, and never removed by `git flow config sync`. `gitflow.worktreePath`, being a genuine setting, is unaffected by that exclusion and can be shared with the team.
+
 ## BRANCH CONFIGURATION
 
 Branch configuration uses the pattern: **gitflow.branch.*name*.*property***
