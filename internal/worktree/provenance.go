@@ -44,8 +44,14 @@ func MarkManaged(repo *git.Repo, branch string) error {
 // Provenance is never inferred by comparing a worktree's path against the
 // template: --path and any later change to gitflow.worktreePath both break that
 // correspondence.
+//
+// The read is LOCAL-scoped, matching MarkManaged, ClearMarker and ListMarkers.
+// Reading merged config would let a stray global or system
+// gitflow.worktree.<branch>.managed make a hand-made worktree report as
+// git-flow's — and since clearing only touches local scope, that marker could
+// never be cleared, so the cleanup commands would delete the user's own worktree.
 func IsManaged(repo *git.Repo, branch string) bool {
-	value, err := repo.GetConfig(MarkerKey(branch))
+	value, err := repo.GetConfigLocal(MarkerKey(branch))
 	return err == nil && config.ParseBool(value)
 }
 

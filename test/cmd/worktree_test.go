@@ -1115,6 +1115,54 @@ func TestWorktreeListTagsUnmanagedWorktree(t *testing.T) {
 	}
 }
 
+// TestWorktreeListIgnoresGlobalScopedMarker verifies the provenance marker is
+// read from LOCAL config only, the scope it is written to and cleared in. A
+// marker that exists only in global config must not make a hand-made worktree
+// report as git-flow's: clearing only touches local scope, so such a marker could
+// never be removed and the cleanup commands would delete the user's own worktree.
+// Steps:
+// 1. Isolates the global config to a temp file so the real global config is untouched
+// 2. Creates a worktree for feature/b by hand, so no local marker exists
+// 3. Writes gitflow.worktree.feature/b.managed=true in the GLOBAL scope only
+// 4. Verifies no gitflow.worktree.* key exists in local config
+// 5. Runs 'git flow worktree list' and verifies the row is still tagged (unmanaged)
+func TestWorktreeListIgnoresGlobalScopedMarker(t *testing.T) {
+	t.Parallel()
+	// The override is passed through each subprocess env (not the test process
+	// env) so it stays scoped to this test and is safe under parallel execution.
+	env := []string{"GIT_CONFIG_GLOBAL=" + filepath.Join(t.TempDir(), "global-gitconfig")}
+
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/b")
+
+	handmade := computedWorktreePath(t, dir, "feature/b")
+	if out, err := testutil.RunGit(t, dir, "worktree", "add", handmade, "feature/b"); err != nil {
+		t.Fatalf("git worktree add failed: %v\nOutput: %s", err, out)
+	}
+
+	if out, err := testutil.RunGitWithEnv(t, dir, env, "config", "--global", "gitflow.worktree.feature/b.managed", "true"); err != nil {
+		t.Fatalf("Failed to write the global marker: %v\nOutput: %s", err, out)
+	}
+	if testutil.GitConfigHasPrefix(t, dir, "gitflow.worktree.") {
+		t.Fatal("Expected no gitflow.worktree.* key in local config")
+	}
+
+	output, err := testutil.RunGitFlowWithEnv(t, dir, env, "worktree", "list")
+	if err != nil {
+		t.Fatalf("worktree list failed: %v\nOutput: %s", err, output)
+	}
+
+	rows := worktreeRows(output)
+	if len(rows) != 1 {
+		t.Fatalf("Expected exactly one row, got %d: %s", len(rows), output)
+	}
+	if !strings.HasSuffix(rows[0], "(unmanaged)") {
+		t.Errorf("Expected a global-only marker to be ignored and the row tagged (unmanaged), got %q", rows[0])
+	}
+}
+
 // TestWorktreeListShowsDetachedWorktree verifies a detached worktree is still
 // listed, with (detached) in the branch column.
 // Steps:
