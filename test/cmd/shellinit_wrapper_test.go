@@ -843,6 +843,86 @@ func TestShellInitFishWrapperReportsFailedCD(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// W11 — a set-but-empty TMPDIR still navigates
+// ---------------------------------------------------------------------------
+
+// assertWrapperNavigatesWithEmptyTMPDIR verifies the /tmp fallback fires for a
+// TMPDIR that is set to the empty string, not only for one that is unset.
+//
+// This is a cross-shell parity test. bash and zsh get it from "${TMPDIR:-/tmp}";
+// fish had "set -q TMPDIR", which is TRUE for a set-but-empty variable, so it
+// took the branch and ran mktemp against "/git-flow-cd.XXXXXX". That fails, the
+// wrapper takes its no-temp-file path, and navigation is silently LOST while the
+// command itself still runs and still returns the right exit code — a failure no
+// exit-code or output assertion elsewhere would catch.
+//
+// assertWrapperTempFiles is deliberately not used: the fallback puts the temp
+// file in the real /tmp, which the run's own TMPDIR-scoped leftover check cannot
+// see and which parallel tests make unsafe to glob. The mktemp count is still
+// meaningful, and it is what proves the wrapper reached its normal path at all.
+func assertWrapperNavigatesWithEmptyTMPDIR(t *testing.T, shell string) {
+	t.Helper()
+	dir, wtPath := wrapperRepoWithWorktree(t)
+
+	res := testutil.RunShell(t, testutil.ShellRun{
+		Shell:  shell,
+		Dir:    dir,
+		Env:    []string{"TMPDIR="},
+		Script: installWrapper(shell) + "; git-flow feature checkout x; pwd -P",
+	})
+
+	if res.ExitCode != 0 {
+		t.Fatalf("Expected exit code 0, got %d\nStderr: %s", res.ExitCode, res.Stderr)
+	}
+	if got := lastLine(res.Stdout); got != wtPath {
+		t.Errorf("Expected an empty TMPDIR to fall back to /tmp and still navigate to %q, got %q", wtPath, got)
+	}
+	if strings.Contains(res.Stderr, "mkstemp") || strings.Contains(res.Stderr, "mktemp") {
+		t.Errorf("Expected no raw mktemp diagnostic on stderr, got %q", res.Stderr)
+	}
+	if res.MktempCalls != 1 {
+		t.Errorf("Expected 1 mktemp call, got %d", res.MktempCalls)
+	}
+}
+
+// TestShellInitBashWrapperNavigatesWithEmptyTMPDIR confirms bash already handles
+// a set-but-empty TMPDIR, the behaviour fish is held to.
+// Steps:
+// 1. Sets up a repository with feature/x and a worktree for it
+// 2. Installs the emitted bash wrapper with TMPDIR set to the empty string
+// 3. Runs 'git-flow feature checkout x' and verifies the shell reached the worktree
+// 4. Verifies stderr carries no mktemp diagnostic and exactly one temp file was requested
+func TestShellInitBashWrapperNavigatesWithEmptyTMPDIR(t *testing.T) {
+	t.Parallel()
+	assertWrapperNavigatesWithEmptyTMPDIR(t, "bash")
+}
+
+// TestShellInitZshWrapperNavigatesWithEmptyTMPDIR confirms zsh already handles a
+// set-but-empty TMPDIR, the behaviour fish is held to.
+// Steps:
+// 1. Sets up a repository with feature/x and a worktree for it
+// 2. Installs the emitted zsh wrapper with TMPDIR set to the empty string
+// 3. Runs 'git-flow feature checkout x' and verifies the shell reached the worktree
+// 4. Verifies stderr carries no mktemp diagnostic and exactly one temp file was requested
+func TestShellInitZshWrapperNavigatesWithEmptyTMPDIR(t *testing.T) {
+	t.Parallel()
+	assertWrapperNavigatesWithEmptyTMPDIR(t, "zsh")
+}
+
+// TestShellInitFishWrapperNavigatesWithEmptyTMPDIR is the regression test for
+// fish's 'set -q TMPDIR', which was true for a set-but-empty variable and lost
+// navigation.
+// Steps:
+// 1. Sets up a repository with feature/x and a worktree for it
+// 2. Installs the emitted fish wrapper with TMPDIR set to the empty string
+// 3. Runs 'git-flow feature checkout x' and verifies the shell reached the worktree
+// 4. Verifies stderr carries no mktemp diagnostic and exactly one temp file was requested
+func TestShellInitFishWrapperNavigatesWithEmptyTMPDIR(t *testing.T) {
+	t.Parallel()
+	assertWrapperNavigatesWithEmptyTMPDIR(t, "fish")
+}
+
+// ---------------------------------------------------------------------------
 // Helper self-check
 // ---------------------------------------------------------------------------
 

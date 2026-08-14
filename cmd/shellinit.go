@@ -195,9 +195,18 @@ git-flow() {
 //     itself clobber $status before the return.
 //   - cd inside a function changes the shell's directory, because fish
 //     functions are not subshells.
+//   - "test -n $TMPDIR" rather than "set -q TMPDIR", which is TRUE for a
+//     set-but-EMPTY variable: that took the branch, ran mktemp against /, and
+//     lost navigation behind a raw mkstemp error while bash and zsh fell back
+//     cleanly through "${TMPDIR:-/tmp}".
+//   - cd takes no "--" here, where the bash and zsh core writes 'cd -- "$dest"'.
+//     The guard is unnecessary in every shell — navigate.WriteDestinationTo only
+//     ever writes an absolute path, so a destination cannot begin with "-" — and
+//     fish's floor for this script is 3.0, whose handling of "--" in cd no test
+//     here can exercise. The divergence is deliberate, not an oversight.
 const fishShellInit = `function __git_flow_nav --description 'Run git-flow and act on its navigation channel'
     set -l gf_dir /tmp
-    if set -q TMPDIR
+    if test -n "$TMPDIR"
         set gf_dir $TMPDIR
     end
     set -l gf_file (mktemp "$gf_dir/git-flow-cd.XXXXXX")
