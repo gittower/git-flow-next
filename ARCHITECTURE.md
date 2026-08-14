@@ -28,12 +28,19 @@ git-flow-next/
 │   ├── checkout.go        # Branch checkout functionality
 │   ├── delete.go          # Branch deletion
 │   ├── rename.go          # Branch renaming
+│   ├── worktree.go        # Worktree management by branch name
 │   └── overview.go        # Repository overview
 ├── internal/              # Internal packages (not exported)
 │   ├── config/           # Git configuration management
 │   │   └── config.go     # Branch type definitions, config loading
 │   ├── git/              # Git command wrapper
-│   │   └── repo.go       # Git operations with error handling
+│   │   ├── repo.go       # Git operations with error handling
+│   │   └── worktree.go   # Worktree add/remove/list/prune/detach
+│   ├── worktree/         # Worktree path templates and provenance markers
+│   │   ├── path.go       # gitflow.worktreePath expansion
+│   │   └── provenance.go # Markers recording which worktrees git-flow created
+│   ├── navigate/         # GIT_FLOW_CD_FILE destination channel
+│   │   └── cdfile.go     # Hand a destination directory to the calling shell
 │   ├── mergestate/       # Merge conflict state persistence
 │   │   └── mergestate.go # State management for multi-step operations
 │   ├── hooks/            # Client-side hook execution
@@ -513,6 +520,13 @@ git flow update <branch> --rebase  # Force rebase strategy
 git flow rebase                    # Shorthand for: git flow <type> update --rebase
 git flow update                    # Shorthand for: git flow <type> update
 git flow finish                    # Shorthand for: git flow <type> finish
+
+# Worktree operations (addressed by full branch name)
+git flow worktree add <branch>
+git flow worktree remove <branch>
+git flow worktree list
+git flow worktree prune
+git flow worktree path <branch>
 
 # Overview
 git flow overview

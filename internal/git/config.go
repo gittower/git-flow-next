@@ -31,6 +31,22 @@ func (r *Repo) GetConfig(key string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// GetConfigLocal gets a Git config value from the repository's LOCAL config only
+// (.git/config), ignoring global and system scope.
+//
+// Use it for repository-local state git-flow writes itself rather than for
+// settings users configure: the matching write (SetConfig) and removal
+// (UnsetConfigIfPresent) are both local-scoped, so a merged read would report a
+// global or system value that those two can never manage — see
+// UnsetConfigIfPresent for the same asymmetry stated from the write side.
+func (r *Repo) GetConfigLocal(key string) (string, error) {
+	output, err := r.gitCmd("config", "--local", "--get", key).Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get local git config %s: %w", key, err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 // HasUserIdentity reports whether both user.name and user.email are configured
 // and non-empty in git's merged/effective config (local > global > system),
 // matching what `git commit` would see. It returns false without error when a

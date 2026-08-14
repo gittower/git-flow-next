@@ -9,6 +9,7 @@ This directory contains comprehensive manpage-style documentation for all git-fl
 - **git-flow-init.1.md** - Repository initialization and workflow setup
 - **git-flow-config.1.md** - Configuration management commands  
 - **git-flow-integrate.1.md** - Integrate a base branch into its parent
+- **git-flow-worktree.1.md** - Worktree management for branches
 - **git-flow-feature.1.md** - Feature branch management
 - **git-flow-release.1.md** - Release branch management
 - **git-flow-hotfix.1.md** - Hotfix branch management

@@ -32,6 +32,9 @@ Many command options intentionally have no Layer 1 equivalent — they exist onl
 | `gitflow.initialized` | Marks repository as git-flow initialized | `false` | `true` |
 | `gitflow.origin` | Remote name to use for operations | `origin` | `upstream` |
 | `gitflow.remote` | Alias for `gitflow.origin` | `origin` | `upstream` |
+| `gitflow.worktreePath` | Path template for a branch's worktree. Supports `{{ repo }}`, `{{ branch }}`, `{{ branchName }}`, `{{ topicType }}` (spaced or unspaced), expands a leading `~`, resolves a relative template against the main worktree root, and always yields an absolute path | `../{{ repo }}-worktrees/{{ branch }}` | `~/worktrees/{{ topicType }}/{{ branchName }}` |
+
+`gitflow.worktree.<branch>.managed` is **not** a setting: it is repository-local state git-flow writes when it creates a worktree, so later commands can tell its own worktrees from the user's. It is excluded from the shared-config set and never reaches a committed `.gitflow`. See [git-flow-worktree(1)](docs/git-flow-worktree.1.md).
 
 ## Branch Type Configuration (Layer 1)
 

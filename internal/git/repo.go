@@ -67,6 +67,30 @@ func (r *Repo) GitDir() string { return r.gitDir }
 // directory (the main .git), shared across linked worktrees.
 func (r *Repo) CommonGitDir() string { return r.commonGitDir }
 
+// MainWorkTree returns the absolute path to the repository's MAIN work-tree
+// root, which is not necessarily this handle's.
+//
+// WorkTree() reports the worktree the command was invoked from — a linked
+// worktree when the user is standing in one. Several decisions must anchor on
+// the main worktree instead: a relative gitflow.worktreePath template resolves
+// against it, and removing the worktree the user is inside hands them back to
+// it. Git always lists the main worktree first, so the first porcelain record
+// answers this; a repository whose worktree list cannot be parsed falls back to
+// the parent of the common git dir, which is the main work-tree root of any
+// non-bare repository.
+func (r *Repo) MainWorkTree() (string, error) {
+	entries, err := r.ListWorktrees()
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		if entry.Main {
+			return entry.Path, nil
+		}
+	}
+	return filepath.Dir(r.commonGitDir), nil
+}
+
 // gitCmd builds a git command bound to this repository's work tree.
 func (r *Repo) gitCmd(args ...string) *exec.Cmd {
 	return gitCommand(r.workTree, args...)
