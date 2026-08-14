@@ -598,6 +598,93 @@ func (e *RepositoryCreationDeclinedError) ExitCode() ExitCode {
 	return ExitCodeGitError
 }
 
+// WorktreeExistsError indicates a worktree for the branch already exists. It
+// mirrors BranchExistsError's "this already exists" exit code.
+type WorktreeExistsError struct {
+	Branch string
+	Path   string
+}
+
+func (e *WorktreeExistsError) Error() string {
+	return fmt.Sprintf("a worktree for branch '%s' already exists at %s", e.Branch, e.Path)
+}
+
+func (e *WorktreeExistsError) ExitCode() ExitCode {
+	return ExitCodeBranchExists
+}
+
+// WorktreePathOccupiedError indicates the target path exists but is not a
+// worktree, so creating one there would collide with unrelated content.
+type WorktreePathOccupiedError struct {
+	Path string
+}
+
+func (e *WorktreePathOccupiedError) Error() string {
+	return fmt.Sprintf("path %s is occupied by an existing directory; move it aside or pass --path to choose another location", e.Path)
+}
+
+func (e *WorktreePathOccupiedError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
+// BranchCheckedOutElsewhereError indicates the branch is already checked out in
+// another worktree. Git allows a branch in only one worktree at a time.
+type BranchCheckedOutElsewhereError struct {
+	Branch string
+	Path   string
+}
+
+func (e *BranchCheckedOutElsewhereError) Error() string {
+	return fmt.Sprintf("branch '%s' is already checked out at %s; a branch cannot be checked out in two worktrees", e.Branch, e.Path)
+}
+
+func (e *BranchCheckedOutElsewhereError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
+// WorktreeNotFoundError indicates no worktree holds the given branch.
+type WorktreeNotFoundError struct {
+	Branch string
+}
+
+func (e *WorktreeNotFoundError) Error() string {
+	return fmt.Sprintf("there is no worktree for branch '%s'", e.Branch)
+}
+
+func (e *WorktreeNotFoundError) ExitCode() ExitCode {
+	return ExitCodeBranchNotFound
+}
+
+// MainWorktreeError indicates an operation was aimed at the main worktree, which
+// git-flow never removes or detaches.
+type MainWorktreeError struct {
+	Operation string
+	Path      string
+}
+
+func (e *MainWorktreeError) Error() string {
+	return fmt.Sprintf("refusing to %s the main worktree at %s: git-flow never removes or detaches the main worktree", e.Operation, e.Path)
+}
+
+func (e *MainWorktreeError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
+// WorktreeDirtyError indicates a worktree has uncommitted or untracked changes
+// that removal would discard.
+type WorktreeDirtyError struct {
+	Branch string
+	Path   string
+}
+
+func (e *WorktreeDirtyError) Error() string {
+	return fmt.Sprintf("worktree for branch '%s' at %s has uncommitted or untracked changes; commit them or pass --force to discard them", e.Branch, e.Path)
+}
+
+func (e *WorktreeDirtyError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
 // MissingUserIdentityError indicates git user.name/user.email are not configured
 type MissingUserIdentityError struct{}
 
