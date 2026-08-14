@@ -209,29 +209,9 @@ func executeWorktreeAdd(repo *git.Repo, branch string, pathFlag string, noCD boo
 		return &errors.WorktreeExistsError{Branch: branch, Path: existing.Path}
 	}
 
-	target, err := resolveWorktreeTarget(cfg, repo, branch, pathFlag)
+	target, err := createWorktreeAt(cfg, repo, branch, pathFlag, false)
 	if err != nil {
 		return err
-	}
-	if occupied, err := pathIsOccupied(target); err != nil {
-		return &errors.GitError{Operation: "inspect target path", Err: err}
-	} else if occupied {
-		return &errors.WorktreePathOccupiedError{Path: target}
-	}
-
-	// A branch name with slashes computes a nested path, whose intermediate
-	// directories have to exist first.
-	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-		return &errors.GitError{Operation: "create worktree parent directory", Err: err}
-	}
-	if err := repo.AddWorktree(target, branch); err != nil {
-		return &errors.GitError{Operation: "add worktree", Err: err}
-	}
-
-	// A missing marker only means later cleanup leaves this worktree alone, so a
-	// failure here warns rather than failing an operation that already succeeded.
-	if err := worktree.MarkManaged(repo, branch); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
 
 	fmt.Printf("Created worktree for branch '%s' at %s\n", branch, target)
@@ -467,6 +447,99 @@ func resolveWorktreeTarget(cfg *config.Config, repo *git.Repo, branch string, pa
 		return "", &errors.GitError{Operation: "compute worktree path", Err: err}
 	}
 	return path, nil
+}
+
+// createWorktreeAt creates the worktree for branch and records git-flow as its
+// creator, returning the path it was created at.
+//
+// It is shared by 'worktree add' and 'checkout --worktree' so the two cannot
+// drift: the target resolution, the occupancy rules and the provenance marker
+// are decided in exactly one place. The caller is expected to have established
+// that the branch exists and has no worktree yet, and prints its own
+// confirmation — the wording differs between the two commands.
+//
+// clobber removes a plain directory that is in the way. It never removes
+// anything else; see clobberTarget.
+func createWorktreeAt(cfg *config.Config, repo *git.Repo, branch string, pathFlag string, clobber bool) (string, error) {
+	target, err := resolveWorktreeTarget(cfg, repo, branch, pathFlag)
+	if err != nil {
+		return "", err
+	}
+
+	occupied, err := pathIsOccupied(target)
+	if err != nil {
+		return "", &errors.GitError{Operation: "inspect target path", Err: err}
+	}
+	if occupied {
+		if !clobber {
+			return "", &errors.WorktreePathOccupiedError{Path: target}
+		}
+		if err := clobberTarget(repo, target); err != nil {
+			return "", err
+		}
+	}
+
+	// A branch name with slashes computes a nested path, whose intermediate
+	// directories have to exist first.
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return "", &errors.GitError{Operation: "create worktree parent directory", Err: err}
+	}
+	if err := repo.AddWorktree(target, branch); err != nil {
+		return "", &errors.GitError{Operation: "add worktree", Err: err}
+	}
+
+	// A missing marker only means later cleanup leaves this worktree alone, so a
+	// failure here warns rather than failing an operation that already succeeded.
+	if err := worktree.MarkManaged(repo, branch); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
+
+	return target, nil
+}
+
+// clobberTarget removes an occupied target path, but only when what is there is
+// a plain directory git-flow can afford to lose.
+//
+// The three refusals bound the blast radius of a mistyped path template. The
+// .git test uses Lstat and refuses on ANY result — the linked-worktree form is a
+// .git file and an ordinary clone is a .git directory, so a check that handled
+// only one of them would remove the other.
+func clobberTarget(repo *git.Repo, target string) error {
+	info, err := os.Stat(target)
+	if err != nil {
+		return &errors.GitError{Operation: "inspect target path", Err: err}
+	}
+	if !info.IsDir() {
+		return &errors.ClobberRefusedError{Path: target, Reason: "it is a file, not a directory"}
+	}
+
+	entries, err := repo.ListWorktrees()
+	if err != nil {
+		return &errors.GitError{Operation: "list worktrees", Err: err}
+	}
+	for _, entry := range entries {
+		if git.SamePath(entry.Path, target) {
+			return &errors.ClobberRefusedError{
+				Path:   target,
+				Reason: "it is a registered worktree of this repository; 'git flow worktree remove <branch>' removes it safely",
+			}
+		}
+	}
+
+	if _, err := os.Lstat(filepath.Join(target, ".git")); err == nil {
+		return &errors.ClobberRefusedError{
+			Path:   target,
+			Reason: "it contains a .git entry, so it looks like a repository",
+		}
+	} else if !os.IsNotExist(err) {
+		return &errors.GitError{Operation: "inspect target path", Err: err}
+	}
+
+	if err := os.RemoveAll(target); err != nil {
+		return &errors.GitError{Operation: "remove the directory in the way", Err: err}
+	}
+	fmt.Printf("Removed %s to make room for the worktree\n", target)
+	return nil
 }
 
 // pathIsOccupied reports whether something is already in the way at path. An
