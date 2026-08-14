@@ -1422,10 +1422,13 @@ func TestWorktreeAddWritesCDFile(t *testing.T) {
 }
 
 // TestWorktreeAddWithoutCDFileEnv covers scenario 24: with the variable unset the
-// command prints exactly its confirmation and cd hint, and nothing else.
+// command prints exactly its confirmation, cd hint and the shell-init tip.
+//
+// The tip is the third line as of #174 (SC-2): shell-init now exists, so both
+// commands that navigate point at it in the one state where it helps.
 // Steps:
 // 1. Runs 'git flow worktree add feature/x' with GIT_FLOW_CD_FILE explicitly empty
-// 2. Verifies stdout equals exactly the confirmation and cd hint lines, proving no machine-readable protocol line rides along
+// 2. Verifies stdout equals exactly the confirmation, cd hint and tip lines, proving no machine-readable protocol line rides along
 // 3. Verifies stderr is empty, so nothing was diverted there either
 func TestWorktreeAddWithoutCDFileEnv(t *testing.T) {
 	t.Parallel()
@@ -1441,12 +1444,75 @@ func TestWorktreeAddWithoutCDFileEnv(t *testing.T) {
 
 	wtPath := computedWorktreePath(t, dir, "feature/x")
 	want := "Created worktree for branch 'feature/x' at " + wtPath + "\n" +
-		"To switch to it: cd " + wtPath + "\n"
+		"To switch to it: cd " + wtPath + "\n" +
+		"Tip: run 'git flow shell-init <shell>' for automatic directory switching\n"
 	if stdout != want {
 		t.Errorf("Expected stdout %q, got %q", want, stdout)
 	}
 	if stderr != "" {
 		t.Errorf("Expected no output on stderr, got %q", stderr)
+	}
+}
+
+// TestWorktreeAddQuietSuppressesShellInitTip covers SC-2: --quiet drops the tip
+// and nothing else.
+// Steps:
+// 1. Creates a free feature/x branch
+// 2. Runs 'git flow worktree add feature/x --quiet' with GIT_FLOW_CD_FILE unset, the only state where the tip would print
+// 3. Verifies exit code 0 and that stdout equals exactly the confirmation and cd hint lines
+// 4. Verifies the worktree was created and stderr is empty
+func TestWorktreeAddQuietSuppressesShellInitTip(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+
+	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, nil, "worktree", "add", "feature/x", "--quiet")
+	if err != nil {
+		t.Fatalf("worktree add --quiet failed: %v\nStderr: %s", err, stderr)
+	}
+
+	wtPath := computedWorktreePath(t, dir, "feature/x")
+	want := "Created worktree for branch 'feature/x' at " + wtPath + "\n" +
+		"To switch to it: cd " + wtPath + "\n"
+	if stdout != want {
+		t.Errorf("Expected stdout %q, got %q", want, stdout)
+	}
+	if _, err := os.Stat(wtPath); err != nil {
+		t.Errorf("Expected the worktree to be created: %v", err)
+	}
+	if stderr != "" {
+		t.Errorf("Expected no output on stderr, got %q", stderr)
+	}
+}
+
+// TestWorktreeAddSuppressesTipWhenCDFileSet covers SC-2: with the channel in use
+// the wrapper is plainly installed already, so the tip is pointless.
+// Steps:
+// 1. Creates an empty GIT_FLOW_CD_FILE and a free feature/x branch
+// 2. Runs 'git flow worktree add feature/x' with the variable set
+// 3. Verifies exit code 0 and that stdout carries no Tip line
+// 4. Verifies the CD file holds the new worktree path
+func TestWorktreeAddSuppressesTipWhenCDFileSet(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	cdFile := cdFilePath(t)
+
+	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "worktree", "add", "feature/x")
+	if err != nil {
+		t.Fatalf("worktree add failed: %v\nStderr: %s", err, stderr)
+	}
+
+	if strings.Contains(stdout, "Tip:") {
+		t.Errorf("Expected no shell-init tip while the channel is in use, got %q", stdout)
+	}
+	want := computedWorktreePath(t, dir, "feature/x")
+	if got := readCDFile(t, cdFile); got != want {
+		t.Errorf("Expected CD file to hold %q, got %q", want, got)
 	}
 }
 
