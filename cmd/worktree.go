@@ -524,6 +524,12 @@ func createWorktreeAt(cfg *config.Config, repo *git.Repo, branch string, pathFla
 // .git test uses Lstat and refuses on ANY result — the linked-worktree form is a
 // .git file and an ordinary clone is a .git directory, so a check that handled
 // only one of them would remove the other.
+//
+// When target is a SYMLINK the guards below follow it while RemoveAll acts on the
+// link itself, so the object inspected and the object removed differ. That is not
+// destructive — Go's RemoveAll never descends through a symlink — and the blast
+// radius is exactly one dangling link, so the asymmetry is left alone rather than
+// traded for an Lstat that would refuse a symlinked worktree root outright.
 func clobberTarget(repo *git.Repo, target string) error {
 	info, err := os.Stat(target)
 	if err != nil {
