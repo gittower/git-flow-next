@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -18,18 +18,21 @@ var shellInitCmd = &cobra.Command{
 	Args:      cobra.ExactValidArgs(1),
 	ValidArgs: []string{"bash", "zsh", "fish"},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		var script string
 		switch args[0] {
 		case "bash":
-			_, err := fmt.Fprint(os.Stdout, bashShellInit)
-			return err
+			script = bashShellInit
 		case "zsh":
-			_, err := fmt.Fprint(os.Stdout, zshShellInit)
-			return err
+			script = zshShellInit
 		case "fish":
-			_, err := fmt.Fprint(os.Stdout, fishShellInit)
-			return err
+			script = fishShellInit
+		default:
+			return nil
 		}
-		return nil
+		// io.WriteString rather than a Fprint: the scripts contain printf
+		// directives of their own, which a formatting call would misread.
+		_, err := io.WriteString(os.Stdout, script)
+		return err
 	},
 }
 
