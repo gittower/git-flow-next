@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -105,7 +106,7 @@ func (r *Repo) WorktreeForBranch(branch string) (*WorktreeEntry, error) {
 func (r *Repo) AddWorktree(path string, branch string) error {
 	output, err := r.gitCmd("worktree", "add", path, branch).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to add worktree at %s: %s", path, strings.TrimSpace(string(output)))
+		return fmt.Errorf("failed to add worktree at %s: %s: %w", path, strings.TrimSpace(string(output)), err)
 	}
 	return nil
 }
@@ -126,7 +127,7 @@ func (r *Repo) RemoveWorktree(path string, force bool) error {
 
 	output, err := r.gitCmd(args...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to remove worktree at %s: %s", path, strings.TrimSpace(string(output)))
+		return fmt.Errorf("failed to remove worktree at %s: %s: %w", path, strings.TrimSpace(string(output)), err)
 	}
 	return nil
 }
@@ -135,7 +136,7 @@ func (r *Repo) RemoveWorktree(path string, force bool) error {
 func (r *Repo) PruneWorktrees() error {
 	output, err := r.gitCmd("worktree", "prune").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to prune worktrees: %s", strings.TrimSpace(string(output)))
+		return fmt.Errorf("failed to prune worktrees: %s: %w", strings.TrimSpace(string(output)), err)
 	}
 	return nil
 }
@@ -151,7 +152,7 @@ func (r *Repo) DetachWorktree(path string) error {
 
 	output, err := gitCommand(path, "checkout", "--detach").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to detach worktree at %s: %s", path, strings.TrimSpace(string(output)))
+		return fmt.Errorf("failed to detach worktree at %s: %s: %w", path, strings.TrimSpace(string(output)), err)
 	}
 	return nil
 }
@@ -160,12 +161,28 @@ func (r *Repo) DetachWorktree(path string) error {
 // untracked changes. It runs `git status --porcelain` with path as the working
 // directory — not this handle's work tree — so it answers for the worktree being
 // asked about rather than the one the command was invoked from.
+//
+// Only stdout is parsed. CombinedOutput would fold a stray git warning into the
+// porcelain the dirty check reads, so a clean worktree could report changes; git's
+// stderr is instead recovered from the failure for the error message.
 func (r *Repo) WorktreeHasChanges(path string) (bool, error) {
 	output, err := gitCommand(path, "status", "--porcelain").Output()
 	if err != nil {
+		if detail := stderrOf(err); detail != "" {
+			return false, fmt.Errorf("failed to check status of worktree at %s: %s: %w", path, detail, err)
+		}
 		return false, fmt.Errorf("failed to check status of worktree at %s: %w", path, err)
 	}
 	return strings.TrimSpace(string(output)) != "", nil
+}
+
+// stderrOf returns the trimmed stderr a failed command wrote, which Output()
+// records on the *exec.ExitError. It is empty for any other failure.
+func stderrOf(err error) string {
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		return strings.TrimSpace(string(exitErr.Stderr))
+	}
+	return ""
 }
 
 // refuseMainWorktree returns an error when path is the repository's main
