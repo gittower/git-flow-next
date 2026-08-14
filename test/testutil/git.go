@@ -116,13 +116,39 @@ func RunGitWithEnv(t *testing.T, dir string, env []string, args ...string) (stri
 	return string(output), nil
 }
 
+// gitFlowEnv assembles the environment for a git-flow subprocess.
+//
+// Order matters, and it is: the test process environment, then an empty
+// GIT_FLOW_CD_FILE, then the caller's extra env, then GIT_EDITOR=: last.
+// exec dedups env keeping the FINAL value of a key, so:
+//   - the ambient GIT_FLOW_CD_FILE of a developer who exported the variable is
+//     neutralized for every test that does not opt in — otherwise each run would
+//     write into that developer's file and the "variable unset" scenario would
+//     silently stop testing anything;
+//   - a caller that does pass GIT_FLOW_CD_FILE=<path> still wins, since its
+//     value comes after the neutralizing one;
+//   - GIT_EDITOR=: comes last so caller env can never make git interactive.
+func gitFlowEnv(env []string) []string {
+	full := append(os.Environ(), "GIT_FLOW_CD_FILE=")
+	full = append(full, env...)
+	return append(full, "GIT_EDITOR=:")
+}
+
 // RunGitFlow runs a git-flow command in the specified directory and returns its output
 func RunGitFlow(t *testing.T, dir string, args ...string) (string, error) {
+	return RunGitFlowWithEnv(t, dir, nil, args...)
+}
+
+// RunGitFlowWithEnv runs a git-flow command in the specified directory with extra
+// environment variables appended to the child process env, returning its combined
+// output. The extra env is scoped to the subprocess only — it never mutates the
+// test process environment — so concurrent tests can isolate settings like
+// GIT_FLOW_CD_FILE without leaking into each other (see RunGitFlow for the
+// no-extra-env case).
+func RunGitFlowWithEnv(t *testing.T, dir string, env []string, args ...string) (string, error) {
 	cmd := exec.Command(gitFlowPath, args...)
 	cmd.Dir = dir
-	// Set GIT_EDITOR to colon (:) to prevent interactive editor from opening
-	// The colon is a shell builtin that does nothing and returns success
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=:")
+	cmd.Env = gitFlowEnv(env)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -140,11 +166,17 @@ func RunGitFlow(t *testing.T, dir string, args ...string) (string, error) {
 // separately. Use it when a test has to prove which stream carried the output;
 // RunGitFlow merges the two and cannot distinguish them.
 func RunGitFlowStreams(t *testing.T, dir string, args ...string) (string, string, error) {
+	return RunGitFlowStreamsWithEnv(t, dir, nil, args...)
+}
+
+// RunGitFlowStreamsWithEnv runs a git-flow command with extra environment
+// variables and returns stdout and stderr separately. It is the stream-separating
+// counterpart of RunGitFlowWithEnv, for tests that need both an environment
+// (e.g. GIT_FLOW_CD_FILE) and proof of which stream carried the output.
+func RunGitFlowStreamsWithEnv(t *testing.T, dir string, env []string, args ...string) (string, string, error) {
 	cmd := exec.Command(gitFlowPath, args...)
 	cmd.Dir = dir
-	// Set GIT_EDITOR to colon (:) to prevent interactive editor from opening
-	// The colon is a shell builtin that does nothing and returns success
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=:")
+	cmd.Env = gitFlowEnv(env)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -212,6 +244,28 @@ func RunGitFlowInteractive(t *testing.T, dir string, input string, args ...strin
 		return string(output), err
 	}
 	return string(output), nil
+}
+
+// EvalPath returns path with all symlinks resolved, failing the test if it
+// cannot be resolved.
+//
+// It exists because SetupTestRepo returns the raw os.MkdirTemp path (on macOS
+// /var/folders/…) while git reports the resolved one (/private/var/folders/…),
+// so any comparison between a test-computed path and a git-reported path must
+// resolve both sides.
+//
+// IMPORTANT: call this only on a path that EXISTS — typically the repository
+// root — and build expectations by appending the remaining components with
+// filepath.Join. filepath.EvalSymlinks fails on a path that does not exist, so it
+// can never be applied to a computed-but-not-yet-created path (e.g. the worktree
+// path `worktree path` prints).
+func EvalPath(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("Failed to resolve symlinks for %q: %v", path, err)
+	}
+	return resolved
 }
 
 // SharedConfigPath returns the path to the committable .gitflow file at the root

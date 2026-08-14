@@ -59,6 +59,31 @@ func TestSharedManagedKeyPredicate(t *testing.T) {
 	}
 }
 
+// TestIsSharedManagedKeyExcludesWorktreeMarker verifies the worktree provenance
+// marker is machine-local state and never participates in the shared-managed set,
+// while gitflow.worktreePath stays shared-managed.
+// Steps:
+// 1. Calls config.IsSharedManagedKey on gitflow.worktree.feature/x.managed
+// 2. Repeats with a mixed-case spelling of the same key
+// 3. Verifies both are excluded (false)
+// 4. Verifies gitflow.worktreePath and gitflow.branch.feature.prefix remain included (true)
+func TestIsSharedManagedKeyExcludesWorktreeMarker(t *testing.T) {
+	t.Parallel()
+
+	if config.IsSharedManagedKey("gitflow.worktree.feature/x.managed") {
+		t.Error("expected gitflow.worktree.feature/x.managed to be excluded from the shared-managed set")
+	}
+	if config.IsSharedManagedKey("gitflow.Worktree.feature/x.Managed") {
+		t.Error("expected the mixed-case worktree marker to be excluded from the shared-managed set")
+	}
+	if !config.IsSharedManagedKey("gitflow.worktreePath") {
+		t.Error("expected gitflow.worktreePath to stay shared-managed")
+	}
+	if !config.IsSharedManagedKey("gitflow.branch.feature.prefix") {
+		t.Error("expected gitflow.branch.feature.prefix to stay shared-managed")
+	}
+}
+
 // TestCopySharedToLocalStaleRemovalPreservesLocalOnly covers scenario 39:
 // CopySharedToLocal removes stale managed keys but preserves local-only keys.
 // Steps:
