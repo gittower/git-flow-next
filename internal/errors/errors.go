@@ -614,13 +614,15 @@ func (e *WorktreeExistsError) ExitCode() ExitCode {
 }
 
 // WorktreePathOccupiedError indicates the target path exists but is not a
-// worktree, so creating one there would collide with unrelated content.
+// worktree, so creating one there would collide with unrelated content. The
+// occupant is either a file or a directory with content in it; an existing empty
+// directory is accepted as a target and never reaches this error.
 type WorktreePathOccupiedError struct {
 	Path string
 }
 
 func (e *WorktreePathOccupiedError) Error() string {
-	return fmt.Sprintf("path %s is occupied by an existing directory; move it aside or pass --path to choose another location", e.Path)
+	return fmt.Sprintf("path %s already exists and is not empty; move it aside or pass --path to choose another location", e.Path)
 }
 
 func (e *WorktreePathOccupiedError) ExitCode() ExitCode {
