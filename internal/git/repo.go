@@ -16,10 +16,12 @@ import (
 // transport failure.
 var ErrRemoteRefNotFound = errors.New("remote ref not found")
 
-// ErrNotFastForward is a sentinel error wrapped by the merge helpers when git itself
-// refuses a --ff-only merge because the merged ref is not a descendant of HEAD. Callers
+// ErrNotFastForward is a sentinel error wrapped by the merge helpers when a --ff-only
+// merge did not fast-forward the current branch onto the merged ref: either git refused
+// it outright because the merged ref is not a descendant of HEAD, or git reported success
+// without moving anything because the current branch was already ahead of it. Callers
 // check it with errors.Is to report the same actionable error as their own pre-merge
-// fast-forward check, instead of a generic merge failure.
+// fast-forward check, instead of a generic merge failure or a false success.
 var ErrNotFastForward = errors.New("merge is not a fast-forward")
 
 // BranchSyncStatus represents the sync status between a local branch and its remote tracking branch
@@ -598,6 +600,9 @@ func (r *Repo) MergeFFOnly(branch string) error {
 // noFF and ffOnly are opposite values of a single setting and are never both true;
 // each is passed on the command line, where it overrides the user's merge.ff config.
 // Passing neither leaves the decision to git, which is what the plain default means.
+//
+// Under ffOnly the result is verified as well as requested: git's own success is not
+// proof that the merged ref landed (see verifyFastForwardLanded).
 func (r *Repo) MergeWithOptions(branchName string, noFF bool, ffOnly bool, noVerify bool) error {
 	args := []string{"merge"}
 	if noFF {
@@ -616,7 +621,51 @@ func (r *Repo) MergeWithOptions(branchName string, noFF bool, ffOnly bool, noVer
 		return r.classifyMergeFailure(branchName, ffOnly, string(output))
 	}
 
+	return r.verifyFastForwardLanded(branchName, ffOnly)
+}
+
+// verifyFastForwardLanded checks the postcondition of a --ff-only merge git reported as
+// successful: the current branch must now point at the very object that was merged.
+//
+// Exit 0 is not enough on its own. When the current branch is *ahead* of the merged ref,
+// git reports "Already up to date." and succeeds without moving anything — the merged tip
+// never lands, and the branch keeps commits the merged ref does not have. That is exactly
+// the parent-ahead-only topology --ff-only exists to reject, and the callers' own
+// pre-merge ancestry check cannot rule it out because the parent may move between that
+// check and the merge. Comparing the two refs afterwards closes the window.
+//
+// Equality is the success case, so a merge that was already up to date because the two
+// refs are the *same* commit still passes. A ref that does not resolve leaves the
+// postcondition unverifiable and is reported as a failure rather than assumed to hold.
+func (r *Repo) verifyFastForwardLanded(branchName string, ffOnly bool) error {
+	if !ffOnly {
+		return nil
+	}
+
+	head, err := r.resolveCommit("HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to verify fast-forward of %q: %w", branchName, err)
+	}
+	merged, err := r.resolveCommit(branchName)
+	if err != nil {
+		return fmt.Errorf("failed to verify fast-forward of %q: %w", branchName, err)
+	}
+
+	if head != merged {
+		return fmt.Errorf("%w: merging %q left the current branch at %s rather than %s", ErrNotFastForward, branchName, head, merged)
+	}
 	return nil
+}
+
+// resolveCommit resolves a revision to the commit it names. The ^{commit} peel keeps an
+// annotated tag from resolving to its tag object, so two revisions naming the same commit
+// compare equal however they were written.
+func (r *Repo) resolveCommit(rev string) (string, error) {
+	output, err := r.gitCmd("rev-parse", "--verify", "--quiet", rev+"^{commit}").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve '%s': %w", rev, err)
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 // classifyMergeFailure turns a failed `git merge` into a typed error: a merge conflict,
@@ -668,7 +717,7 @@ func (r *Repo) MergeWithMessage(branchName string, message string, noFF bool, ff
 		return r.classifyMergeFailure(branchName, ffOnly, string(output))
 	}
 
-	return nil
+	return r.verifyFastForwardLanded(branchName, ffOnly)
 }
 
 // Commit creates a commit with the given message

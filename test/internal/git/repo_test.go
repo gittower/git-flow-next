@@ -1012,3 +1012,101 @@ func TestMergeWithOptionsFailureWithoutFFOnlyKeepsGenericError(t *testing.T) {
 		t.Errorf("Expected a generic merge error without --ff-only, got: %v", mergeErr)
 	}
 }
+
+// TestMergeWithOptionsFFOnlyRejectsAheadCurrentBranch verifies the postcondition on a
+// --ff-only merge git reported as successful: when the current branch is *ahead* of the
+// merged branch, git says "Already up to date." and exits 0 without moving anything, so
+// the merged tip never lands. That must come back as ErrNotFastForward rather than
+// success, or callers would treat the current branch's own tip as the merged one.
+// Steps:
+// 1. Creates a repository with commits c1 and c2, with "side" left behind at c1
+// 2. Calls MergeWithOptions("side", noFF=false, ffOnly=true, noVerify=false)
+// 3. Verifies the error wraps ErrNotFastForward
+// 4. Verifies HEAD is unchanged: nothing was merged either way
+func TestMergeWithOptionsFFOnlyRejectsAheadCurrentBranch(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+
+	repo := openRepo(t, dir)
+	headBefore, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+
+	mergeErr := repo.MergeWithOptions("side", false, true, false)
+	if mergeErr == nil {
+		t.Fatal("Expected a --ff-only merge of a branch the current one is ahead of to fail")
+	}
+	if !goerrors.Is(mergeErr, git.ErrNotFastForward) {
+		t.Errorf("Expected the error to wrap ErrNotFastForward, got: %v", mergeErr)
+	}
+
+	headAfter, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to re-read HEAD: %v", err)
+	}
+	if headAfter != headBefore {
+		t.Errorf("Expected HEAD unchanged. Before: %s After: %s", headBefore, headAfter)
+	}
+}
+
+// TestMergeWithMessageFFOnlyRejectsAheadCurrentBranch verifies the message-carrying merge
+// applies the same postcondition as its plain counterpart.
+// Steps:
+// 1. Creates a repository with commits c1 and c2, with "side" left behind at c1
+// 2. Calls MergeWithMessage("side", msg, noFF=false, ffOnly=true, noVerify=false)
+// 3. Verifies the error wraps ErrNotFastForward
+func TestMergeWithMessageFFOnlyRejectsAheadCurrentBranch(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+
+	repo := openRepo(t, dir)
+
+	mergeErr := repo.MergeWithMessage("side", "Merge side", false, true, false)
+	if mergeErr == nil {
+		t.Fatal("Expected a --ff-only merge of a branch the current one is ahead of to fail")
+	}
+	if !goerrors.Is(mergeErr, git.ErrNotFastForward) {
+		t.Errorf("Expected the error to wrap ErrNotFastForward, got: %v", mergeErr)
+	}
+}
+
+// TestMergeWithOptionsFFOnlyAcceptsEqualBranches verifies the postcondition does not
+// over-fire on the other merge git calls "already up to date": when the merged branch is
+// the very commit the current branch is on, nothing needs to land and the merge succeeds.
+// Steps:
+// 1. Creates a repository with commits c1 and c2, and a branch "equal" at HEAD
+// 2. Calls MergeWithOptions("equal", noFF=false, ffOnly=true, noVerify=false)
+// 3. Verifies it returns no error
+// 4. Verifies HEAD still equals the merged branch
+func TestMergeWithOptionsFFOnlyAcceptsEqualBranches(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+	if _, err := testutil.RunGit(t, dir, "branch", "equal"); err != nil {
+		t.Fatalf("Failed to create the equal branch: %v", err)
+	}
+
+	repo := openRepo(t, dir)
+
+	if mergeErr := repo.MergeWithOptions("equal", false, true, false); mergeErr != nil {
+		t.Fatalf("Expected a --ff-only merge of an equal branch to succeed, got: %v", mergeErr)
+	}
+
+	head, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+	equal, err := testutil.RunGit(t, dir, "rev-parse", "refs/heads/equal")
+	if err != nil {
+		t.Fatalf("Failed to read the equal branch: %v", err)
+	}
+	if head != equal {
+		t.Errorf("Expected HEAD to equal the merged branch. HEAD: %s equal: %s", head, equal)
+	}
+}

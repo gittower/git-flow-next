@@ -1763,3 +1763,88 @@ func TestFinishFFOnlyReportsGitRefusalAsGateFailure(t *testing.T) {
 		t.Error("Expected no git-flow merge state file after a rejected finish")
 	}
 }
+
+// landReleaseOnMainOnPostCheckout is a post-checkout hook that fast-forwards main onto
+// release/1.0.0 and then adds a commit of its own, the first time main is checked out.
+// git-flow checks the parent out inside the merge step, after the pre-merge re-check has
+// passed, so this stands in for a concurrent process that lands the topic and moves on
+// within that window. What it leaves behind is the parent-ahead-only topology: git's own
+// --ff-only merge reports "Already up to date" and exits 0 without moving the parent onto
+// the tested tip, so only a postcondition on the merge can catch it. The marker keeps it
+// to a single round; the branch guard keeps it off the topic branch's own checkouts.
+const landReleaseOnMainOnPostCheckout = `#!/bin/sh
+marker="$(git rev-parse --git-dir)/ffonly-post-checkout-fired"
+if [ ! -f "$marker" ] && [ "$(git symbolic-ref --short HEAD 2>/dev/null)" = "main" ]; then
+	: > "$marker"
+	git merge -q --ff-only refs/heads/release/1.0.0
+	git commit -q --allow-empty -m "Concurrent commit on main"
+fi
+exit 0
+`
+
+// TestFinishFFOnlyRejectsParentMovedAheadOfTopic tests that a parent moved *ahead* of the
+// topic after the pre-merge re-check is rejected, even though git's --ff-only merge
+// succeeds with "Already up to date" (R11). Without a postcondition on the merge, finish
+// would tag and delete the topic while the parent tip is a commit the topic never had.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates release/1.0.0 with one commit, so the gate passes
+// 3. Installs a post-checkout hook that lands the release on main and commits past it
+// 4. Runs 'git flow release finish 1.0.0 --ff-only'
+// 5. Verifies the hook produced the parent-ahead-only topology, so the test cannot pass vacuously
+// 6. Verifies the failure came from the merge step, past the parent checkout
+// 7. Verifies exit code 6 and the gate error rather than a generic merge failure
+// 8. Verifies release/1.0.0 survives at its original tip and no tag was created
+// 9. Verifies HEAD is back on the topic branch and no merge state remains
+func TestFinishFFOnlyRejectsParentMovedAheadOfTopic(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	tip := ffCapableRelease(t, dir)
+
+	createHookScript(t, dir, "post-checkout", landReleaseOnMainOnPostCheckout)
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0", "--ff-only")
+
+	// The hook has to have produced a main that is strictly ahead of the release tip:
+	// anything else — an unmoved main, or a diverged one — tests a different topology.
+	if got := revParse(t, dir, "refs/heads/main"); got == tip {
+		t.Fatalf("Expected the post-checkout hook to advance main past the release tip %s. Output: %s", tip, output)
+	}
+	if out, ancestryErr := testutil.RunGit(t, dir, "merge-base", "--is-ancestor", tip, "refs/heads/main"); ancestryErr != nil {
+		t.Fatalf("Expected the release tip to be an ancestor of main (parent ahead only): %v\nOutput: %s", ancestryErr, out)
+	}
+
+	if err == nil {
+		t.Fatalf("Expected finish to fail after the parent moved ahead of the topic. Output: %s", output)
+	}
+	assertExitCode(t, err, errors.ExitCodeValidationError)
+	if !strings.Contains(output, "Switched to branch 'main'") {
+		t.Errorf("Expected the finish to reach the merge step, so the post-merge window is the one under test. Output: %s", output)
+	}
+	assertGateMessage(t, output, "main", "release/1.0.0")
+	if strings.Contains(output, "failed to merge branch") {
+		t.Errorf("Expected the gate error rather than a generic merge failure. Output: %s", output)
+	}
+
+	if !testutil.BranchExists(t, dir, "release/1.0.0") {
+		t.Error("Expected release/1.0.0 to still exist after a rejected finish")
+	}
+	if got := revParse(t, dir, "refs/heads/release/1.0.0"); got != tip {
+		t.Errorf("Expected release/1.0.0 to stay at %s, got %s", tip, got)
+	}
+	tags, tagErr := testutil.RunGit(t, dir, "tag", "-l")
+	if tagErr != nil {
+		t.Fatalf("Failed to list tags: %v", tagErr)
+	}
+	if strings.TrimSpace(tags) != "" {
+		t.Errorf("Expected no tag to be created for a rejected finish, got: %q", tags)
+	}
+	if got := testutil.GetCurrentBranch(t, dir); got != "release/1.0.0" {
+		t.Errorf("Expected to be left on the topic branch, got %q", got)
+	}
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected no git-flow merge state file after a rejected finish")
+	}
+}
