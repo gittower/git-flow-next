@@ -193,14 +193,18 @@ func executeIntegrate(repo *git.Repo, name string, continueOp bool, abortOp bool
 	childStrategies := make(map[string]string)
 	for branchName, branch := range cfg.Branches {
 		if branch.Type == string(config.BranchTypeBase) && branch.Parent == parent && branch.AutoUpdate {
-			fmt.Printf("Found child base branch '%s' with auto-update enabled\n", branchName)
 			childBranches = append(childBranches, branchName)
 			childStrategies[branchName] = branch.DownstreamStrategy
 		}
 	}
 	// Ranging a map yields nondeterministic order; sort so children are updated
-	// in a stable, reproducible order (and so tests can assert per-child outcomes).
+	// in a stable, reproducible order (and so tests can assert per-child
+	// outcomes). Reporting happens after the sort so the output, the
+	// integration order and the persisted ChildBranches all agree.
 	sort.Strings(childBranches)
+	for _, branchName := range childBranches {
+		fmt.Printf("Found child base branch '%s' with auto-update enabled\n", branchName)
+	}
 
 	// Build and persist the integrate merge state. Base branches have no prefix,
 	// so FullBranchName == BranchName == the base name.
