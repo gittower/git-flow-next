@@ -204,6 +204,7 @@ git-flow-next implements shorthand commands that work on the current branch:
 | `-k/--keep` | ✅ | ✅ |
 | `-D/--force-delete` | ✅ | ✅ |
 | `--no-ff` / `--ff` | ✅ | ✅ |
+| `--ff-only` | ❌ | ✅ (git-flow-next exclusive; avh has `--[no]ff` but no fast-forward precondition) |
 | `-p/--preserve-merges` | ✅ | ✅ |
 | `-s/--sign` | ✅ | ✅ |
 | `--signingkey` | ✅ | ✅ |

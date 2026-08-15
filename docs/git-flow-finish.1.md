@@ -130,6 +130,9 @@ The operation maintains a persistent state file that allows it to resume after c
 **--ff**
 : Allow fast-forward merge when possible (default)
 
+**--ff-only**
+: Require that the merge into the parent branch be a fast-forward. This is a precondition, not a merge strategy: if the parent branch carries any commit the topic branch does not — whether the two have truly diverged or the parent is merely ahead — finish aborts before touching the repository, so what lands on the parent is exactly the tested topic tip. Integrate the parent into the topic branch, re-test, and finish again. Overrides git config setting `gitflow.<type>.finish.ff-only`.
+
 ### Remote Fetch Options
 
 **--fetch**
@@ -248,6 +251,7 @@ The following options modify strategy behavior:
 - **--preserve-merges**: Only valid with rebase operations
 - **--no-ff**: Forces creation of merge commits, even for fast-forward cases
 - **--ff**: Allows fast-forward merges when possible (default)
+- **--ff-only**: Requires the merge into the parent to be a fast-forward. `--ff`, `--no-ff` and `--ff-only` are three values of one setting, so combining `--ff-only` with either of the others is rejected, as is combining it with a squash strategy (squashing always creates a new commit). It constrains the upstream merge only — the automatic update of child base branches still creates merge commits as usual.
 
 ## MESSAGE PLACEHOLDERS
 
@@ -366,6 +370,11 @@ Create merge commit even for fast-forward:
 git flow feature finish my-feature --no-ff
 ```
 
+Refuse to finish unless the parent can be fast-forwarded:
+```bash
+git flow feature finish my-feature --ff-only
+```
+
 Override configured squash with regular merge:
 ```bash
 git flow feature finish my-feature --no-squash
@@ -479,6 +488,7 @@ git config gitflow.<type>.finish.rebase true
 git config gitflow.<type>.finish.squash false
 git config gitflow.<type>.finish.preserve-merges true
 git config gitflow.<type>.finish.no-ff true
+git config gitflow.<type>.finish.ff-only true
 
 # Tag creation overrides
 git config gitflow.<type>.finish.sign true
@@ -504,7 +514,7 @@ git config gitflow.<type>.finish.noverify true
 : Topic branch not found
 
 **2**
-: Git operation failed (conflicts, etc.)
+: Git operation failed (conflicts, etc.); also returned for conflicting options, such as `--ff-only` combined with `--no-ff`, `--ff`, or a squash strategy
 
 **3**
 : Invalid branch name or configuration
@@ -516,7 +526,7 @@ git config gitflow.<type>.finish.noverify true
 : Tag creation failed
 
 **6**
-: GPG signing failed
+: GPG signing failed; also returned when the `--ff-only` precondition fails because the parent branch carries commits the topic branch does not
 
 ## SEE ALSO
 
