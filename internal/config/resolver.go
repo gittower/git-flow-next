@@ -73,7 +73,8 @@ const (
 	// FFModeNoFF always creates a merge commit, even when a fast-forward is possible.
 	FFModeNoFF FastForwardMode = "no-ff"
 	// FFModeFFOnly requires that the merge be a fast-forward, failing otherwise.
-	// It is a finish-only value; integrate never resolves to it.
+	// It is a finish-only value: the ff-only config key is read in the "finish"
+	// namespace only, and integrate's flag mapping cannot produce it.
 	FFModeFFOnly FastForwardMode = "ff-only"
 )
 
@@ -460,8 +461,9 @@ func resolveFinishPreserveMerges(cfg *Config, branchType string, command string,
 // .no-ff and then .ff, preserving the long-standing rule that ff beats no-ff
 // within Layer 2, and finally .ff-only, so a configured ff-only wins over both
 // of them. The .ff-only key is read in the "finish" namespace only: integrate
-// shares this resolver but must never require a fast-forward. Layer 3 (the CLI
-// value) overrides whatever Layer 2 produced.
+// shares this resolver but must never require a fast-forward, and its flag
+// mapping (see ffModeFromNoFFSelection) cannot supply the value either. Layer 3
+// (the CLI value) overrides whatever Layer 2 produced, for every command.
 func resolveFFMode(cfg *Config, branchType string, command string, mergeOpts *MergeStrategyOptions) FastForwardMode {
 	// Layer 1: Default is to allow fast-forward
 	mode := FFModeFF
