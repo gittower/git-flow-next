@@ -16,6 +16,12 @@ import (
 // transport failure.
 var ErrRemoteRefNotFound = errors.New("remote ref not found")
 
+// ErrNotFastForward is a sentinel error wrapped by the merge helpers when git itself
+// refuses a --ff-only merge because the merged ref is not a descendant of HEAD. Callers
+// check it with errors.Is to report the same actionable error as their own pre-merge
+// fast-forward check, instead of a generic merge failure.
+var ErrNotFastForward = errors.New("merge is not a fast-forward")
+
 // BranchSyncStatus represents the sync status between a local branch and its remote tracking branch
 type BranchSyncStatus string
 
@@ -606,22 +612,39 @@ func (r *Repo) MergeWithOptions(branchName string, noFF bool, ffOnly bool, noVer
 	args = append(args, branchName)
 
 	output, err := r.gitCmd(args...).CombinedOutput()
-	outputStr := string(output)
-
 	if err != nil {
-		conflictOutput, _ := r.gitCmd("ls-files", "--unmerged").Output()
-
-		if len(conflictOutput) > 0 ||
-			strings.Contains(outputStr, "Automatic merge failed") ||
-			strings.Contains(outputStr, "CONFLICT") ||
-			strings.Contains(outputStr, "merge failed") ||
-			strings.Contains(outputStr, "needs merge") {
-			return fmt.Errorf("merge conflict: %s", outputStr)
-		}
-		return fmt.Errorf("failed to merge branch: %s", outputStr)
+		return r.classifyMergeFailure(branchName, ffOnly, string(output))
 	}
 
 	return nil
+}
+
+// classifyMergeFailure turns a failed `git merge` into a typed error: a merge conflict,
+// a fast-forward git refused to make, or a generic failure carrying git's output.
+//
+// The fast-forward case is derived from the refs rather than from git's "Not possible to
+// fast-forward, aborting." sentence, which a translated git renders differently: when
+// --ff-only was requested and the merged ref is not a descendant of HEAD, the merge
+// cannot have been a fast-forward, whatever else went wrong. A ref that does not resolve
+// leaves the ancestry unknown, and falls through to the generic error.
+func (r *Repo) classifyMergeFailure(branchName string, ffOnly bool, outputStr string) error {
+	conflictOutput, _ := r.gitCmd("ls-files", "--unmerged").Output()
+
+	if len(conflictOutput) > 0 ||
+		strings.Contains(outputStr, "Automatic merge failed") ||
+		strings.Contains(outputStr, "CONFLICT") ||
+		strings.Contains(outputStr, "merge failed") ||
+		strings.Contains(outputStr, "needs merge") {
+		return fmt.Errorf("merge conflict: %s", outputStr)
+	}
+
+	if ffOnly {
+		if fastForwardable, ancestryErr := r.IsAncestor("HEAD", branchName); ancestryErr == nil && !fastForwardable {
+			return fmt.Errorf("%w: %s", ErrNotFastForward, outputStr)
+		}
+	}
+
+	return fmt.Errorf("failed to merge branch: %s", outputStr)
 }
 
 // MergeWithMessage merges a branch into current branch with a custom commit message.
@@ -641,19 +664,8 @@ func (r *Repo) MergeWithMessage(branchName string, message string, noFF bool, ff
 	args = append(args, "-m", message, branchName)
 
 	output, err := r.gitCmd(args...).CombinedOutput()
-	outputStr := string(output)
-
 	if err != nil {
-		conflictOutput, _ := r.gitCmd("ls-files", "--unmerged").Output()
-
-		if len(conflictOutput) > 0 ||
-			strings.Contains(outputStr, "Automatic merge failed") ||
-			strings.Contains(outputStr, "CONFLICT") ||
-			strings.Contains(outputStr, "merge failed") ||
-			strings.Contains(outputStr, "needs merge") {
-			return fmt.Errorf("merge conflict: %s", outputStr)
-		}
-		return fmt.Errorf("failed to merge branch: %s", outputStr)
+		return r.classifyMergeFailure(branchName, ffOnly, string(output))
 	}
 
 	return nil

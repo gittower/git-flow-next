@@ -903,3 +903,112 @@ func TestIsAncestorErrorsOnUnknownRef(t *testing.T) {
 		t.Errorf("Expected work-tree status unchanged. Before: %q After: %q", statusBefore, statusAfter)
 	}
 }
+
+// =============================================================================
+// Merge failure classification (issue #210): git's own --ff-only refusal.
+// =============================================================================
+
+// setupDivergedBranches seeds a common base, then adds one commit to "side" and one
+// touching a different file to the current branch, so the two have truly diverged and
+// neither is an ancestor of the other. It leaves the repository on its initial branch.
+func setupDivergedBranches(t *testing.T, dir string) {
+	t.Helper()
+	setupAncestryRepo(t, dir)
+	if _, err := testutil.RunGit(t, dir, "checkout", "side"); err != nil {
+		t.Fatalf("Failed to checkout side: %v", err)
+	}
+	testutil.WriteFile(t, dir, "side.txt", "side")
+	if _, err := testutil.RunGit(t, dir, "add", "side.txt"); err != nil {
+		t.Fatalf("Failed to add side.txt: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "side"); err != nil {
+		t.Fatalf("Failed to commit side: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "checkout", "-"); err != nil {
+		t.Fatalf("Failed to checkout the initial branch: %v", err)
+	}
+}
+
+// TestMergeWithOptionsFFOnlyRefusalWrapsSentinel verifies that a --ff-only merge git
+// refuses comes back as ErrNotFastForward rather than a generic merge failure, so
+// callers can report the actionable error instead of exiting on a git error.
+// Steps:
+// 1. Creates a repository whose current branch and "side" have diverged
+// 2. Calls MergeWithOptions("side", noFF=false, ffOnly=true, noVerify=false)
+// 3. Verifies the error wraps ErrNotFastForward
+// 4. Verifies HEAD is unchanged: the refused merge committed nothing
+func TestMergeWithOptionsFFOnlyRefusalWrapsSentinel(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupDivergedBranches(t, dir)
+
+	repo := openRepo(t, dir)
+	headBefore, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+
+	mergeErr := repo.MergeWithOptions("side", false, true, false)
+	if mergeErr == nil {
+		t.Fatal("Expected a --ff-only merge of a diverged branch to fail")
+	}
+	if !goerrors.Is(mergeErr, git.ErrNotFastForward) {
+		t.Errorf("Expected the error to wrap ErrNotFastForward, got: %v", mergeErr)
+	}
+
+	headAfter, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to re-read HEAD: %v", err)
+	}
+	if headAfter != headBefore {
+		t.Errorf("Expected HEAD unchanged. Before: %s After: %s", headBefore, headAfter)
+	}
+}
+
+// TestMergeWithMessageFFOnlyRefusalWrapsSentinel verifies the message-carrying merge
+// classifies git's --ff-only refusal the same way its plain counterpart does.
+// Steps:
+// 1. Creates a repository whose current branch and "side" have diverged
+// 2. Calls MergeWithMessage("side", msg, noFF=false, ffOnly=true, noVerify=false)
+// 3. Verifies the error wraps ErrNotFastForward
+func TestMergeWithMessageFFOnlyRefusalWrapsSentinel(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupDivergedBranches(t, dir)
+
+	repo := openRepo(t, dir)
+
+	mergeErr := repo.MergeWithMessage("side", "Merge side", false, true, false)
+	if mergeErr == nil {
+		t.Fatal("Expected a --ff-only merge of a diverged branch to fail")
+	}
+	if !goerrors.Is(mergeErr, git.ErrNotFastForward) {
+		t.Errorf("Expected the error to wrap ErrNotFastForward, got: %v", mergeErr)
+	}
+}
+
+// TestMergeWithOptionsFailureWithoutFFOnlyKeepsGenericError verifies the sentinel is
+// confined to --ff-only merges: without it, a merge that cannot proceed still reports a
+// plain merge failure, so no caller mistakes an ordinary error for the gate condition.
+// Steps:
+// 1. Creates a repository whose current branch and "side" have diverged
+// 2. Calls MergeWithOptions for a branch that does not exist, without --ff-only
+// 3. Verifies the error does not wrap ErrNotFastForward
+func TestMergeWithOptionsFailureWithoutFFOnlyKeepsGenericError(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupDivergedBranches(t, dir)
+
+	repo := openRepo(t, dir)
+
+	mergeErr := repo.MergeWithOptions("no-such-branch", false, false, false)
+	if mergeErr == nil {
+		t.Fatal("Expected merging a missing branch to fail")
+	}
+	if goerrors.Is(mergeErr, git.ErrNotFastForward) {
+		t.Errorf("Expected a generic merge error without --ff-only, got: %v", mergeErr)
+	}
+}
