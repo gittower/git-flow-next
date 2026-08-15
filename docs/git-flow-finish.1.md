@@ -131,7 +131,7 @@ The operation maintains a persistent state file that allows it to resume after c
 : Allow fast-forward merge when possible (default)
 
 **--ff-only**
-: Require that the merge into the parent branch be a fast-forward. This is a precondition, not a merge strategy: if the parent branch carries any commit the topic branch does not — whether the two have truly diverged or the parent is merely ahead — finish runs the configured fetch and then aborts before touching any local branch, tag or the working tree, so what lands on the parent is exactly the tested topic tip. Integrate the parent into the topic branch, re-test, and finish again. Overrides git config setting `gitflow.<type>.finish.ff-only`.
+: Require that the merge into the parent branch be a fast-forward. This is a precondition, not a merge strategy: if the parent branch carries any commit the topic branch does not — whether the two have truly diverged or the parent is merely ahead — finish runs the configured fetch and then aborts before touching any local branch, tag or the working tree, so what lands on the parent is exactly the tested topic tip. Integrate the parent into the topic branch, re-test, and finish again. The condition is re-checked immediately before the merge, so a parent branch advanced in the meantime — by the pre-finish hook or by a concurrent process — is caught as well; that later abort still performs no merge, creates no tag and deletes no branch, but it is not a no-op, because the pre-finish hook has already run and whatever it did stands. Overrides git config setting `gitflow.<type>.finish.ff-only`.
 
 ### Remote Fetch Options
 

@@ -1246,12 +1246,16 @@ func TestFinishFFAndNoFFFlagsStillResolveToNoFF(t *testing.T) {
 }
 
 // =============================================================================
-// Ref resolution regressions (R1-R2)
+// Ref resolution and time-of-check regressions (R1-R4)
 // =============================================================================
 //
-// These pin the gate to refs/heads/*: Git's revision parser resolves
+// R1 and R2 pin the gate to refs/heads/*: Git's revision parser resolves
 // refs/tags/<name> before refs/heads/<name>, so an unqualified comparison would
-// judge a same-named tag instead of the branch it is supposed to move.
+// judge a same-named tag instead of the branch. R3 and R4 pin the re-validation
+// that runs immediately before the upstream merge: the pre-finish hook executes
+// between the precondition gate and the merge, and a hook that advances the
+// *parent* would otherwise silently produce a merge commit, while a hook that
+// advances the *topic* (a version bump, say) must keep working.
 
 // TestFinishFFOnlyGateReadsParentBranchNotTag tests that the gate compares the parent
 // branch and not a tag that happens to share its name (R1).
@@ -1334,5 +1338,110 @@ func TestFinishFFOnlyGateReadsTopicBranchNotTag(t *testing.T) {
 	}
 	if !testutil.BranchExists(t, dir, "feature/f1") {
 		t.Error("Expected feature/f1 to still exist after a rejected finish")
+	}
+}
+
+// TestFinishFFOnlyRejectsParentMovedByPreFinishHook tests that a parent advanced between
+// the precondition gate and the merge is caught, instead of silently producing a merge
+// commit (R3).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates feature/f1 with one commit, so the gate passes at check time
+// 3. Installs a pre-flow-feature-finish hook that adds a commit to develop
+// 4. Runs 'git flow feature finish f1 --ff-only'
+// 5. Verifies the hook actually moved develop, so the test cannot pass vacuously
+// 6. Verifies exit code 6 and the gate error naming develop and feature/f1
+// 7. Verifies develop carries no merge commit and none of the feature's content
+// 8. Verifies feature/f1 survives and no merge state is left behind
+func TestFinishFFOnlyRejectsParentMovedByPreFinishHook(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "feature", "start", "f1"); err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, out)
+	}
+	commitFile(t, dir, "feature.txt", "feature content", "Add feature.txt")
+	developBefore := revParse(t, dir, "refs/heads/develop")
+
+	// The hook runs with the topic branch checked out, so it advances develop by
+	// writing the ref directly rather than by checking it out.
+	createHookScript(t, dir, "pre-flow-feature-finish", `#!/bin/sh
+set -e
+parent=$(git rev-parse refs/heads/develop)
+tree=$(git rev-parse "$parent^{tree}")
+new=$(git commit-tree "$tree" -p "$parent" -m "Hook advanced develop")
+git update-ref refs/heads/develop "$new" "$parent"
+`)
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "f1", "--ff-only")
+
+	developAfter := revParse(t, dir, "refs/heads/develop")
+	if developAfter == developBefore {
+		t.Fatalf("Expected the pre-finish hook to advance develop; it is still %s. Output: %s", developBefore, output)
+	}
+	if err == nil {
+		t.Fatalf("Expected finish to fail after the hook advanced develop. Output: %s", output)
+	}
+	assertExitCode(t, err, errors.ExitCodeValidationError)
+	assertGateMessage(t, output, "develop", "feature/f1")
+	if got := commitParentCount(t, dir, "refs/heads/develop"); got != 1 {
+		t.Errorf("Expected no merge commit on develop, got a tip with %d parents", got)
+	}
+	if fileOnBranch(t, dir, "refs/heads/develop", "feature.txt") {
+		t.Error("Expected develop not to carry the feature content after the rejected merge")
+	}
+	if !testutil.BranchExists(t, dir, "feature/f1") {
+		t.Error("Expected feature/f1 to still exist after a rejected finish")
+	}
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected no git-flow merge state file after a rejected finish")
+	}
+}
+
+// TestFinishFFOnlyAcceptsTopicMovedByPreFinishHook tests that a topic advanced by the
+// pre-finish hook still fast-forwards: the parent remains an ancestor, so the guarantee
+// holds and the re-validation must not fire (R4).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates feature/f1 with one commit
+// 3. Installs a pre-flow-feature-finish hook that commits a version bump on the topic
+// 4. Runs 'git flow feature finish f1 --ff-only'
+// 5. Verifies the finish succeeds
+// 6. Verifies develop advanced by fast-forward and carries both the feature and the bump
+func TestFinishFFOnlyAcceptsTopicMovedByPreFinishHook(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "feature", "start", "f1"); err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, out)
+	}
+	commitFile(t, dir, "feature.txt", "feature content", "Add feature.txt")
+	tipBefore := revParse(t, dir, "refs/heads/feature/f1")
+
+	// The topic branch is checked out while the pre-finish hook runs, so an ordinary
+	// commit lands on it — the classic version-bump hook.
+	createHookScript(t, dir, "pre-flow-feature-finish", `#!/bin/sh
+set -e
+echo 1.2.3 > version.txt
+git add version.txt
+git commit -q -m "Hook bumped the version"
+`)
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "f1", "--ff-only")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed when the hook advances the topic: %v\nOutput: %s", err, output)
+	}
+
+	developAfter := revParse(t, dir, "refs/heads/develop")
+	if developAfter == tipBefore {
+		t.Fatalf("Expected the pre-finish hook to advance the topic past %s before the merge", tipBefore)
+	}
+	if got := commitParentCount(t, dir, "refs/heads/develop"); got != 1 {
+		t.Errorf("Expected develop's tip to have exactly one parent (fast-forward), got %d", got)
+	}
+	if !fileOnBranch(t, dir, "refs/heads/develop", "feature.txt") || !fileOnBranch(t, dir, "refs/heads/develop", "version.txt") {
+		t.Error("Expected develop to carry both the feature content and the hook's version bump")
 	}
 }

@@ -272,6 +272,10 @@ func executeFinish(repo *git.Repo, branchType string, name string, continueOp bo
 // an ancestor of the topic branch, so what lands on the parent is exactly the
 // tested topic tip. Equal branches satisfy it. It mutates nothing.
 //
+// It runs twice per finish: once in executeFinish as the precondition gate, and
+// again in handleMergeStep right before the merge, to catch a parent moved in
+// between (see the comment there).
+//
 // The parent's existence is verified here because the gate runs ahead of
 // finishBranch's own check, so a misconfigured parent keeps the error and exit
 // code it produces today instead of surfacing as a raw merge-base failure.
@@ -665,6 +669,30 @@ func handleAbort(repo *git.Repo, state *mergestate.MergeState) error {
 
 // handleMergeStep handles the merge step of the finish operation
 func handleMergeStep(repo *git.Repo, cfg *config.Config, state *mergestate.MergeState, branchConfig config.BranchConfig, resolvedOptions *config.ResolvedFinishOptions) error {
+	// Re-check the --ff-only precondition immediately before the merge. The gate in
+	// executeFinish is a time-of-check: the pre-finish hook runs between the two, and a
+	// hook (or a concurrent process) that advances the *parent* would make this merge a
+	// merge commit — exactly what --ff-only exists to prevent. A hook that advances the
+	// *topic*, the common version-bump case, keeps the parent an ancestor and still
+	// fast-forwards, so it passes here as before.
+	//
+	// Unlike the precondition gate this is not a "nothing was mutated" failure: the
+	// pre-finish hook has already run and whatever it did stands. Nothing has been
+	// merged, though, so there is no operation to resume — the merge state written by
+	// finishBranch is cleared rather than left for --continue.
+	//
+	// Only the initial finish reaches this code. --continue completes the merge in
+	// handleContinue and advances the step before re-entering the state machine, and
+	// integrate can never resolve to the ff-only mode.
+	if resolvedOptions.RequireFastForward {
+		if ffErr := requireFastForwardable(repo, state.FullBranchName, state.ParentBranch); ffErr != nil {
+			if clearErr := mergestate.ClearMergeState(repo); clearErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to clear merge state: %v\n", clearErr)
+			}
+			return ffErr
+		}
+	}
+
 	// Checkout target branch
 	err := repo.Checkout(state.ParentBranch)
 	if err != nil {
