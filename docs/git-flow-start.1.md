@@ -58,7 +58,7 @@ By default, start fetches from the remote before creating the branch, so its rem
 
 A worktree lets the new branch live in its own directory, so an in-progress branch does not have to be stashed away before another one can be started. Because Git allows a branch in only one worktree at a time, **start --worktree** creates the branch **without checking it out** where you ran it: the invocation worktree stays on the branch it was on, and the new branch is checked out in the new worktree.
 
-The worktree's path comes from the **gitflow.worktreePath** template unless **--worktree-path** overrides it. Missing parent directories are created. An existing **empty** directory is accepted as the target, matching plain **git worktree add**; a file or a directory with content in it is refused, and nothing is created.
+The worktree's path comes from the **gitflow.worktreePath** template unless **--worktree-path** overrides it. Missing parent directories are created. An existing **empty** directory is accepted as the target, matching plain **git worktree add**; a file or a directory with content in it is refused, and nothing is created. A **--worktree-path** inside the repository work tree is allowed, again matching Git's own behavior; the worktree simply shows up as an untracked directory.
 
 The target path is validated **before** anything happens — before the fetch and before the `pre-flow-<type>-start` hook — so a command that cannot succeed leaves no branch, no worktree, no provenance marker and no side effect behind. One consequence is worth knowing: when the target path is occupied **and** the branch already exists, the occupied path is what you are told about (exit status **6**), not the existing branch. Clear the path first.
 
