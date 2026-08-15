@@ -139,9 +139,13 @@ func validateWorktreeTarget(cfg *config.Config, repo *git.Repo, branch string, p
 	// checked out, so there is nothing a second worktree could hold. CreateBranch
 	// would also RENAME that branch rather than create one, which no worktree
 	// could follow.
-	// HasCommits reports an unverifiable HEAD as (false, nil) and has no other
-	// failure mode, so there is no error path to handle here.
-	hasCommits, _ := repo.HasCommits()
+	// HasCommits reports an unverifiable HEAD as (false, nil) today, so this
+	// error path is currently unreachable. It is handled anyway, because every
+	// other caller does and the signature is what callers may rely on.
+	hasCommits, err := repo.HasCommits()
+	if err != nil {
+		return &errors.GitError{Operation: "check for commits", Err: err}
+	}
 	if !hasCommits {
 		return &errors.InvalidInputError{Message: "cannot create a worktree in a repository with no commits; commit first, then start the branch"}
 	}
