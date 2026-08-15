@@ -768,11 +768,29 @@ func handleUpdateChildrenStep(repo *git.Repo, cfg *config.Config, state *mergest
 	return nil
 }
 
+// landingBranch returns the branch a completed finish leaves the user on: the
+// last auto-update child of the parent that the integration sequence processed,
+// or the parent itself when the parent has no auto-update children. Children are
+// collected from configuration in sorted order and persisted in the merge state,
+// so the result is stable across runs and identical on --continue even if the
+// configuration changed while conflicts were being resolved.
+func landingBranch(state *mergestate.MergeState) string {
+	if n := len(state.ChildBranches); n > 0 {
+		return state.ChildBranches[n-1]
+	}
+	return state.ParentBranch
+}
+
 // handleDeleteBranchStep handles branch deletion
 func handleDeleteBranchStep(repo *git.Repo, cfg *config.Config, state *mergestate.MergeState, resolvedOptions *config.ResolvedFinishOptions) error {
-	// Ensure we're on the parent branch before deletion
-	if err := repo.Checkout(state.ParentBranch); err != nil {
-		return &errors.GitError{Operation: fmt.Sprintf("checkout parent branch '%s'", state.ParentBranch), Err: err}
+	// Land on the integration branch: the last auto-update child of the parent,
+	// or the parent when there is none. The checkout also guarantees HEAD is not
+	// on the branch about to be deleted. It is a no-op in every normal path (HEAD
+	// is already there by construction) and only does real work when --continue
+	// resumes directly at this step.
+	landing := landingBranch(state)
+	if err := repo.Checkout(landing); err != nil {
+		return &errors.GitError{Operation: fmt.Sprintf("checkout branch '%s'", landing), Err: err}
 	}
 
 	// Clear the merge state before branch deletion. By this point all merges,
@@ -814,6 +832,7 @@ func handleDeleteBranchStep(repo *git.Repo, cfg *config.Config, state *mergestat
 	}
 
 	fmt.Printf("Successfully finished branch '%s' and updated %d child base branches\n", state.FullBranchName, len(state.UpdatedBranches))
+	fmt.Printf("You are now on branch '%s'\n", landing)
 
 	// Run post-hook after successful completion
 	hookCtx := hooks.HookContext{

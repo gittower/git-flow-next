@@ -209,7 +209,9 @@ git flow feature finish my-feature --rebase
    → Update branches with autoUpdate=true
    → On conflict: save state (including current child), exit
 5. STATE: DELETE_BRANCH
+   → Checkout the landing branch (last auto-update child of the parent, else the parent)
    → Delete local/remote (unless --keep)
+   → Report the branch you are left on
 ```
 
 ### Continue After Conflict
