@@ -1445,3 +1445,71 @@ git commit -q -m "Hook bumped the version"
 		t.Error("Expected develop to carry both the feature content and the hook's version bump")
 	}
 }
+
+// =============================================================================
+// Merge-level enforcement (R5-R6)
+// =============================================================================
+//
+// These cover the user's own `merge.ff = false`, which turns every git merge
+// into a merge commit. No amount of checking beforehand changes what that merge
+// does, so the upstream merge itself has to carry --ff-only.
+
+// TestFinishFFOnlyOverridesMergeFFFalseConfig tests that --ff-only still fast-forwards
+// when the repository sets merge.ff=false (R5).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Sets merge.ff false, so an unqualified git merge always creates a merge commit
+// 3. Creates release/1.0.0 with one commit, leaving main untouched
+// 4. Runs 'git flow release finish 1.0.0 --ff-only'
+// 5. Verifies success, main equal to the release tip, and a single-parent tip
+func TestFinishFFOnlyOverridesMergeFFFalseConfig(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "merge.ff", "false"); err != nil {
+		t.Fatalf("Failed to set merge.ff: %v", err)
+	}
+	tip := ffCapableRelease(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0", "--ff-only")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed: %v\nOutput: %s", err, output)
+	}
+	if got := revParse(t, dir, "refs/heads/main"); got != tip {
+		t.Errorf("Expected main to equal the release tip %s, got %s", tip, got)
+	}
+	if got := commitParentCount(t, dir, "refs/heads/main"); got != 1 {
+		t.Errorf("Expected main's tip to have exactly one parent (fast-forward), got %d", got)
+	}
+}
+
+// TestFinishFFOnlyWithRebaseOverridesMergeFFFalseConfig tests the same for the rebase
+// strategy, whose merge is a second call site (R6).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Sets merge.ff false
+// 3. Creates release/1.0.0 with one commit, leaving main untouched
+// 4. Runs 'git flow release finish 1.0.0 --ff-only --rebase'
+// 5. Verifies success, main equal to the release tip, and a single-parent tip
+func TestFinishFFOnlyWithRebaseOverridesMergeFFFalseConfig(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if _, err := testutil.RunGit(t, dir, "config", "merge.ff", "false"); err != nil {
+		t.Fatalf("Failed to set merge.ff: %v", err)
+	}
+	tip := ffCapableRelease(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0", "--ff-only", "--rebase")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed: %v\nOutput: %s", err, output)
+	}
+	if got := revParse(t, dir, "refs/heads/main"); got != tip {
+		t.Errorf("Expected main to equal the release tip %s, got %s", tip, got)
+	}
+	if got := commitParentCount(t, dir, "refs/heads/main"); got != 1 {
+		t.Errorf("Expected main's tip to have exactly one parent (fast-forward), got %d", got)
+	}
+}

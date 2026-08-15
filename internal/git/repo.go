@@ -587,10 +587,18 @@ func (r *Repo) MergeFFOnly(branch string) error {
 }
 
 // MergeWithOptions merges a branch into current branch with optional no-fast-forward
-func (r *Repo) MergeWithOptions(branchName string, noFF bool, noVerify bool) error {
+// or fast-forward-only handling.
+//
+// noFF and ffOnly are opposite values of a single setting and are never both true;
+// each is passed on the command line, where it overrides the user's merge.ff config.
+// Passing neither leaves the decision to git, which is what the plain default means.
+func (r *Repo) MergeWithOptions(branchName string, noFF bool, ffOnly bool, noVerify bool) error {
 	args := []string{"merge"}
 	if noFF {
 		args = append(args, "--no-ff")
+	}
+	if ffOnly {
+		args = append(args, "--ff-only")
 	}
 	if noVerify {
 		args = append(args, "--no-verify")
@@ -616,11 +624,16 @@ func (r *Repo) MergeWithOptions(branchName string, noFF bool, noVerify bool) err
 	return nil
 }
 
-// MergeWithMessage merges a branch into current branch with a custom commit message
-func (r *Repo) MergeWithMessage(branchName string, message string, noFF bool, noVerify bool) error {
+// MergeWithMessage merges a branch into current branch with a custom commit message.
+// noFF and ffOnly behave as in MergeWithOptions. A fast-forward creates no commit,
+// so git ignores the message in that case.
+func (r *Repo) MergeWithMessage(branchName string, message string, noFF bool, ffOnly bool, noVerify bool) error {
 	args := []string{"merge"}
 	if noFF {
 		args = append(args, "--no-ff")
+	}
+	if ffOnly {
+		args = append(args, "--ff-only")
 	}
 	if noVerify {
 		args = append(args, "--no-verify")

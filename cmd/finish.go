@@ -461,11 +461,15 @@ func handleContinue(repo *git.Repo, cfg *config.Config, state *mergestate.MergeS
 			if mergeOptions != nil && mergeOptions.MergeMessage != nil && *mergeOptions.MergeMessage != "" {
 				mergeMsg = *mergeOptions.MergeMessage
 			}
+			// The fast-forward requirement is deliberately not applied on --continue:
+			// a resumed operation never re-evaluates the gate, and an ff-only finish
+			// cannot reach this path anyway (the gate makes its rebase a no-op, so
+			// there is no conflict to resolve and resume from).
 			if mergeMsg != "" {
 				expandedMsg := util.ExpandMessagePlaceholders(mergeMsg, state.FullBranchName, state.ParentBranch)
-				err = repo.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, state.NoVerify)
+				err = repo.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, false, state.NoVerify)
 			} else {
-				err = repo.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, state.NoVerify)
+				err = repo.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, false, state.NoVerify)
 			}
 			if err != nil {
 				return &errors.GitError{Operation: "merge rebased branch", Err: err}
@@ -684,6 +688,11 @@ func handleMergeStep(repo *git.Repo, cfg *config.Config, state *mergestate.Merge
 	// Only the initial finish reaches this code. --continue completes the merge in
 	// handleContinue and advances the step before re-entering the state machine, and
 	// integrate can never resolve to the ff-only mode.
+	//
+	// The merge below additionally passes --ff-only to git, which enforces the same
+	// invariant atomically and overrides a repository-level merge.ff=false. This check
+	// remains because it produces the actionable error, and because it fails before the
+	// parent branch is even checked out.
 	if resolvedOptions.RequireFastForward {
 		if ffErr := requireFastForwardable(repo, state.FullBranchName, state.ParentBranch); ffErr != nil {
 			if clearErr := mergestate.ClearMergeState(repo); clearErr != nil {
@@ -726,9 +735,9 @@ func handleMergeStep(repo *git.Repo, cfg *config.Config, state *mergestate.Merge
 			// Use custom merge message if provided, otherwise use default
 			if resolvedOptions.MergeMessage != "" {
 				expandedMsg := util.ExpandMessagePlaceholders(resolvedOptions.MergeMessage, state.FullBranchName, state.ParentBranch)
-				mergeErr = repo.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, resolvedOptions.NoVerify)
+				mergeErr = repo.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, resolvedOptions.RequireFastForward, resolvedOptions.NoVerify)
 			} else {
-				mergeErr = repo.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, resolvedOptions.NoVerify)
+				mergeErr = repo.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, resolvedOptions.RequireFastForward, resolvedOptions.NoVerify)
 			}
 		}
 	case strategySquash:
@@ -736,9 +745,9 @@ func handleMergeStep(repo *git.Repo, cfg *config.Config, state *mergestate.Merge
 	case strategyMerge:
 		if resolvedOptions.MergeMessage != "" {
 			expandedMsg := util.ExpandMessagePlaceholders(resolvedOptions.MergeMessage, state.FullBranchName, state.ParentBranch)
-			mergeErr = repo.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, resolvedOptions.NoVerify)
+			mergeErr = repo.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, resolvedOptions.RequireFastForward, resolvedOptions.NoVerify)
 		} else {
-			mergeErr = repo.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, resolvedOptions.NoVerify)
+			mergeErr = repo.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, resolvedOptions.RequireFastForward, resolvedOptions.NoVerify)
 		}
 	default:
 		return &errors.GitError{Operation: fmt.Sprintf("unknown merge strategy: %s", resolvedOptions.MergeStrategy), Err: nil}
