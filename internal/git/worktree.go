@@ -227,16 +227,28 @@ func IsWithin(child, parent string) bool {
 }
 
 // foldPath returns p in the form used for comparison: unchanged where path
-// names are case-sensitive, upper-cased where they are not. Windows path names
-// ignore case, so two spellings of one location must compare equal there, while
-// Linux and a case-sensitive macOS volume both distinguish case and must not.
+// names are case-sensitive, upper-cased where they are not.
 //
-// The fold is to UPPER case, not lower, because that is the direction Windows
-// itself folds in: NTFS and exFAT carry an upcase table and ordinal
-// case-insensitive comparison upper-cases both sides. The two differ on
-// characters whose lowercase forms are distinct but whose uppercase form is
-// shared — Greek final sigma is the reachable example, where ToLower leaves
-// "ς" and "σ" different while Windows considers both "Σ" and the paths equal.
+// The fold is to UPPER case because that is the direction Windows folds in:
+// NTFS and exFAT carry an upcase table and ordinal case-insensitive comparison
+// upper-cases both sides. The directions disagree on characters whose lowercase
+// forms are distinct but whose uppercase form is shared — Greek final sigma is
+// the reachable example, where lowercasing leaves "ς" and "σ" different while
+// Windows upper-cases both to "Σ" and treats the paths as one location. Neither
+// direction reproduces the volume's table exactly; upper is the one that fails
+// on rarer characters and in the direction Windows itself works.
+//
+// The gate is Windows-only, which leaves a residual gap: a macOS volume is
+// case-insensitive by default and has the same defect, but case sensitivity
+// there is a per-volume property that runtime.GOOS cannot decide. Closing it
+// needs per-volume detection and is deliberately left alone here.
+//
+// Folding still matters even though EvalSymlinks rewrites existing components
+// to their on-disk casing on Windows: that canonicalization only reaches paths
+// that exist. The comparisons here routinely see paths that do not — a computed
+// worktree path, a stale entry whose directory is gone, an EvalSymlinks failure
+// on a network share — and there resolvePath's fallback preserves the caller's
+// raw casing all the way to the comparison.
 //
 // Only comparisons see the folded form. Paths stored, passed to git or reported
 // to the user keep the casing they arrived with.

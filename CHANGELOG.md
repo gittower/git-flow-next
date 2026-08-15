@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The EXIT STATUS section of the `git flow <type> checkout` manpage documented codes 1/2/3/4 that the command has never returned; it now documents the actual 1/2/3/5/6
+- Worktree path comparison ignores case on Windows, where two spellings of one location differing only in case were treated as different paths. The refusal to remove or detach the main worktree, the refusal to delete a registered worktree, and the detection that the shell is standing inside a worktree being removed all failed to fire on a case mismatch
 
 ## [2.0.0] - 2026-08-09
 
