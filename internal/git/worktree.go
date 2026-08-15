@@ -4,8 +4,14 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
+
+// isWindows selects case-insensitive path comparison. It is a variable rather
+// than a runtime.GOOS test at each use so tests can exercise both branches on
+// any host, matching the seam of the same name in internal/hooks.
+var isWindows = runtime.GOOS == "windows"
 
 // WorktreeEntry is one record of `git worktree list --porcelain`: a worktree
 // registered with the repository, whether it is the main one or a linked one.
