@@ -809,6 +809,52 @@ func TestIsAncestorTrueForEqualRefs(t *testing.T) {
 	}
 }
 
+// TestIsAncestorTrueForGenuineAncestor verifies IsAncestor reports true when the
+// first ref is a strict ancestor of the second — the case the finish --ff-only
+// gate lets through.
+// Steps:
+// 1. Creates a repository with commits c1 and c2 plus a side branch at c1
+// 2. Calls IsAncestor("side", "HEAD"), where side is c1 and HEAD is c2
+// 3. Verifies it returns (true, nil)
+func TestIsAncestorTrueForGenuineAncestor(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+
+	repo := openRepo(t, dir)
+	ok, err := repo.IsAncestor("side", "HEAD")
+	if err != nil {
+		t.Fatalf("IsAncestor returned an error for a genuine ancestor: %v", err)
+	}
+	if !ok {
+		t.Error("Expected IsAncestor to report true when side (c1) precedes HEAD (c2)")
+	}
+}
+
+// TestIsAncestorFalseForNonAncestor verifies IsAncestor reports (false, nil) when
+// the first ref carries a commit the second lacks. git exits 1 here, and that
+// branch is what the finish --ff-only gate turns into its rejection.
+// Steps:
+// 1. Creates a repository with commits c1 and c2 plus a side branch at c1
+// 2. Calls IsAncestor("HEAD", "side"), where HEAD is c2 and side is c1
+// 3. Verifies it returns false with a nil error, not an error
+func TestIsAncestorFalseForNonAncestor(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+
+	repo := openRepo(t, dir)
+	ok, err := repo.IsAncestor("HEAD", "side")
+	if err != nil {
+		t.Fatalf("Expected a plain false for a non-ancestor, got error: %v", err)
+	}
+	if ok {
+		t.Error("Expected IsAncestor to report false when HEAD (c2) does not precede side (c1)")
+	}
+}
+
 // TestIsAncestorErrorsOnUnknownRef verifies an unknown ref surfaces as an error
 // rather than being collapsed into the boolean. git exits 128 here, which must
 // never be read as "not an ancestor".
@@ -837,6 +883,9 @@ func TestIsAncestorErrorsOnUnknownRef(t *testing.T) {
 	ok, err := repo.IsAncestor("no-such-ref", "side")
 	if err == nil {
 		t.Fatalf("Expected an error for an unknown ref, got (%v, nil)", ok)
+	}
+	if ok {
+		t.Error("Expected IsAncestor to report false alongside the error")
 	}
 
 	headAfter, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")

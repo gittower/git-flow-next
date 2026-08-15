@@ -235,9 +235,12 @@ func TestIntegrateNoFFFlagStillCreatesMergeCommit(t *testing.T) {
 // finish-side tri-state refactor.
 //
 // Steps:
-//  1. init --defaults; commit develop.txt on develop only and capture its tip.
-//  2. Run: git flow integrate develop --ff.
-//  3. Assert main equals the captured develop tip with a single-parent tip commit.
+//  1. init --defaults; set gitflow.develop.integrate.no-ff true so --ff has a Layer-2
+//     setting to override — without it Layer 1 already fast-forwards and the flag
+//     would be a no-op that no assertion could catch.
+//  2. Commit develop.txt on develop only and capture its tip.
+//  3. Run: git flow integrate develop --ff.
+//  4. Assert main equals the captured develop tip with a single-parent tip commit.
 func TestIntegrateFFFlagStillFastForwards(t *testing.T) {
 	t.Parallel()
 	dir := testutil.SetupTestRepo(t)
@@ -245,6 +248,9 @@ func TestIntegrateFFFlagStillFastForwards(t *testing.T) {
 
 	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
 		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, dir, "config", "gitflow.develop.integrate.no-ff", "true"); err != nil {
+		t.Fatalf("Failed to set no-ff config: %v\nOutput: %s", err, out)
 	}
 	developTip := integAddCommit(t, dir, "develop", "develop.txt", "D", "Add develop.txt on develop")
 

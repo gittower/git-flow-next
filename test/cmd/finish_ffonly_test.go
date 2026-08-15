@@ -158,10 +158,19 @@ func commitParentCount(t *testing.T, dir, ref string) int {
 }
 
 // fileOnBranch reports whether path exists in the tree of ref, without checking it out.
+// A missing path is the only failure git may report here: any other error (an unknown
+// ref, a broken repository) would masquerade as "absent" and silently satisfy a negative
+// assertion, so it fails the test instead.
 func fileOnBranch(t *testing.T, dir, ref, path string) bool {
 	t.Helper()
-	_, err := testutil.RunGit(t, dir, "cat-file", "-e", ref+":"+path)
-	return err == nil
+	out, err := testutil.RunGit(t, dir, "cat-file", "-e", ref+":"+path)
+	if err == nil {
+		return true
+	}
+	if !strings.Contains(out, "does not exist") && !strings.Contains(out, "exists on disk, but not in") {
+		t.Fatalf("Failed to look up %s:%s: %v\nOutput: %s", ref, path, err, out)
+	}
+	return false
 }
 
 // assertGateMessage asserts the output carries the ff-only gate error naming both
@@ -170,9 +179,12 @@ func fileOnBranch(t *testing.T, dir, ref, path string) bool {
 func assertGateMessage(t *testing.T, output, parent, topic string) {
 	t.Helper()
 	heading := "cannot fast-forward '" + parent + "' to '" + topic + "'"
+	// The condition must name which side carries the extra commits, not merely state
+	// that some branch does — that association is what tells the user where to look.
+	condition := "'" + parent + "' has commits that are not in '" + topic + "'"
 	for _, want := range []string{
 		heading,
-		"has commits that are not in",
+		condition,
 		"exactly the tested branch tip",
 		"re-test",
 	} {
@@ -618,7 +630,7 @@ func TestFinishFFOnlyWithNoFFFlagRejected(t *testing.T) {
 // 1. Sets up a test repository and initializes git-flow with defaults
 // 2. Creates the ff-capable release topology and snapshots the repository
 // 3. Runs 'git flow release finish 1.0.0 --ff --ff-only'
-// 4. Verifies exit code 2 and that the error names both --ff and --ff-only
+// 4. Verifies exit code 2 and the full conflict message naming --ff-only and --ff
 // 5. Verifies the repository is unchanged
 func TestFinishFFOnlyWithFFFlagRejected(t *testing.T) {
 	t.Parallel()
@@ -633,8 +645,11 @@ func TestFinishFFOnlyWithFFFlagRejected(t *testing.T) {
 		t.Fatalf("Expected --ff --ff-only to be rejected. Output: %s", output)
 	}
 	assertExitCode(t, err, errors.ExitCodeInvalidInput)
-	if !strings.Contains(output, "--ff") || !strings.Contains(output, "--ff-only") {
-		t.Errorf("Expected the error to name both --ff and --ff-only. Output: %s", output)
+	// Asserting on "--ff" alone would be satisfied by the "--ff-only" token itself, so
+	// the whole conflict message is required.
+	wantMessage := "cannot combine --ff-only with --ff: they are conflicting values of the same fast-forward setting"
+	if !strings.Contains(output, wantMessage) {
+		t.Errorf("Expected the error to be %q. Output: %s", wantMessage, output)
 	}
 	assertRepoUnchanged(t, dir, before)
 }
