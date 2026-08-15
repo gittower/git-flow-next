@@ -251,7 +251,7 @@ func (r *Repo) CreateBranchNoCheckout(name string, startPoint string) error {
 	}
 
 	if output, err := r.gitCmd("branch", name, startPoint).CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create branch: %s", string(output))
+		return fmt.Errorf("failed to create branch: %s: %w", strings.TrimSpace(string(output)), err)
 	}
 	return nil
 }
