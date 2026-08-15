@@ -202,6 +202,28 @@ func (r *Repo) BranchOrCommitExists(ref string) error {
 	return nil
 }
 
+// IsAncestor reports whether ancestor is an ancestor of (or identical to)
+// descendant. Identical refs yield true, which is exactly the "already
+// fast-forwarded" rule the finish --ff-only precondition relies on.
+//
+// The query is read-only: it inspects refs and never touches HEAD, the index, or
+// the work tree. MergeFFOnly is not a substitute — it checks out and mutates the
+// target branch, and it reports success when the target is merely ahead.
+//
+// git merge-base --is-ancestor exits 0 for true and 1 for false. Any other exit
+// status (notably 128 for an unknown ref or a broken repository) is returned as
+// an error rather than collapsed into the boolean.
+func (r *Repo) IsAncestor(ancestor string, descendant string) (bool, error) {
+	output, err := r.gitCmd("merge-base", "--is-ancestor", ancestor, descendant).CombinedOutput()
+	if err == nil {
+		return true, nil
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, fmt.Errorf("failed to check whether '%s' is an ancestor of '%s': %w: %s", ancestor, descendant, err, strings.TrimSpace(string(output)))
+}
+
 // CreateBranch creates a new branch
 func (r *Repo) CreateBranch(name string, startPoint string) error {
 	// Check if we have any commits
