@@ -730,3 +730,383 @@ func splitLines(s string) []string {
 	}
 	return lines
 }
+
+// =============================================================================
+// IsAncestor (issue #210): the read-only ancestry query behind the finish
+// --ff-only gate.
+// =============================================================================
+
+// setupAncestryRepo seeds commits c1 and c2 on the current branch and a second
+// branch "side" pointing at c1. It leaves the repository checked out on its
+// initial branch with a clean work tree.
+func setupAncestryRepo(t *testing.T, dir string) {
+	t.Helper()
+	testutil.WriteFile(t, dir, "c1.txt", "c1")
+	if _, err := testutil.RunGit(t, dir, "add", "c1.txt"); err != nil {
+		t.Fatalf("Failed to add c1.txt: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "c1"); err != nil {
+		t.Fatalf("Failed to commit c1: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "branch", "side"); err != nil {
+		t.Fatalf("Failed to create side branch: %v", err)
+	}
+	testutil.WriteFile(t, dir, "c2.txt", "c2")
+	if _, err := testutil.RunGit(t, dir, "add", "c2.txt"); err != nil {
+		t.Fatalf("Failed to add c2.txt: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "c2"); err != nil {
+		t.Fatalf("Failed to commit c2: %v", err)
+	}
+}
+
+// TestIsAncestorTrueForEqualRefs verifies IsAncestor reports true when both refs
+// name the same commit — the "gate passes when the branches are equal" rule the
+// finish --ff-only feature rests on.
+// Steps:
+// 1. Creates a repository with commits c1 and c2 plus a side branch at c1
+// 2. Captures HEAD and the porcelain status
+// 3. Calls IsAncestor with the same ref on both sides
+// 4. Verifies it returns (true, nil)
+// 5. Verifies HEAD and the work-tree status are unchanged (the helper is read-only)
+func TestIsAncestorTrueForEqualRefs(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+
+	repo := openRepo(t, dir)
+	headBefore, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+	statusBefore, err := testutil.RunGit(t, dir, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("Failed to read status: %v", err)
+	}
+
+	ok, err := repo.IsAncestor("side", "side")
+	if err != nil {
+		t.Fatalf("IsAncestor returned an error for identical refs: %v", err)
+	}
+	if !ok {
+		t.Error("Expected IsAncestor to report true for identical refs")
+	}
+
+	headAfter, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to re-read HEAD: %v", err)
+	}
+	if headAfter != headBefore {
+		t.Errorf("Expected HEAD unchanged. Before: %s After: %s", headBefore, headAfter)
+	}
+	statusAfter, err := testutil.RunGit(t, dir, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("Failed to re-read status: %v", err)
+	}
+	if statusAfter != statusBefore {
+		t.Errorf("Expected work-tree status unchanged. Before: %q After: %q", statusBefore, statusAfter)
+	}
+}
+
+// TestIsAncestorTrueForGenuineAncestor verifies IsAncestor reports true when the
+// first ref is a strict ancestor of the second — the case the finish --ff-only
+// gate lets through.
+// Steps:
+// 1. Creates a repository with commits c1 and c2 plus a side branch at c1
+// 2. Calls IsAncestor("side", "HEAD"), where side is c1 and HEAD is c2
+// 3. Verifies it returns (true, nil)
+func TestIsAncestorTrueForGenuineAncestor(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+
+	repo := openRepo(t, dir)
+	ok, err := repo.IsAncestor("side", "HEAD")
+	if err != nil {
+		t.Fatalf("IsAncestor returned an error for a genuine ancestor: %v", err)
+	}
+	if !ok {
+		t.Error("Expected IsAncestor to report true when side (c1) precedes HEAD (c2)")
+	}
+}
+
+// TestIsAncestorFalseForNonAncestor verifies IsAncestor reports (false, nil) when
+// the first ref carries a commit the second lacks. git exits 1 here, and that
+// branch is what the finish --ff-only gate turns into its rejection.
+// Steps:
+// 1. Creates a repository with commits c1 and c2 plus a side branch at c1
+// 2. Calls IsAncestor("HEAD", "side"), where HEAD is c2 and side is c1
+// 3. Verifies it returns false with a nil error, not an error
+func TestIsAncestorFalseForNonAncestor(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+
+	repo := openRepo(t, dir)
+	ok, err := repo.IsAncestor("HEAD", "side")
+	if err != nil {
+		t.Fatalf("Expected a plain false for a non-ancestor, got error: %v", err)
+	}
+	if ok {
+		t.Error("Expected IsAncestor to report false when HEAD (c2) does not precede side (c1)")
+	}
+}
+
+// TestIsAncestorErrorsOnUnknownRef verifies an unknown ref surfaces as an error
+// rather than being collapsed into the boolean. git exits 128 here, which must
+// never be read as "not an ancestor".
+// Steps:
+// 1. Creates a repository with commits c1 and c2 plus a side branch at c1
+// 2. Captures HEAD and the porcelain status
+// 3. Calls IsAncestor with a ref that does not exist
+// 4. Verifies a non-nil error is returned (and not a bare false)
+// 5. Verifies HEAD and the work-tree status are unchanged
+func TestIsAncestorErrorsOnUnknownRef(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+
+	repo := openRepo(t, dir)
+	headBefore, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+	statusBefore, err := testutil.RunGit(t, dir, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("Failed to read status: %v", err)
+	}
+
+	ok, err := repo.IsAncestor("no-such-ref", "side")
+	if err == nil {
+		t.Fatalf("Expected an error for an unknown ref, got (%v, nil)", ok)
+	}
+	if ok {
+		t.Error("Expected IsAncestor to report false alongside the error")
+	}
+
+	headAfter, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to re-read HEAD: %v", err)
+	}
+	if headAfter != headBefore {
+		t.Errorf("Expected HEAD unchanged. Before: %s After: %s", headBefore, headAfter)
+	}
+	statusAfter, err := testutil.RunGit(t, dir, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("Failed to re-read status: %v", err)
+	}
+	if statusAfter != statusBefore {
+		t.Errorf("Expected work-tree status unchanged. Before: %q After: %q", statusBefore, statusAfter)
+	}
+}
+
+// =============================================================================
+// Merge failure classification (issue #210): git's own --ff-only refusal.
+// =============================================================================
+
+// setupDivergedBranches seeds a common base, then adds one commit to "side" and one
+// touching a different file to the current branch, so the two have truly diverged and
+// neither is an ancestor of the other. It leaves the repository on its initial branch.
+func setupDivergedBranches(t *testing.T, dir string) {
+	t.Helper()
+	setupAncestryRepo(t, dir)
+	if _, err := testutil.RunGit(t, dir, "checkout", "side"); err != nil {
+		t.Fatalf("Failed to checkout side: %v", err)
+	}
+	testutil.WriteFile(t, dir, "side.txt", "side")
+	if _, err := testutil.RunGit(t, dir, "add", "side.txt"); err != nil {
+		t.Fatalf("Failed to add side.txt: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "side"); err != nil {
+		t.Fatalf("Failed to commit side: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "checkout", "-"); err != nil {
+		t.Fatalf("Failed to checkout the initial branch: %v", err)
+	}
+}
+
+// TestMergeWithOptionsFFOnlyRefusalWrapsSentinel verifies that a --ff-only merge git
+// refuses comes back as ErrNotFastForward rather than a generic merge failure, so
+// callers can report the actionable error instead of exiting on a git error.
+// Steps:
+// 1. Creates a repository whose current branch and "side" have diverged
+// 2. Calls MergeWithOptions("side", noFF=false, ffOnly=true, noVerify=false)
+// 3. Verifies the error wraps ErrNotFastForward
+// 4. Verifies HEAD is unchanged: the refused merge committed nothing
+func TestMergeWithOptionsFFOnlyRefusalWrapsSentinel(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupDivergedBranches(t, dir)
+
+	repo := openRepo(t, dir)
+	headBefore, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+
+	mergeErr := repo.MergeWithOptions("side", false, true, false)
+	if mergeErr == nil {
+		t.Fatal("Expected a --ff-only merge of a diverged branch to fail")
+	}
+	if !goerrors.Is(mergeErr, git.ErrNotFastForward) {
+		t.Errorf("Expected the error to wrap ErrNotFastForward, got: %v", mergeErr)
+	}
+
+	headAfter, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to re-read HEAD: %v", err)
+	}
+	if headAfter != headBefore {
+		t.Errorf("Expected HEAD unchanged. Before: %s After: %s", headBefore, headAfter)
+	}
+}
+
+// TestMergeWithMessageFFOnlyRefusalWrapsSentinel verifies the message-carrying merge
+// classifies git's --ff-only refusal the same way its plain counterpart does.
+// Steps:
+// 1. Creates a repository whose current branch and "side" have diverged
+// 2. Calls MergeWithMessage("side", msg, noFF=false, ffOnly=true, noVerify=false)
+// 3. Verifies the error wraps ErrNotFastForward
+func TestMergeWithMessageFFOnlyRefusalWrapsSentinel(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupDivergedBranches(t, dir)
+
+	repo := openRepo(t, dir)
+
+	mergeErr := repo.MergeWithMessage("side", "Merge side", false, true, false)
+	if mergeErr == nil {
+		t.Fatal("Expected a --ff-only merge of a diverged branch to fail")
+	}
+	if !goerrors.Is(mergeErr, git.ErrNotFastForward) {
+		t.Errorf("Expected the error to wrap ErrNotFastForward, got: %v", mergeErr)
+	}
+}
+
+// TestMergeWithOptionsFailureWithoutFFOnlyKeepsGenericError verifies the sentinel is
+// confined to --ff-only merges: without it, a merge that cannot proceed still reports a
+// plain merge failure, so no caller mistakes an ordinary error for the gate condition.
+// Steps:
+// 1. Creates a repository whose current branch and "side" have diverged
+// 2. Calls MergeWithOptions for a branch that does not exist, without --ff-only
+// 3. Verifies the error does not wrap ErrNotFastForward
+func TestMergeWithOptionsFailureWithoutFFOnlyKeepsGenericError(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupDivergedBranches(t, dir)
+
+	repo := openRepo(t, dir)
+
+	mergeErr := repo.MergeWithOptions("no-such-branch", false, false, false)
+	if mergeErr == nil {
+		t.Fatal("Expected merging a missing branch to fail")
+	}
+	if goerrors.Is(mergeErr, git.ErrNotFastForward) {
+		t.Errorf("Expected a generic merge error without --ff-only, got: %v", mergeErr)
+	}
+}
+
+// TestMergeWithOptionsFFOnlyRejectsAheadCurrentBranch verifies the postcondition on a
+// --ff-only merge git reported as successful: when the current branch is *ahead* of the
+// merged branch, git says "Already up to date." and exits 0 without moving anything, so
+// the merged tip never lands. That must come back as ErrNotFastForward rather than
+// success, or callers would treat the current branch's own tip as the merged one.
+// Steps:
+// 1. Creates a repository with commits c1 and c2, with "side" left behind at c1
+// 2. Calls MergeWithOptions("side", noFF=false, ffOnly=true, noVerify=false)
+// 3. Verifies the error wraps ErrNotFastForward
+// 4. Verifies HEAD is unchanged: nothing was merged either way
+func TestMergeWithOptionsFFOnlyRejectsAheadCurrentBranch(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+
+	repo := openRepo(t, dir)
+	headBefore, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+
+	mergeErr := repo.MergeWithOptions("side", false, true, false)
+	if mergeErr == nil {
+		t.Fatal("Expected a --ff-only merge of a branch the current one is ahead of to fail")
+	}
+	if !goerrors.Is(mergeErr, git.ErrNotFastForward) {
+		t.Errorf("Expected the error to wrap ErrNotFastForward, got: %v", mergeErr)
+	}
+
+	headAfter, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to re-read HEAD: %v", err)
+	}
+	if headAfter != headBefore {
+		t.Errorf("Expected HEAD unchanged. Before: %s After: %s", headBefore, headAfter)
+	}
+}
+
+// TestMergeWithMessageFFOnlyRejectsAheadCurrentBranch verifies the message-carrying merge
+// applies the same postcondition as its plain counterpart.
+// Steps:
+// 1. Creates a repository with commits c1 and c2, with "side" left behind at c1
+// 2. Calls MergeWithMessage("side", msg, noFF=false, ffOnly=true, noVerify=false)
+// 3. Verifies the error wraps ErrNotFastForward
+func TestMergeWithMessageFFOnlyRejectsAheadCurrentBranch(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+
+	repo := openRepo(t, dir)
+
+	mergeErr := repo.MergeWithMessage("side", "Merge side", false, true, false)
+	if mergeErr == nil {
+		t.Fatal("Expected a --ff-only merge of a branch the current one is ahead of to fail")
+	}
+	if !goerrors.Is(mergeErr, git.ErrNotFastForward) {
+		t.Errorf("Expected the error to wrap ErrNotFastForward, got: %v", mergeErr)
+	}
+}
+
+// TestMergeWithOptionsFFOnlyAcceptsEqualBranches verifies the postcondition does not
+// over-fire on the other merge git calls "already up to date": when the merged branch is
+// the very commit the current branch is on, nothing needs to land and the merge succeeds.
+// Steps:
+// 1. Creates a repository with commits c1 and c2, and a branch "equal" at HEAD
+// 2. Calls MergeWithOptions("equal", noFF=false, ffOnly=true, noVerify=false)
+// 3. Verifies it returns no error
+// 4. Verifies HEAD still equals the merged branch
+func TestMergeWithOptionsFFOnlyAcceptsEqualBranches(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+	if _, err := testutil.RunGit(t, dir, "branch", "equal"); err != nil {
+		t.Fatalf("Failed to create the equal branch: %v", err)
+	}
+
+	repo := openRepo(t, dir)
+
+	if mergeErr := repo.MergeWithOptions("equal", false, true, false); mergeErr != nil {
+		t.Fatalf("Expected a --ff-only merge of an equal branch to succeed, got: %v", mergeErr)
+	}
+
+	head, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+	equal, err := testutil.RunGit(t, dir, "rev-parse", "refs/heads/equal")
+	if err != nil {
+		t.Fatalf("Failed to read the equal branch: %v", err)
+	}
+	if head != equal {
+		t.Errorf("Expected HEAD to equal the merged branch. HEAD: %s equal: %s", head, equal)
+	}
+}

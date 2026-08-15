@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gittower/git-flow-next/internal/config"
+	flowerrors "github.com/gittower/git-flow-next/internal/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -160,11 +161,28 @@ func RegisterShorthandCommands() {
 				KeepLocal:   getBoolPtr(cmd, "keeplocal", "no-keeplocal"),
 				ForceDelete: getBoolPtr(cmd, "force-delete", "no-force-delete"),
 			}
+			// Collapse the fast-forward flag trio into the tri-state option. A
+			// conflicting pair exits with the usage code here, matching the
+			// per-type finish surface. All three are read by value rather than
+			// through getBoolPtr, which treats any mention of a flag as a
+			// selection: that would read --no-ff=false as a no-ff selection and
+			// reject '--ff-only --no-ff=false' as a conflict, while the per-type
+			// command accepts it. Reading values keeps the two surfaces
+			// identical, and the precedence between --ff and --no-ff lives in
+			// ffModeFromFlags for both of them.
+			ffOnly, _ := cmd.Flags().GetBool("ff-only")
+			noFF, _ := cmd.Flags().GetBool("no-ff")
+			ff, _ := cmd.Flags().GetBool("ff")
+			ffMode, ffErr := ffModeFromFlags(ffOnly, noFF, ff)
+			if ffErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", ffErr)
+				os.Exit(int(flowerrors.ExitCodeInvalidInput))
+			}
 			// Create merge strategy options with squash message support
 			mergeOptions := &config.MergeStrategyOptions{
 				Rebase:         getBoolPtr(cmd, "rebase", "no-rebase"),
 				PreserveMerges: getBoolPtr(cmd, "preserve-merges", "no-preserve-merges"),
-				NoFF:           getBoolPtr(cmd, "no-ff", "ff"),
+				FF:             ffMode,
 				Squash:         getBoolPtr(cmd, "squash", "no-squash"),
 				SquashMessage:  getStringPtrFromFlag(cmd, "squash-message"),
 			}
@@ -224,10 +242,12 @@ given, the current branch is integrated into its parent.`,
 				tagOptions.ShouldTag = &disable
 			}
 
+			// Integrate offers only --ff/--no-ff, so the mapping can never
+			// produce the ff-only value.
 			mergeOptions := &config.MergeStrategyOptions{
 				Rebase:         getBoolPtr(cmd, "rebase", "no-rebase"),
 				PreserveMerges: getBoolPtr(cmd, "preserve-merges", "no-preserve-merges"),
-				NoFF:           getBoolPtr(cmd, "no-ff", "ff"),
+				FF:             ffModeFromNoFFSelection(getBoolPtr(cmd, "no-ff", "ff")),
 				Squash:         getBoolPtr(cmd, "squash", "no-squash"),
 				SquashMessage:  getStringPtrFromFlag(cmd, "squash-message"),
 				MergeMessage:   getStringPtrFromFlag(cmd, "merge-message"),

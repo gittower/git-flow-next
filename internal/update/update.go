@@ -45,7 +45,9 @@ func UpdateBranchFromParentWithMessage(repo *git.Repo, branchName string, parent
 	default:
 		fmt.Printf("Using merge strategy for '%s'\n", branchName)
 		if customMessage != "" {
-			mergeErr = repo.MergeWithMessage(parentBranch, customMessage, true, false)
+			// noFF: a child base branch always records the update as a merge commit.
+			// ffOnly and noVerify stay off.
+			mergeErr = repo.MergeWithMessage(parentBranch, customMessage, true, false, false)
 		} else {
 			mergeErr = repo.Merge(parentBranch, false)
 		}
