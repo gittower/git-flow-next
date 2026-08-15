@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gittower/git-flow-next/internal/config"
+	flowerrors "github.com/gittower/git-flow-next/internal/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -160,11 +161,19 @@ func RegisterShorthandCommands() {
 				KeepLocal:   getBoolPtr(cmd, "keeplocal", "no-keeplocal"),
 				ForceDelete: getBoolPtr(cmd, "force-delete", "no-force-delete"),
 			}
+			// Collapse the fast-forward flag trio into the tri-state option. A
+			// conflicting pair exits with the usage code here, matching the
+			// per-type finish surface.
+			ffMode, ffErr := ffModeFromFlags(cmd.Flags().Changed("ff-only"), cmd.Flags().Changed("no-ff"), cmd.Flags().Changed("ff"))
+			if ffErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", ffErr)
+				os.Exit(int(flowerrors.ExitCodeInvalidInput))
+			}
 			// Create merge strategy options with squash message support
 			mergeOptions := &config.MergeStrategyOptions{
 				Rebase:         getBoolPtr(cmd, "rebase", "no-rebase"),
 				PreserveMerges: getBoolPtr(cmd, "preserve-merges", "no-preserve-merges"),
-				NoFF:           getBoolPtr(cmd, "no-ff", "ff"),
+				FF:             ffMode,
 				Squash:         getBoolPtr(cmd, "squash", "no-squash"),
 				SquashMessage:  getStringPtrFromFlag(cmd, "squash-message"),
 			}
@@ -224,10 +233,12 @@ given, the current branch is integrated into its parent.`,
 				tagOptions.ShouldTag = &disable
 			}
 
+			// Integrate offers only --ff/--no-ff, so the mapping can never
+			// produce the ff-only value.
 			mergeOptions := &config.MergeStrategyOptions{
 				Rebase:         getBoolPtr(cmd, "rebase", "no-rebase"),
 				PreserveMerges: getBoolPtr(cmd, "preserve-merges", "no-preserve-merges"),
-				NoFF:           getBoolPtr(cmd, "no-ff", "ff"),
+				FF:             ffModeFromNoFFSelection(getBoolPtr(cmd, "no-ff", "ff")),
 				Squash:         getBoolPtr(cmd, "squash", "no-squash"),
 				SquashMessage:  getStringPtrFromFlag(cmd, "squash-message"),
 				MergeMessage:   getStringPtrFromFlag(cmd, "merge-message"),

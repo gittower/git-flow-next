@@ -190,6 +190,12 @@ func registerBranchCommand(branchType string) {
 			noPreserveMerges, _ := cmd.Flags().GetBool("no-preserve-merges")
 			noFF, _ := cmd.Flags().GetBool("no-ff")
 			ff, _ := cmd.Flags().GetBool("ff")
+			ffOnly, _ := cmd.Flags().GetBool("ff-only")
+			ffMode, ffErr := ffModeFromFlags(ffOnly, noFF, ff)
+			if ffErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", ffErr)
+				os.Exit(int(errors.ExitCodeInvalidInput))
+			}
 			squash, _ := cmd.Flags().GetBool("squash")
 			noSquash, _ := cmd.Flags().GetBool("no-squash")
 			squashMessage, _ := cmd.Flags().GetString("squash-message")
@@ -264,7 +270,7 @@ func registerBranchCommand(branchType string) {
 			mergeOptions := &config.MergeStrategyOptions{
 				Rebase:         getBoolFlag(rebase, noRebase),
 				PreserveMerges: getBoolFlag(preserveMerges, noPreserveMerges),
-				NoFF:           getBoolFlag(noFF, ff),
+				FF:             ffMode,
 				Squash:         getBoolFlag(squash, noSquash),
 				SquashMessage:  getStringPtr(squashMessage),
 				MergeMessage:   getStringPtr(mergeMessage),
@@ -487,6 +493,7 @@ func addFinishFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("no-preserve-merges", false, "Flatten merges during rebase")
 	cmd.Flags().Bool("no-ff", false, "Create merge commit even for fast-forward")
 	cmd.Flags().Bool("ff", false, "Allow fast-forward merge when possible")
+	cmd.Flags().Bool("ff-only", false, "Require a fast-forward merge; fail if the parent has moved")
 	cmd.Flags().BoolP("squash", "S", false, "Squash all commits into single commit")
 	cmd.Flags().Bool("no-squash", false, "Keep individual commits (don't squash)")
 	cmd.Flags().String("squash-message", "", "Custom commit message for squash merge")
@@ -505,6 +512,52 @@ func addFinishFlags(cmd *cobra.Command) {
 
 	// Hook Control Flags
 	cmd.Flags().Bool("no-verify", false, "Bypass pre-commit and commit-msg hooks during merge and commit operations")
+}
+
+// ffModeFromFlags collapses the --ff-only / --no-ff / --ff trio into the
+// tri-state fast-forward option shared by both finish surfaces. The three flags
+// are spellings of one setting, so pairing --ff-only with either of the others
+// is a usage error naming both offending options. The pre-existing --ff --no-ff
+// pairing keeps its long-standing meaning (no-ff wins) and is not rejected.
+// A nil mode means the user specified nothing, leaving config to decide.
+//
+// The conflict is reported here rather than through cobra's
+// MarkFlagsMutuallyExclusive because cobra errors exit 1 via main.go, while a
+// git-flow usage error must exit ExitCodeInvalidInput (2).
+func ffModeFromFlags(ffOnly bool, noFF bool, ff bool) (*config.FastForwardMode, error) {
+	if ffOnly && noFF {
+		return nil, &errors.InvalidInputError{Message: "cannot combine --ff-only with --no-ff: they are conflicting values of the same fast-forward setting"}
+	}
+	if ffOnly && ff {
+		return nil, &errors.InvalidInputError{Message: "cannot combine --ff-only with --ff: they are conflicting values of the same fast-forward setting"}
+	}
+
+	var mode config.FastForwardMode
+	switch {
+	case ffOnly:
+		mode = config.FFModeFFOnly
+	case noFF:
+		mode = config.FFModeNoFF
+	case ff:
+		mode = config.FFModeFF
+	default:
+		return nil, nil
+	}
+	return &mode, nil
+}
+
+// ffModeFromNoFFSelection maps the two-valued --no-ff/--ff selection of surfaces
+// that do not offer --ff-only onto the tri-state. It can never yield
+// FFModeFFOnly.
+func ffModeFromNoFFSelection(noFF *bool) *config.FastForwardMode {
+	if noFF == nil {
+		return nil
+	}
+	mode := config.FFModeFF
+	if *noFF {
+		mode = config.FFModeNoFF
+	}
+	return &mode
 }
 
 // getBoolFlag converts two opposite boolean flags into a single *bool value
