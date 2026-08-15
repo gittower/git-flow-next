@@ -235,6 +235,15 @@ func executeFinish(repo *git.Repo, branchType string, name string, continueOp bo
 	// Resolve all options once before starting operations
 	resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
 
+	// --ff-only and a squash strategy are mutually exclusive: squashing always
+	// creates a new commit, so the parent can never fast-forward onto the topic
+	// tip. The check reads the *resolved* strategy, so a squash coming from the
+	// branch type, from config, or from --squash is caught alike. It runs before
+	// the preflight so a pure usage error never causes a network round-trip.
+	if resolvedOptions.RequireFastForward && resolvedOptions.UseSquash {
+		return &errors.InvalidInputError{Message: "cannot combine --ff-only with the squash strategy: a squash always creates a new commit, so a fast-forward is impossible"}
+	}
+
 	// Fetch the topic (and parent, best-effort) and verify the topic is in sync with its remote.
 	// This runs only on the initial finish, never on --continue/--abort (handled above). A fatal
 	// fetch failure or a behind/diverged topic aborts here, before any merge. Being *ahead* is
@@ -244,8 +253,41 @@ func executeFinish(repo *git.Repo, branchType string, name string, continueOp bo
 		return err
 	}
 
+	// Enforce the --ff-only precondition. It runs here, after the fetch/sync
+	// preflight, so it judges the parent state that would actually be merged, and
+	// before finishBranch, which runs the pre-finish hook and writes the merge
+	// state file. --continue and --abort return well above this point, so a
+	// resumed operation never re-evaluates the gate.
+	if resolvedOptions.RequireFastForward {
+		if err := requireFastForwardable(repo, name, branchConfig.Parent); err != nil {
+			return err
+		}
+	}
+
 	// Regular finish command flow
 	return finishBranch(repo, cfg, branchType, name, branchConfig, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
+}
+
+// requireFastForwardable enforces the --ff-only precondition: the parent must be
+// an ancestor of the topic branch, so what lands on the parent is exactly the
+// tested topic tip. Equal branches satisfy it. It mutates nothing.
+//
+// The parent's existence is verified here because the gate runs ahead of
+// finishBranch's own check, so a misconfigured parent keeps the error and exit
+// code it produces today instead of surfacing as a raw merge-base failure.
+func requireFastForwardable(repo *git.Repo, topic string, parent string) error {
+	if err := repo.BranchExists(parent); err != nil {
+		return &errors.BranchNotFoundError{BranchName: parent}
+	}
+
+	fastForwardable, err := repo.IsAncestor(parent, topic)
+	if err != nil {
+		return &errors.GitError{Operation: "check fast-forward precondition", Err: err}
+	}
+	if !fastForwardable {
+		return &errors.NotFastForwardableError{Parent: parent, Topic: topic}
+	}
+	return nil
 }
 
 func finishBranch(repo *git.Repo, cfg *config.Config, branchType string, name string, branchConfig config.BranchConfig, tagOptions *config.TagOptions, retentionOptions *config.BranchRetentionOptions, mergeOptions *config.MergeStrategyOptions, fetch *bool, noVerify *bool, push *bool, pushTag *bool) error {
