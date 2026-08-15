@@ -16,7 +16,7 @@ func managedMarkerFor(branch string) string {
 }
 
 // writeObstruction creates dir and a file inside it, the "occupied path" state
-// every clobber scenario starts from. An EMPTY directory is deliberately not an
+// every --force scenario starts from. An EMPTY directory is deliberately not an
 // obstruction (#172 decision 12), so the file is what makes the path occupied.
 func writeObstruction(t *testing.T, dir string, name string, content string) {
 	t.Helper()
@@ -212,7 +212,7 @@ func TestCheckoutHandMadeWorktreeStaysUnmanaged(t *testing.T) {
 }
 
 // TestCheckoutWorktreeOccupiedPathFails covers scenario 5: --worktree refuses an
-// occupied target path when --clobber is not given.
+// occupied target path when --force is not given.
 // Steps:
 // 1. Initializes git-flow and creates feature/x
 // 2. Creates the computed worktree path as a directory holding a file
@@ -244,17 +244,17 @@ func TestCheckoutWorktreeOccupiedPathFails(t *testing.T) {
 	}
 }
 
-// TestCheckoutWorktreeClobberReplacesStaleDirectory covers scenario 6: --clobber
+// TestCheckoutWorktreeForceReplacesStaleDirectory covers scenario 6: --force
 // replaces a plain directory in the way and creates the worktree there.
 // Steps:
 // 1. Initializes git-flow and creates feature/x
 // 2. Creates the computed worktree path as a directory holding a file
-// 3. Runs 'git flow feature checkout x --worktree --clobber' with GIT_FLOW_CD_FILE set
+// 3. Runs 'git flow feature checkout x --worktree --force' with GIT_FLOW_CD_FILE set
 // 4. Verifies exit code 0 and that the stale file is gone
 // 5. Verifies a worktree exists at the path, the marker is written and the CD file holds the path
 // 6. Verifies stdout reports the creation
 // 7. Verifies stdout announces the removal, so the one destructive operation in the command cannot go silent
-func TestCheckoutWorktreeClobberReplacesStaleDirectory(t *testing.T) {
+func TestCheckoutWorktreeForceReplacesStaleDirectory(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -264,9 +264,9 @@ func TestCheckoutWorktreeClobberReplacesStaleDirectory(t *testing.T) {
 	writeObstruction(t, wtPath, "stale.txt", "old")
 	cdFile := cdFilePath(t)
 
-	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--worktree", "--clobber")
+	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--worktree", "--force")
 	if err != nil {
-		t.Fatalf("feature checkout --worktree --clobber failed: %v\nStderr: %s", err, stderr)
+		t.Fatalf("feature checkout --worktree --force failed: %v\nStderr: %s", err, stderr)
 	}
 
 	if _, err := os.Stat(filepath.Join(wtPath, "stale.txt")); !os.IsNotExist(err) {
@@ -284,7 +284,7 @@ func TestCheckoutWorktreeClobberReplacesStaleDirectory(t *testing.T) {
 	if !strings.Contains(stdout, "Created worktree for branch 'feature/x' at "+wtPath) {
 		t.Errorf("Expected stdout to report the creation, got %q", stdout)
 	}
-	// Without this the suite would accept a --clobber that removed the directory
+	// Without this the suite would accept a --force that removed the directory
 	// silently: the only other test touching this line pins its ABSENCE.
 	if !strings.Contains(stdout, "Removed "+wtPath+" to make room for the worktree") {
 		t.Errorf("Expected stdout to announce the removal, got %q", stdout)
@@ -574,16 +574,16 @@ func TestCheckoutReplacedWorktreeFileFails(t *testing.T) {
 	assertStaleWorktreeRefused(t, dir, wtPath, branchBefore)
 }
 
-// TestCheckoutClobberRefusesFile covers SC-4: --clobber refuses a file at the
+// TestCheckoutForceRefusesFile covers SC-4: --force refuses a file at the
 // target path.
 // Steps:
 // 1. Initializes git-flow and creates feature/x
 // 2. Creates the computed worktree path as a file with known content
-// 3. Runs 'git flow feature checkout x --worktree --clobber' with GIT_FLOW_CD_FILE set
+// 3. Runs 'git flow feature checkout x --worktree --force' with GIT_FLOW_CD_FILE set
 // 4. Verifies exit code 6 and that stderr refuses because the target is a file
 // 5. Verifies the file still exists with its content intact
 // 6. Verifies the CD file is still zero-length
-func TestCheckoutClobberRefusesFile(t *testing.T) {
+func TestCheckoutForceRefusesFile(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -598,7 +598,7 @@ func TestCheckoutClobberRefusesFile(t *testing.T) {
 	}
 	cdFile := cdFilePath(t)
 
-	_, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--worktree", "--clobber")
+	_, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--worktree", "--force")
 	if got := worktreeExitCode(err); got != 6 {
 		t.Fatalf("Expected exit code 6, got %d\nStderr: %s", got, stderr)
 	}
@@ -609,16 +609,16 @@ func TestCheckoutClobberRefusesFile(t *testing.T) {
 	assertCDFileEmpty(t, cdFile)
 }
 
-// TestCheckoutClobberRefusesRegisteredWorktree covers SC-4: --clobber refuses a
+// TestCheckoutForceRefusesRegisteredWorktree covers SC-4: --force refuses a
 // registered worktree of this repository.
 // Steps:
 // 1. Initializes git-flow and sets a branch-independent path template so two branches compute the same target
 // 2. Creates feature/x and feature/y and adds a worktree for feature/y at that shared target
-// 3. Runs 'git flow feature checkout x --worktree --clobber' with GIT_FLOW_CD_FILE set
+// 3. Runs 'git flow feature checkout x --worktree --force' with GIT_FLOW_CD_FILE set
 // 4. Verifies exit code 6 and that stderr points at 'git flow worktree remove'
 // 5. Verifies the other worktree still exists and is still listed by git
 // 6. Verifies the CD file is still zero-length
-func TestCheckoutClobberRefusesRegisteredWorktree(t *testing.T) {
+func TestCheckoutForceRefusesRegisteredWorktree(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -637,7 +637,7 @@ func TestCheckoutClobberRefusesRegisteredWorktree(t *testing.T) {
 	}
 	cdFile := cdFilePath(t)
 
-	_, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--worktree", "--clobber")
+	_, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--worktree", "--force")
 	if got := worktreeExitCode(err); got != 6 {
 		t.Fatalf("Expected exit code 6, got %d\nStderr: %s", got, stderr)
 	}
@@ -653,16 +653,16 @@ func TestCheckoutClobberRefusesRegisteredWorktree(t *testing.T) {
 	assertCDFileEmpty(t, cdFile)
 }
 
-// TestCheckoutClobberRefusesDirectoryWithGitEntry covers SC-4: --clobber refuses
+// TestCheckoutForceRefusesDirectoryWithGitEntry covers SC-4: --force refuses
 // a directory holding a .git FILE, the linked-worktree form.
 // Steps:
 // 1. Initializes git-flow and creates feature/x
 // 2. Creates the computed path as a directory holding a .git file and a decoy file
-// 3. Runs 'git flow feature checkout x --worktree --clobber' with GIT_FLOW_CD_FILE set
+// 3. Runs 'git flow feature checkout x --worktree --force' with GIT_FLOW_CD_FILE set
 // 4. Verifies exit code 6 and that stderr refuses because the directory looks like a repository
 // 5. Verifies the directory and both files are intact
 // 6. Verifies the CD file is still zero-length
-func TestCheckoutClobberRefusesDirectoryWithGitEntry(t *testing.T) {
+func TestCheckoutForceRefusesDirectoryWithGitEntry(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -675,7 +675,7 @@ func TestCheckoutClobberRefusesDirectoryWithGitEntry(t *testing.T) {
 	}
 	cdFile := cdFilePath(t)
 
-	_, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--worktree", "--clobber")
+	_, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--worktree", "--force")
 	if got := worktreeExitCode(err); got != 6 {
 		t.Fatalf("Expected exit code 6, got %d\nStderr: %s", got, stderr)
 	}
@@ -687,7 +687,7 @@ func TestCheckoutClobberRefusesDirectoryWithGitEntry(t *testing.T) {
 	assertCDFileEmpty(t, cdFile)
 }
 
-// TestCheckoutClobberRefusesDirectoryWithGitDirectory covers SC-4: --clobber
+// TestCheckoutForceRefusesDirectoryWithGitDirectory covers SC-4: --force
 // refuses a directory holding a .git DIRECTORY, the ordinary-clone form.
 //
 // It is separate from the .git-file case because an implementation that stats
@@ -696,11 +696,11 @@ func TestCheckoutClobberRefusesDirectoryWithGitEntry(t *testing.T) {
 // Steps:
 // 1. Initializes git-flow and creates feature/x
 // 2. Creates the computed path as a directory holding a .git/ directory with a file inside it, plus a sentinel file
-// 3. Runs 'git flow feature checkout x --worktree --clobber' with GIT_FLOW_CD_FILE set
+// 3. Runs 'git flow feature checkout x --worktree --force' with GIT_FLOW_CD_FILE set
 // 4. Verifies exit code 6 and that stderr refuses because the directory looks like a repository
 // 5. Verifies the directory, the .git directory's content and the sentinel are all intact
 // 6. Verifies the CD file is still zero-length
-func TestCheckoutClobberRefusesDirectoryWithGitDirectory(t *testing.T) {
+func TestCheckoutForceRefusesDirectoryWithGitDirectory(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -711,7 +711,7 @@ func TestCheckoutClobberRefusesDirectoryWithGitDirectory(t *testing.T) {
 	writeObstruction(t, filepath.Join(wtPath, ".git"), "HEAD", "ref: refs/heads/main\n")
 	cdFile := cdFilePath(t)
 
-	_, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--worktree", "--clobber")
+	_, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--worktree", "--force")
 	if got := worktreeExitCode(err); got != 6 {
 		t.Fatalf("Expected exit code 6, got %d\nStderr: %s", got, stderr)
 	}
@@ -723,15 +723,15 @@ func TestCheckoutClobberRefusesDirectoryWithGitDirectory(t *testing.T) {
 	assertCDFileEmpty(t, cdFile)
 }
 
-// TestCheckoutClobberWithNothingToClobberSucceeds covers SC-4: --clobber with an
+// TestCheckoutForceWithNothingToRemoveSucceeds covers SC-4: --force with an
 // empty target path is an ordinary creation.
 // Steps:
 // 1. Initializes git-flow and creates feature/x with nothing at the computed path
-// 2. Runs 'git flow feature checkout x --worktree --clobber' with GIT_FLOW_CD_FILE set
+// 2. Runs 'git flow feature checkout x --worktree --force' with GIT_FLOW_CD_FILE set
 // 3. Verifies exit code 0 and that the worktree was created and marked
-// 4. Verifies stdout reports the creation and says nothing about clobbering
+// 4. Verifies stdout reports the creation and says nothing about a removal
 // 5. Verifies stderr is empty
-func TestCheckoutClobberWithNothingToClobberSucceeds(t *testing.T) {
+func TestCheckoutForceWithNothingToRemoveSucceeds(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -739,9 +739,9 @@ func TestCheckoutClobberWithNothingToClobberSucceeds(t *testing.T) {
 	createFreeBranch(t, dir, "feature/x")
 	cdFile := cdFilePath(t)
 
-	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--worktree", "--clobber")
+	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--worktree", "--force")
 	if err != nil {
-		t.Fatalf("feature checkout --worktree --clobber failed: %v\nStderr: %s", err, stderr)
+		t.Fatalf("feature checkout --worktree --force failed: %v\nStderr: %s", err, stderr)
 	}
 
 	wtPath := computedWorktreePath(t, dir, "feature/x")
@@ -755,7 +755,7 @@ func TestCheckoutClobberWithNothingToClobberSucceeds(t *testing.T) {
 		t.Errorf("Expected stdout to report the creation, got %q", stdout)
 	}
 	if strings.Contains(strings.ToLower(stdout), "removed") {
-		t.Errorf("Expected no removal message when there was nothing to clobber, got %q", stdout)
+		t.Errorf("Expected no removal message when there was nothing to remove, got %q", stdout)
 	}
 	if stderr != "" {
 		t.Errorf("Expected no output on stderr, got %q", stderr)
@@ -930,16 +930,16 @@ func TestCheckoutCurrentMainWorktreeUsesClassicBehavior(t *testing.T) {
 	}
 }
 
-// TestCheckoutClobberWithoutWorktreeIsSilentNoOp covers SC-15: --clobber without
+// TestCheckoutForceWithoutWorktreeIsSilentNoOp covers SC-15: --force without
 // --worktree changes nothing and says nothing.
 // Steps:
 // 1. Initializes git-flow and creates feature/x
 // 2. Creates the computed worktree path as a directory holding a sentinel file
-// 3. Runs 'git flow feature checkout x --clobber' without --worktree, with GIT_FLOW_CD_FILE set
+// 3. Runs 'git flow feature checkout x --force' without --worktree, with GIT_FLOW_CD_FILE set
 // 4. Verifies stdout equals exactly the classic 'Switched to branch' message and stderr is empty
 // 5. Verifies the sentinel directory and its file are byte-identical
 // 6. Verifies no worktree was created and the CD file is still zero-length
-func TestCheckoutClobberWithoutWorktreeIsSilentNoOp(t *testing.T) {
+func TestCheckoutForceWithoutWorktreeIsSilentNoOp(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -949,9 +949,9 @@ func TestCheckoutClobberWithoutWorktreeIsSilentNoOp(t *testing.T) {
 	writeObstruction(t, wtPath, "sentinel.txt", "do not delete")
 	cdFile := cdFilePath(t)
 
-	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--clobber")
+	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "checkout", "x", "--force")
 	if err != nil {
-		t.Fatalf("feature checkout --clobber failed: %v\nStderr: %s", err, stderr)
+		t.Fatalf("feature checkout --force failed: %v\nStderr: %s", err, stderr)
 	}
 
 	if want := "Switched to branch 'feature/x'\n"; stdout != want {

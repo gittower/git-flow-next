@@ -687,23 +687,23 @@ func (e *WorktreeDirtyError) ExitCode() ExitCode {
 	return ExitCodeValidationError
 }
 
-// ClobberRefusedError indicates --clobber was asked to remove something it must
-// not: the flag exists to clear a stale directory out of the way, and every
-// other occupant of the target path is either somebody's data or somebody's
-// repository.
+// RemovalRefusedError indicates a forced removal was asked to remove something
+// it must not: forcing exists to clear a stale directory out of the way, and
+// every other occupant of the target path is either somebody's data or
+// somebody's repository.
 //
 // Reason is the second half of the message rather than a code, so the three
 // refusals read as one family in the terminal.
-type ClobberRefusedError struct {
+type RemovalRefusedError struct {
 	Path   string
 	Reason string
 }
 
-func (e *ClobberRefusedError) Error() string {
+func (e *RemovalRefusedError) Error() string {
 	return fmt.Sprintf("refusing to remove %s: %s", e.Path, e.Reason)
 }
 
-func (e *ClobberRefusedError) ExitCode() ExitCode {
+func (e *RemovalRefusedError) ExitCode() ExitCode {
 	return ExitCodeValidationError
 }
 

@@ -478,9 +478,9 @@ func printShellInitTip(quiet bool) {
 // that the branch exists and has no worktree yet, and prints its own
 // confirmation — the wording differs between the two commands.
 //
-// clobber removes a plain directory that is in the way. It never removes
-// anything else; see clobberTarget.
-func createWorktreeAt(cfg *config.Config, repo *git.Repo, branch string, pathFlag string, clobber bool) (string, error) {
+// force removes a plain directory that is in the way. It never removes
+// anything else; see removeObstruction.
+func createWorktreeAt(cfg *config.Config, repo *git.Repo, branch string, pathFlag string, force bool) (string, error) {
 	target, err := resolveWorktreeTarget(cfg, repo, branch, pathFlag)
 	if err != nil {
 		return "", err
@@ -491,10 +491,10 @@ func createWorktreeAt(cfg *config.Config, repo *git.Repo, branch string, pathFla
 		return "", &errors.GitError{Operation: "inspect target path", Err: err}
 	}
 	if occupied {
-		if !clobber {
+		if !force {
 			return "", &errors.WorktreePathOccupiedError{Path: target}
 		}
-		if err := clobberTarget(repo, target); err != nil {
+		if err := removeObstruction(repo, target); err != nil {
 			return "", err
 		}
 	}
@@ -517,8 +517,8 @@ func createWorktreeAt(cfg *config.Config, repo *git.Repo, branch string, pathFla
 	return target, nil
 }
 
-// clobberTarget removes an occupied target path, but only when what is there is
-// a plain directory git-flow can afford to lose.
+// removeObstruction removes an occupied target path, but only when what is
+// there is a plain directory git-flow can afford to lose.
 //
 // The three refusals bound the blast radius of a mistyped path template. The
 // .git test uses Lstat and refuses on ANY result — the linked-worktree form is a
@@ -530,13 +530,13 @@ func createWorktreeAt(cfg *config.Config, repo *git.Repo, branch string, pathFla
 // destructive — Go's RemoveAll never descends through a symlink — and the blast
 // radius is exactly one dangling link, so the asymmetry is left alone rather than
 // traded for an Lstat that would refuse a symlinked worktree root outright.
-func clobberTarget(repo *git.Repo, target string) error {
+func removeObstruction(repo *git.Repo, target string) error {
 	info, err := os.Stat(target)
 	if err != nil {
 		return &errors.GitError{Operation: "inspect target path", Err: err}
 	}
 	if !info.IsDir() {
-		return &errors.ClobberRefusedError{Path: target, Reason: "it is a file, not a directory"}
+		return &errors.RemovalRefusedError{Path: target, Reason: "it is a file, not a directory"}
 	}
 
 	entries, err := repo.ListWorktrees()
@@ -545,7 +545,7 @@ func clobberTarget(repo *git.Repo, target string) error {
 	}
 	for _, entry := range entries {
 		if git.SamePath(entry.Path, target) {
-			return &errors.ClobberRefusedError{
+			return &errors.RemovalRefusedError{
 				Path:   target,
 				Reason: "it is a registered worktree of this repository; 'git flow worktree remove <branch>' removes it safely",
 			}
@@ -553,7 +553,7 @@ func clobberTarget(repo *git.Repo, target string) error {
 	}
 
 	if _, err := os.Lstat(filepath.Join(target, ".git")); err == nil {
-		return &errors.ClobberRefusedError{
+		return &errors.RemovalRefusedError{
 			Path:   target,
 			Reason: "it contains a .git entry, so it looks like a repository",
 		}

@@ -21,9 +21,9 @@ type CheckoutOptions struct {
 	// NoCD suppresses the navigation-destination write, and nothing else: the
 	// branch switch and the printed path both still happen.
 	NoCD bool
-	// Clobber allows a plain directory in the way of a new worktree to be
+	// Force allows a plain directory in the way of a new worktree to be
 	// removed. It only means anything alongside Worktree.
-	Clobber bool
+	Force bool
 	// Quiet suppresses the shell-init tip.
 	Quiet bool
 	// ShowCommands echoes the git command before running it.
@@ -144,9 +144,9 @@ func executeCheckout(repo *git.Repo, branchType string, nameOrPrefix string, opt
 			return navigateToWorktree(fullBranchName, entry.Path, false, opts)
 		}
 	} else if opts.Worktree {
-		// --clobber reaches createWorktreeAt only from here: with no creation
-		// requested there is nothing to clobber, so the flag is ignored.
-		target, err := createWorktreeAt(cfg, repo, fullBranchName, "", opts.Clobber)
+		// --force reaches createWorktreeAt only from here: with no creation
+		// requested there is nothing in the way to remove, so the flag is ignored.
+		target, err := createWorktreeAt(cfg, repo, fullBranchName, "", opts.Force)
 		if err != nil {
 			return err
 		}
@@ -180,7 +180,7 @@ func executeCheckout(repo *git.Repo, branchType string, nameOrPrefix string, opt
 //
 // The .git entry settles it without a git subprocess: a linked worktree carries a
 // .git FILE and the main worktree a .git DIRECTORY, so an Lstat that refuses only
-// on absence accepts both — the same idiom clobberTarget uses.
+// on absence accepts both — the same idiom removeObstruction uses.
 func worktreeIsPresent(path string) (bool, error) {
 	info, err := os.Stat(path)
 	if err != nil {

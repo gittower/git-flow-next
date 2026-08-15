@@ -6,7 +6,7 @@ git-flow-checkout - Switch to topic branches
 
 ## SYNOPSIS
 
-**git-flow** *topic* **checkout** *name*|*nameprefix* [**--worktree**] [**--no-cd**] [**--clobber**] [**--quiet**] [**--showcommands**]
+**git-flow** *topic* **checkout** *name*|*nameprefix* [**--worktree**] [**--no-cd**] [**--force**] [**--quiet**] [**--showcommands**]
 
 ## DESCRIPTION
 
@@ -32,8 +32,8 @@ When the branch has a worktree, checkout **navigates to it** instead of switchin
 **--no-cd**
 : Do not write a navigation destination for the calling shell, even when **GIT_FLOW_CD_FILE** is set. The path is still printed for manual use, and the branch switch — when there is one — still happens.
 
-**--clobber**
-: Remove a plain directory standing in the way of a new worktree. Only meaningful together with **--worktree**; on its own it does nothing at all, because with no worktree to create there is nothing to clobber. Removal is refused when the target is a file, a registered worktree of this repository, or a directory containing a `.git` entry.
+**--force**
+: Remove a plain directory standing in the way of a new worktree. Only meaningful together with **--worktree**; on its own it does nothing at all, because with no worktree to create there is nothing in the way to remove. Removal is refused when the target is a file, a registered worktree of this repository, or a directory containing a `.git` entry.
 
 **--quiet**, **-q**
 : Do not print the tip naming **git flow shell-init**.
@@ -253,7 +253,7 @@ git checkout feature/branch -- specific-file.txt
 : Branch not found
 
 **6**
-: A refusal: the target path of a new worktree is occupied, or **--clobber** was asked to remove a file, a registered worktree, or a directory containing a `.git` entry
+: A refusal: the target path of a new worktree is occupied, or **--force** was asked to remove a file, a registered worktree, or a directory containing a `.git` entry
 
 ## SEE ALSO
 

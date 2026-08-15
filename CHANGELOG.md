@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `checkout` is worktree-aware: when the branch has a worktree, it reports the path and offers it to the calling shell instead of switching the current worktree's branch. `--worktree` creates a missing worktree first and records git-flow as its creator, `--clobber` clears a plain directory out of the way, `--no-cd` suppresses only the shell handover, and `--quiet` drops the shell-init tip
+- `checkout` is worktree-aware: when the branch has a worktree, it reports the path and offers it to the calling shell instead of switching the current worktree's branch. `--worktree` creates a missing worktree first and records git-flow as its creator, `--force` clears a plain directory out of the way, `--no-cd` suppresses only the shell handover, and `--quiet` drops the shell-init tip
 - `shell-init {bash|zsh|fish}` prints a shell wrapper that turns that handover into an automatic `cd`. It defines both a `git` and a `git-flow` function, so the documented `git flow …` form navigates too, and it scopes the navigation variable to a single command rather than exporting it
 - `worktree add` now points at `shell-init` when the navigation channel is unused, and gains `--quiet` to suppress that tip
 
