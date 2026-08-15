@@ -227,7 +227,11 @@ Define how the branch type participates in the workflow:
 : Prefix for created tags (topic branches only).
 : *Default*: "" (no prefix)
 
-git-flow always writes **autoUpdate** and **tag** explicitly as **true** or **false**, so a configuration it wrote carries a line for both keys on every branch. An absent key still reads as **false**; the difference is that an explicit local **false** shadows a **true** inherited from an outer config scope, whereas an absent key does not. This applies to any configuration git-flow writes, including **git flow init**.
+**worktree**
+: Branch type creates a worktree for new branches by default (topic branches only). With this set, **git flow *type* start** creates the branch in its own worktree instead of checking it out, at the path **gitflow.worktreePath** computes. **--worktree** and **--no-worktree** override it per command.
+: *Default*: false
+
+git-flow always writes **autoUpdate** and **tag** explicitly as **true** or **false**, so a configuration it wrote carries a line for both keys on every branch. **worktree** is written explicitly too, but for **topic branch types only**: a worktree default on a base branch has no effect, because **start** never creates one for a base branch, so writing it would only add noise. An absent key still reads as **false**; the difference is that an explicit local **false** shadows a **true** inherited from an outer config scope, whereas an absent key does not. This applies to any configuration git-flow writes, including **git flow init**.
 
 ## COMMAND OVERRIDES
 

@@ -70,6 +70,9 @@ Define how the branch type participates in the workflow:
 | `tagprefix` | Prefix for created tags (topic only) | String | `""` |
 | `autoUpdate` | Auto-update from parent on finish (base only) | `true`, `false` | `false` |
 | `deleteRemote` | Delete remote branch on finish (topic only) | `true`, `false` | `false` |
+| `worktree` | `start` creates a worktree for new branches (topic only) | `true`, `false` | `false` |
+
+`worktree` says the branch type's process gives every new branch its own working directory: `git flow <type> start` then creates the branch in a worktree at the path [`gitflow.worktreePath`](#system-settings) computes, instead of checking it out. `--worktree` and `--no-worktree` override it per invocation. git-flow writes the key for topic branch types only — a worktree default on a base branch has no effect.
 
 For example, setting `tag=true` on release branches means "releases produce tags" — it characterizes the release process. This can still be overridden per-command (Layer 2: `gitflow.release.finish.notag`) or per-invocation (Layer 3: `--notag`), but the branch config establishes the branch type's intended role.
 
@@ -94,6 +97,8 @@ gitflow.branch.develop.downstreamStrategy=merge
 gitflow.branch.develop.autoUpdate=true    # Auto-updates from main
 ```
 
+Base branches carry no `worktree` key: `start` never creates a worktree for them, so a default there would have no effect and git-flow does not write one.
+
 #### Topic Branches
 
 ```bash
@@ -106,6 +111,7 @@ gitflow.branch.feature.upstreamStrategy=merge
 gitflow.branch.feature.downstreamStrategy=rebase
 gitflow.branch.feature.tag=false
 gitflow.branch.feature.autoUpdate=false
+gitflow.branch.feature.worktree=false
 
 # Release branches
 gitflow.branch.release.type=topic
@@ -116,6 +122,7 @@ gitflow.branch.release.upstreamStrategy=merge
 gitflow.branch.release.downstreamStrategy=merge
 gitflow.branch.release.tag=true
 gitflow.branch.release.autoUpdate=false
+gitflow.branch.release.worktree=false
 
 # Hotfix branches  
 gitflow.branch.hotfix.type=topic
@@ -126,6 +133,7 @@ gitflow.branch.hotfix.upstreamStrategy=merge
 gitflow.branch.hotfix.downstreamStrategy=merge
 gitflow.branch.hotfix.tag=true
 gitflow.branch.hotfix.autoUpdate=false
+gitflow.branch.hotfix.worktree=false
 ```
 
 #### Custom Branch Types

@@ -234,6 +234,7 @@ gitflow.branch.<name>.upstreamStrategy    = "merge|rebase|squash"
 gitflow.branch.<name>.downstreamStrategy  = "merge|rebase"
 gitflow.branch.<name>.tag                 = "true|false"
 gitflow.branch.<name>.autoUpdate          = "true|false"
+gitflow.branch.<name>.worktree            = "true|false"  # topic types only
 
 gitflow.<type>.start.fetch                = "true|false"
 gitflow.<type>.finish.keep                = "true|false"
