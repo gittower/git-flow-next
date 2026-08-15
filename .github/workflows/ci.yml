@@ -38,5 +38,14 @@ jobs:
       - name: Build
         run: go build ./...
 
+      # The shell-init wrapper tests execute the emitted scripts against their
+      # real interpreters. ubuntu-latest ships neither zsh nor fish, and the
+      # tests fail rather than skip when a shell is missing — a skip would leave
+      # the suite green while two of the three scripts were never run once.
+      - name: Install shells
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh fish
+
       - name: Test
         run: go test -shuffle=on -timeout 20m ./...

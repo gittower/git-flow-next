@@ -51,7 +51,8 @@ directories of the computed path are created as needed.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		path, _ := cmd.Flags().GetString("path")
 		noCD, _ := cmd.Flags().GetBool("no-cd")
-		WorktreeAddCommand(args[0], path, noCD)
+		quiet, _ := cmd.Flags().GetBool("quiet")
+		WorktreeAddCommand(args[0], path, noCD, quiet)
 	},
 }
 
@@ -112,9 +113,9 @@ Nothing is created and nothing is changed.`,
 }
 
 // WorktreeAddCommand is the implementation of 'git flow worktree add'.
-func WorktreeAddCommand(branch string, path string, noCD bool) {
+func WorktreeAddCommand(branch string, path string, noCD bool, quiet bool) {
 	runWorktreeCommand(func(repo *git.Repo) error {
-		return executeWorktreeAdd(repo, branch, path, noCD)
+		return executeWorktreeAdd(repo, branch, path, noCD, quiet)
 	})
 }
 
@@ -185,7 +186,7 @@ func loadWorktreeConfig(repo *git.Repo) (*config.Config, error) {
 }
 
 // executeWorktreeAdd creates a worktree for an existing branch.
-func executeWorktreeAdd(repo *git.Repo, branch string, pathFlag string, noCD bool) error {
+func executeWorktreeAdd(repo *git.Repo, branch string, pathFlag string, noCD bool, quiet bool) error {
 	cfg, err := loadWorktreeConfig(repo)
 	if err != nil {
 		return err
@@ -209,33 +210,14 @@ func executeWorktreeAdd(repo *git.Repo, branch string, pathFlag string, noCD boo
 		return &errors.WorktreeExistsError{Branch: branch, Path: existing.Path}
 	}
 
-	target, err := resolveWorktreeTarget(cfg, repo, branch, pathFlag)
+	target, err := createWorktreeAt(cfg, repo, branch, pathFlag, false)
 	if err != nil {
 		return err
-	}
-	if occupied, err := pathIsOccupied(target); err != nil {
-		return &errors.GitError{Operation: "inspect target path", Err: err}
-	} else if occupied {
-		return &errors.WorktreePathOccupiedError{Path: target}
-	}
-
-	// A branch name with slashes computes a nested path, whose intermediate
-	// directories have to exist first.
-	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-		return &errors.GitError{Operation: "create worktree parent directory", Err: err}
-	}
-	if err := repo.AddWorktree(target, branch); err != nil {
-		return &errors.GitError{Operation: "add worktree", Err: err}
-	}
-
-	// A missing marker only means later cleanup leaves this worktree alone, so a
-	// failure here warns rather than failing an operation that already succeeded.
-	if err := worktree.MarkManaged(repo, branch); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
 
 	fmt.Printf("Created worktree for branch '%s' at %s\n", branch, target)
 	fmt.Printf("To switch to it: cd %s\n", target)
+	printShellInitTip(quiet)
 
 	if !noCD {
 		// Written only now, after the worktree exists.
@@ -469,6 +451,123 @@ func resolveWorktreeTarget(cfg *config.Config, repo *git.Repo, branch string, pa
 	return path, nil
 }
 
+// printShellInitTip points the user at 'git flow shell-init' after a navigation
+// they now have to perform by hand.
+//
+// It prints only when the navigation channel is unused: a caller that set
+// GIT_FLOW_CD_FILE has the wrapper installed already, and telling them to
+// install it would be noise on every navigating command. The decision is made on
+// the resolved destination file rather than on whether the variable exists,
+// because an empty value means the same thing as an absent one.
+//
+// <shell> is printed verbatim: 'git flow shell-init' with no argument errors
+// with usage, so naming a placeholder is what keeps the tip honest.
+func printShellInitTip(quiet bool) {
+	if quiet || navigate.DestinationFile() != "" {
+		return
+	}
+	fmt.Println("Tip: run 'git flow shell-init <shell>' for automatic directory switching")
+}
+
+// createWorktreeAt creates the worktree for branch and records git-flow as its
+// creator, returning the path it was created at.
+//
+// It is shared by 'worktree add' and 'checkout --worktree' so the two cannot
+// drift: the target resolution, the occupancy rules and the provenance marker
+// are decided in exactly one place. The caller is expected to have established
+// that the branch exists and has no worktree yet, and prints its own
+// confirmation — the wording differs between the two commands.
+//
+// force removes a plain directory that is in the way. It never removes
+// anything else; see removeObstruction.
+func createWorktreeAt(cfg *config.Config, repo *git.Repo, branch string, pathFlag string, force bool) (string, error) {
+	target, err := resolveWorktreeTarget(cfg, repo, branch, pathFlag)
+	if err != nil {
+		return "", err
+	}
+
+	occupied, err := pathIsOccupied(target)
+	if err != nil {
+		return "", &errors.GitError{Operation: "inspect target path", Err: err}
+	}
+	if occupied {
+		if !force {
+			return "", &errors.WorktreePathOccupiedError{Path: target}
+		}
+		if err := removeObstruction(repo, target); err != nil {
+			return "", err
+		}
+	}
+
+	// A branch name with slashes computes a nested path, whose intermediate
+	// directories have to exist first.
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return "", &errors.GitError{Operation: "create worktree parent directory", Err: err}
+	}
+	if err := repo.AddWorktree(target, branch); err != nil {
+		return "", &errors.GitError{Operation: "add worktree", Err: err}
+	}
+
+	// A missing marker only means later cleanup leaves this worktree alone, so a
+	// failure here warns rather than failing an operation that already succeeded.
+	if err := worktree.MarkManaged(repo, branch); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
+
+	return target, nil
+}
+
+// removeObstruction removes an occupied target path, but only when what is
+// there is a plain directory git-flow can afford to lose.
+//
+// The three refusals bound the blast radius of a mistyped path template. The
+// .git test uses Lstat and refuses on ANY result — the linked-worktree form is a
+// .git file and an ordinary clone is a .git directory, so a check that handled
+// only one of them would remove the other.
+//
+// When target is a SYMLINK the guards below follow it while RemoveAll acts on the
+// link itself, so the object inspected and the object removed differ. That is not
+// destructive — Go's RemoveAll never descends through a symlink — and the blast
+// radius is exactly one dangling link, so the asymmetry is left alone rather than
+// traded for an Lstat that would refuse a symlinked worktree root outright.
+func removeObstruction(repo *git.Repo, target string) error {
+	info, err := os.Stat(target)
+	if err != nil {
+		return &errors.GitError{Operation: "inspect target path", Err: err}
+	}
+	if !info.IsDir() {
+		return &errors.RemovalRefusedError{Path: target, Reason: "it is a file, not a directory"}
+	}
+
+	entries, err := repo.ListWorktrees()
+	if err != nil {
+		return &errors.GitError{Operation: "list worktrees", Err: err}
+	}
+	for _, entry := range entries {
+		if git.SamePath(entry.Path, target) {
+			return &errors.RemovalRefusedError{
+				Path:   target,
+				Reason: "it is a registered worktree of this repository; 'git flow worktree remove <branch>' removes it safely",
+			}
+		}
+	}
+
+	if _, err := os.Lstat(filepath.Join(target, ".git")); err == nil {
+		return &errors.RemovalRefusedError{
+			Path:   target,
+			Reason: "it contains a .git entry, so it looks like a repository",
+		}
+	} else if !os.IsNotExist(err) {
+		return &errors.GitError{Operation: "inspect target path", Err: err}
+	}
+
+	if err := os.RemoveAll(target); err != nil {
+		return &errors.GitError{Operation: "remove the directory in the way", Err: err}
+	}
+	fmt.Printf("Removed %s to make room for the worktree\n", target)
+	return nil
+}
+
 // pathIsOccupied reports whether something is already in the way at path. An
 // empty directory is not in the way — git itself accepts one — but a file or a
 // directory with content is.
@@ -493,6 +592,7 @@ func pathIsOccupied(path string) (bool, error) {
 func init() {
 	worktreeAddCmd.Flags().String("path", "", "Create the worktree at this path instead of the computed one")
 	worktreeAddCmd.Flags().Bool("no-cd", false, "Do not write a navigation destination for the calling shell")
+	worktreeAddCmd.Flags().BoolP("quiet", "q", false, "Do not print the shell-init tip")
 
 	worktreeRemoveCmd.Flags().Bool("force", false, "Remove even with uncommitted or untracked changes")
 	worktreeRemoveCmd.Flags().Bool("no-cd", false, "Do not write a navigation destination for the calling shell")

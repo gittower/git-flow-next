@@ -15,6 +15,7 @@ This directory contains comprehensive manpage-style documentation for all git-fl
 - **git-flow-hotfix.1.md** - Hotfix branch management
 - **git-flow-overview.1.md** - Repository workflow overview
 - **git-flow-completion.1.md** - Shell completion script generation
+- **git-flow-shell-init.1.md** - Shell integration script for directory switching
 
 ### Configuration Documentation (Section 5)
 - **gitflow-config.5.md** - Complete configuration reference and examples

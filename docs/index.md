@@ -13,6 +13,7 @@ Comprehensive manpage-style documentation for git-flow-next commands and configu
 | **git-flow integrate** | Integrate a base branch into its parent | [git-flow-integrate(1)](git-flow-integrate.1.md) |
 | **git-flow worktree** | Manage worktrees for branches | [git-flow-worktree(1)](git-flow-worktree.1.md) |
 | **git-flow completion** | Generate shell completion scripts | [git-flow-completion(1)](git-flow-completion.1.md) |
+| **git-flow shell-init** | Print the shell integration script for directory switching | [git-flow-shell-init(1)](git-flow-shell-init.1.md) |
 
 ## Topic Branch Commands
 
