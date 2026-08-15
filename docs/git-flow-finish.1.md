@@ -131,7 +131,7 @@ The operation maintains a persistent state file that allows it to resume after c
 : Allow fast-forward merge when possible (default)
 
 **--ff-only**
-: Require that the merge into the parent branch be a fast-forward. This is a precondition, not a merge strategy: if the parent branch carries any commit the topic branch does not — whether the two have truly diverged or the parent is merely ahead — finish aborts before touching the repository, so what lands on the parent is exactly the tested topic tip. Integrate the parent into the topic branch, re-test, and finish again. Overrides git config setting `gitflow.<type>.finish.ff-only`.
+: Require that the merge into the parent branch be a fast-forward. This is a precondition, not a merge strategy: if the parent branch carries any commit the topic branch does not — whether the two have truly diverged or the parent is merely ahead — finish runs the configured fetch and then aborts before touching any local branch, tag or the working tree, so what lands on the parent is exactly the tested topic tip. Integrate the parent into the topic branch, re-test, and finish again. Overrides git config setting `gitflow.<type>.finish.ff-only`.
 
 ### Remote Fetch Options
 
@@ -508,25 +508,22 @@ git config gitflow.<type>.finish.noverify true
 ## EXIT STATUS
 
 **0**
-: Successful finish operation
+: Success.
 
 **1**
-: Topic branch not found
+: git-flow is not initialized.
 
 **2**
-: Git operation failed (conflicts, etc.); also returned for conflicting options, such as `--ff-only` combined with `--no-ff`, `--ff`, or a squash strategy
+: Invalid input (an unknown branch type, an invalid branch name, or conflicting options such as `--ff-only` combined with `--no-ff`, `--ff`, or a squash strategy).
 
 **3**
-: Invalid branch name or configuration
-
-**4**
-: Merge conflicts require manual resolution
+: A Git operation failed, a merge or rebase is already in progress, unresolved conflicts remain, a required fetch failed, or there is no in-progress operation to continue.
 
 **5**
-: Tag creation failed
+: A required branch (the topic branch or its parent) does not exist.
 
 **6**
-: GPG signing failed; also returned when the `--ff-only` precondition fails because the parent branch carries commits the topic branch does not
+: A validation error (the topic or parent branch is not in sync with its remote, or the `--ff-only` precondition failed because the parent carries commits the topic branch does not).
 
 ## SEE ALSO
 
