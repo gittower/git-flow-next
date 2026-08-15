@@ -19,12 +19,13 @@ type ResolvedFinishOptions struct {
 	ForceDelete bool
 
 	// Merge strategy options
-	MergeStrategy  string // Final resolved strategy (merge/rebase/squash)
-	UseRebase      bool   // Whether to use rebase
-	PreserveMerges bool   // Whether to preserve merges during rebase
-	NoFastForward  bool   // Whether to create merge commit for fast-forward
-	UseSquash      bool   // Whether to squash commits
-	SquashMessage  string // Custom commit message for squash merge
+	MergeStrategy      string // Final resolved strategy (merge/rebase/squash)
+	UseRebase          bool   // Whether to use rebase
+	PreserveMerges     bool   // Whether to preserve merges during rebase
+	NoFastForward      bool   // Whether to create merge commit for fast-forward
+	RequireFastForward bool   // Whether the upstream merge must be a fast-forward (finish only)
+	UseSquash          bool   // Whether to squash commits
+	SquashMessage      string // Custom commit message for squash merge
 
 	// Fetch options
 	ShouldFetch bool // Whether to fetch from remote before finishing
@@ -61,17 +62,32 @@ type BranchRetentionOptions struct {
 	ForceDelete *bool
 }
 
+// FastForwardMode is the tri-state fast-forward setting shared by the --ff,
+// --no-ff and --ff-only options and their Layer-2 config keys. The three values
+// are mutually exclusive spellings of one setting, not independent booleans.
+type FastForwardMode string
+
+const (
+	// FFModeFF allows a fast-forward merge when one is possible (the default).
+	FFModeFF FastForwardMode = "ff"
+	// FFModeNoFF always creates a merge commit, even when a fast-forward is possible.
+	FFModeNoFF FastForwardMode = "no-ff"
+	// FFModeFFOnly requires that the merge be a fast-forward, failing otherwise.
+	// It is a finish-only value; integrate never resolves to it.
+	FFModeFFOnly FastForwardMode = "ff-only"
+)
+
 // MergeStrategyOptions represents command-line merge strategy options
 // Note: This should match the MergeStrategyOptions type in cmd package
 type MergeStrategyOptions struct {
-	Strategy       *string // Override for entire strategy
-	Rebase         *bool   // --rebase/--no-rebase override
-	PreserveMerges *bool   // --preserve-merges/--no-preserve-merges
-	NoFF           *bool   // --no-ff/--ff
-	Squash         *bool   // --squash/--no-squash override
-	SquashMessage  *string // --squash-message custom commit message
-	MergeMessage   *string // --merge-message custom commit message for upstream merge
-	UpdateMessage  *string // --update-message custom commit message for child updates
+	Strategy       *string          // Override for entire strategy
+	Rebase         *bool            // --rebase/--no-rebase override
+	PreserveMerges *bool            // --preserve-merges/--no-preserve-merges
+	FF             *FastForwardMode // --ff/--no-ff/--ff-only; nil means not specified on the command line
+	Squash         *bool            // --squash/--no-squash override
+	SquashMessage  *string          // --squash-message custom commit message
+	MergeMessage   *string          // --merge-message custom commit message for upstream merge
+	UpdateMessage  *string          // --update-message custom commit message for child updates
 }
 
 // ResolveFinishOptions resolves all finish command options using three-layer precedence:
@@ -85,7 +101,7 @@ func ResolveFinishOptions(cfg *Config, branchType string, branchName string, tag
 	fullBranchName := branchConfig.Prefix + branchName
 
 	// Resolve merge strategy components
-	strategy, useRebase, preserveMerges, noFastForward, useSquash := resolveMergeStrategy(cfg, branchConfig, branchType, "finish", mergeOpts)
+	strategy, useRebase, preserveMerges, noFastForward, requireFastForward, useSquash := resolveMergeStrategy(cfg, branchConfig, branchType, "finish", mergeOpts)
 
 	// Resolve push options. Order matters: pushTag's default derives from the
 	// resolved pushBranches value, so resolve branches first.
@@ -108,12 +124,13 @@ func ResolveFinishOptions(cfg *Config, branchType string, branchName string, tag
 		ForceDelete: resolveFinishForceDelete(cfg, branchType, retentionOpts),
 
 		// Merge strategy resolution
-		MergeStrategy:  strategy,
-		UseRebase:      useRebase,
-		PreserveMerges: preserveMerges,
-		NoFastForward:  noFastForward,
-		UseSquash:      useSquash,
-		SquashMessage:  resolveSquashMessage(fullBranchName, mergeOpts),
+		MergeStrategy:      strategy,
+		UseRebase:          useRebase,
+		PreserveMerges:     preserveMerges,
+		NoFastForward:      noFastForward,
+		RequireFastForward: requireFastForward,
+		UseSquash:          useSquash,
+		SquashMessage:      resolveSquashMessage(fullBranchName, mergeOpts),
 
 		// Fetch resolution
 		ShouldFetch: resolveFinishShouldFetch(cfg, branchType, fetch),
@@ -326,7 +343,11 @@ func getCommandConfigString(cfg *Config, configKey string) string {
 // resolveMergeStrategy resolves merge strategy using three-layer precedence.
 // The command segment (e.g. "finish" or "integrate") selects the Layer-2
 // gitflow.<branchType>.<command>.* config namespace.
-func resolveMergeStrategy(cfg *Config, branchConfig BranchConfig, branchType string, command string, mergeOpts *MergeStrategyOptions) (string, bool, bool, bool, bool) {
+//
+// The fast-forward setting is resolved as one tri-state (see resolveFFMode) and
+// returned as two derived booleans: noFF and requireFF. The ff-only value is read
+// in the "finish" namespace only, so integrate can never require a fast-forward.
+func resolveMergeStrategy(cfg *Config, branchConfig BranchConfig, branchType string, command string, mergeOpts *MergeStrategyOptions) (string, bool, bool, bool, bool, bool) {
 	// Layer 1: Get base strategy from branch configuration
 	baseStrategy := branchConfig.UpstreamStrategy
 	if baseStrategy == "" {
@@ -337,7 +358,9 @@ func resolveMergeStrategy(cfg *Config, branchConfig BranchConfig, branchType str
 	rebase := resolveFinishRebase(cfg, branchType, command, baseStrategy, mergeOpts)
 	squash := resolveFinishSquash(cfg, branchType, command, baseStrategy, mergeOpts)
 	preserveMerges := resolveFinishPreserveMerges(cfg, branchType, command, mergeOpts)
-	noFF := resolveFinishNoFF(cfg, branchType, command, mergeOpts)
+	ffMode := resolveFFMode(cfg, branchType, command, mergeOpts)
+	noFF := ffMode == FFModeNoFF
+	requireFF := ffMode == FFModeFFOnly
 
 	// Determine final strategy based on precedence: squash > rebase > base strategy
 	var finalStrategy string
@@ -349,7 +372,7 @@ func resolveMergeStrategy(cfg *Config, branchConfig BranchConfig, branchType str
 		finalStrategy = "merge"
 	}
 
-	return finalStrategy, rebase, preserveMerges, noFF, squash
+	return finalStrategy, rebase, preserveMerges, noFF, requireFF, squash
 }
 
 // resolveFinishRebase resolves whether to use rebase strategy
@@ -430,26 +453,40 @@ func resolveFinishPreserveMerges(cfg *Config, branchType string, command string,
 	return preserveMerges
 }
 
-// resolveFinishNoFF resolves whether to create merge commit for fast-forward
-func resolveFinishNoFF(cfg *Config, branchType string, command string, mergeOpts *MergeStrategyOptions) bool {
-	// Layer 1: Default is to allow fast-forward (no --no-ff)
-	noFF := false
+// resolveFFMode resolves the tri-state fast-forward setting shared by --ff,
+// --no-ff and --ff-only.
+//
+// Layer 1 is always FFModeFF (fast-forward when possible). Layer 2 reads
+// .no-ff and then .ff, preserving the long-standing rule that ff beats no-ff
+// within Layer 2, and finally .ff-only, so a configured ff-only wins over both
+// of them. The .ff-only key is read in the "finish" namespace only: integrate
+// shares this resolver but must never require a fast-forward. Layer 3 (the CLI
+// value) overrides whatever Layer 2 produced.
+func resolveFFMode(cfg *Config, branchType string, command string, mergeOpts *MergeStrategyOptions) FastForwardMode {
+	// Layer 1: Default is to allow fast-forward
+	mode := FFModeFF
 
 	// Layer 2: Command-specific config
 	if noFFConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.%s.no-ff", branchType, command)); noFFConfig {
-		noFF = true
+		mode = FFModeNoFF
 	}
 	// Check for explicit fast-forward config
 	if ffConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.%s.ff", branchType, command)); ffConfig {
-		noFF = false
+		mode = FFModeFF
+	}
+	// The fast-forward requirement is a finish-only setting
+	if command == "finish" {
+		if ffOnlyConfig := getCommandConfigBool(cfg, fmt.Sprintf("gitflow.%s.%s.ff-only", branchType, command)); ffOnlyConfig {
+			mode = FFModeFFOnly
+		}
 	}
 
 	// Layer 3: Command-line flags override config
-	if mergeOpts != nil && mergeOpts.NoFF != nil {
-		noFF = *mergeOpts.NoFF
+	if mergeOpts != nil && mergeOpts.FF != nil {
+		mode = *mergeOpts.FF
 	}
 
-	return noFF
+	return mode
 }
 
 // resolveShouldFetch resolves whether to fetch from the remote before a command runs, using the
@@ -573,7 +610,7 @@ func ResolveIntegrateOptions(cfg *Config, branchName string, tagOpts *TagOptions
 	// Base branches have no prefix, so the full name is just the branch name.
 	fullBranchName := branchName
 
-	strategy, useRebase, preserveMerges, noFastForward, useSquash := resolveMergeStrategy(cfg, branchConfig, branchName, "integrate", mergeOpts)
+	strategy, useRebase, preserveMerges, noFastForward, requireFastForward, useSquash := resolveMergeStrategy(cfg, branchConfig, branchName, "integrate", mergeOpts)
 
 	tagName := resolveIntegrateTagName(cfg, branchName, tagOpts)
 
@@ -587,12 +624,13 @@ func ResolveIntegrateOptions(cfg *Config, branchName string, tagOpts *TagOptions
 		MessageFile: resolveIntegrateMessageFile(cfg, branchName, tagOpts),
 
 		// Merge strategy resolution
-		MergeStrategy:  strategy,
-		UseRebase:      useRebase,
-		PreserveMerges: preserveMerges,
-		NoFastForward:  noFastForward,
-		UseSquash:      useSquash,
-		SquashMessage:  resolveSquashMessage(fullBranchName, mergeOpts),
+		MergeStrategy:      strategy,
+		UseRebase:          useRebase,
+		PreserveMerges:     preserveMerges,
+		NoFastForward:      noFastForward,
+		RequireFastForward: requireFastForward,
+		UseSquash:          useSquash,
+		SquashMessage:      resolveSquashMessage(fullBranchName, mergeOpts),
 
 		// Fetch resolution (Layer-1 default OFF)
 		ShouldFetch: resolveIntegrateShouldFetch(cfg, branchName, fetch),
