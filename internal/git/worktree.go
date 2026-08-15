@@ -227,15 +227,22 @@ func IsWithin(child, parent string) bool {
 }
 
 // foldPath returns p in the form used for comparison: unchanged where path
-// names are case-sensitive, lowercased where they are not. Windows path names
+// names are case-sensitive, upper-cased where they are not. Windows path names
 // ignore case, so two spellings of one location must compare equal there, while
 // Linux and a case-sensitive macOS volume both distinguish case and must not.
+//
+// The fold is to UPPER case, not lower, because that is the direction Windows
+// itself folds in: NTFS and exFAT carry an upcase table and ordinal
+// case-insensitive comparison upper-cases both sides. The two differ on
+// characters whose lowercase forms are distinct but whose uppercase form is
+// shared — Greek final sigma is the reachable example, where ToLower leaves
+// "ς" and "σ" different while Windows considers both "Σ" and the paths equal.
 //
 // Only comparisons see the folded form. Paths stored, passed to git or reported
 // to the user keep the casing they arrived with.
 func foldPath(p string) string {
 	if isWindows {
-		return strings.ToLower(p)
+		return strings.ToUpper(p)
 	}
 	return p
 }
