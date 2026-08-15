@@ -350,8 +350,12 @@ func TestFinishChildBranchOrderIsDeterministic(t *testing.T) {
 			}
 
 			testutil.WriteFile(t, dir, "hotfix-order.txt", "Order determinism test")
-			testutil.RunGit(t, dir, "add", "hotfix-order.txt")
-			testutil.RunGit(t, dir, "commit", "-m", "Hotfix for order determinism test")
+			if _, err := testutil.RunGit(t, dir, "add", "hotfix-order.txt"); err != nil {
+				t.Fatalf("iteration %d: failed to add file: %v", i, err)
+			}
+			if _, err := testutil.RunGit(t, dir, "commit", "-m", "Hotfix for order determinism test"); err != nil {
+				t.Fatalf("iteration %d: failed to commit: %v", i, err)
+			}
 
 			output, err = testutil.RunGitFlow(t, dir, "hotfix", "finish", "order-check")
 			if err != nil {
@@ -367,7 +371,12 @@ func TestFinishChildBranchOrderIsDeterministic(t *testing.T) {
 			// Every child must still actually receive the hotfix — sorting
 			// decides the order, never the selection.
 			for _, name := range want {
-				testutil.RunGit(t, dir, "checkout", name)
+				// A failed checkout would leave the working tree on the
+				// previous branch, where the file exists — the check would
+				// then pass while inspecting the wrong branch.
+				if _, err := testutil.RunGit(t, dir, "checkout", name); err != nil {
+					t.Fatalf("iteration %d: failed to check out %s: %v", i, name, err)
+				}
 				if !testutil.FileExists(t, dir, "hotfix-order.txt") {
 					t.Errorf("iteration %d: branch %s was not auto-updated", i, name)
 				}
