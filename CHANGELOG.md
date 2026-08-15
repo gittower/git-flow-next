@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The EXIT STATUS section of the `git flow <type> checkout` manpage documented codes 1/2/3/4 that the command has never returned; it now documents the actual 1/2/3/5/6
 - `finish` collected the auto-update child base branches in Go's randomized map order, so with more than one auto-update child the order they were updated in, the order they were reported in, and the order recorded in merge state (the resume order after a conflict) all varied between identical runs; children are now processed in sorted order, matching `integrate`
+- Worktree path comparison ignores case on Windows, where two spellings of one location differing only in case were treated as different paths. The refusal to remove or detach the main worktree, the refusal to delete a registered worktree, and the detection that the shell is standing inside a worktree being removed all failed to fire on a case mismatch
 
 ## [2.0.0] - 2026-08-09
 
