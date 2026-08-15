@@ -781,13 +781,13 @@ func TestFinishWithConsecutiveConflicts(t *testing.T) {
 		t.Error("Expected merge state file to be cleaned up after successful completion")
 	}
 
-	// Verify final repository state - should be on main branch after release finish
+	// Verify final repository state - should be on the integration branch after release finish
 	currentBranch, err := testutil.RunGit(t, dir, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		t.Fatalf("Failed to get current branch: %v", err)
 	}
-	if strings.TrimSpace(currentBranch) != "main" {
-		t.Errorf("Expected to be on main branch after release finish, got: %s", strings.TrimSpace(currentBranch))
+	if strings.TrimSpace(currentBranch) != "develop" {
+		t.Errorf("Expected to be on develop branch after release finish, got: %s", strings.TrimSpace(currentBranch))
 	}
 
 	// Verify release branch is deleted
@@ -800,6 +800,10 @@ func TestFinishWithConsecutiveConflicts(t *testing.T) {
 	}
 
 	// Verify main branch has the resolved content with release info
+	_, err = testutil.RunGit(t, dir, "checkout", "main")
+	if err != nil {
+		t.Fatalf("Failed to checkout main branch: %v", err)
+	}
 	mainContent := testutil.ReadFile(t, dir, "version.txt")
 	if !strings.Contains(mainContent, "version: 1.1.0") || !strings.Contains(mainContent, "release-date: 2024-01-15") {
 		t.Errorf("Expected main branch to have release changes, got: %s", mainContent)
