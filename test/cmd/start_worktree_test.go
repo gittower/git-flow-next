@@ -214,8 +214,17 @@ func TestStartWorktreeCreatesAtComputedPath(t *testing.T) {
 	if !(branchLine < worktreeLine && worktreeLine < cdLine) {
 		t.Errorf("Expected the branch, worktree and cd lines in that order, got: %s", output)
 	}
-	if !filepath.IsAbs(wtPath) {
-		t.Errorf("Expected an absolute computed path, got %q", wtPath)
+	// Absoluteness is asserted on what the command actually printed, not on the
+	// helper's own return value, which cannot fail while computedWorktreePath is
+	// correct.
+	const worktreePrefix = "Created worktree for branch 'feature/x' at "
+	printed := output[worktreeLine+len(worktreePrefix):]
+	if end := strings.IndexByte(printed, '\n'); end >= 0 {
+		printed = printed[:end]
+	}
+	printed = strings.TrimSpace(printed)
+	if !filepath.IsAbs(printed) {
+		t.Errorf("Expected start to print an absolute worktree path, got %q", printed)
 	}
 }
 
@@ -366,6 +375,7 @@ func TestStartWorktreePathBeatsNoWorktree(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
 	relative, absolute := customWorktreeDest(t, dir)
 
 	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "x", "--worktree-path", relative, "--no-worktree")
@@ -847,6 +857,7 @@ func TestStartWorktreePathWritesAbsoluteDestination(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
 	relative, absolute := customWorktreeDest(t, dir)
 	cdFile := cdFilePath(t)
 
@@ -857,6 +868,45 @@ func TestStartWorktreePathWritesAbsoluteDestination(t *testing.T) {
 
 	if got := readCDFile(t, cdFile); got != absolute {
 		t.Errorf("Expected CD file to hold %q, got %q", absolute, got)
+	}
+}
+
+// TestStartWorktreePathOccupiedCreatesNothing covers the hand-typed branch of the
+// occupancy check. Every other occupancy scenario (8, 18, E8, E9, E14) obstructs
+// the COMPUTED path, so without this test the --worktree-path branch of
+// resolveWorktreeTarget is never validated against an occupied destination and an
+// implementation that skipped the check for hand-typed paths would still pass.
+// Steps:
+// 1. Sets up a repository with git-flow defaults and an empty GIT_FLOW_CD_FILE
+// 2. Creates a non-empty directory at the custom destination
+// 3. Runs 'git flow feature start x --worktree-path ../<repo>-custom' with the variable set
+// 4. Verifies exit code 6 and that stderr names the occupied custom path
+// 5. Verifies no branch, no registered worktree and no provenance marker
+// 6. Verifies the obstruction is untouched, the computed root was never used and the CD file is empty
+func TestStartWorktreePathOccupiedCreatesNothing(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	relative, absolute := customWorktreeDest(t, dir)
+	cdFile := cdFilePath(t)
+	writeObstruction(t, absolute, "keep.txt", "precious")
+
+	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, cdEnv(cdFile), "feature", "start", "x", "--worktree-path", relative)
+	if got := worktreeExitCode(err); got != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nStdout: %s\nStderr: %s", got, stdout, stderr)
+	}
+	if !strings.Contains(stderr, absolute) {
+		t.Errorf("Expected stderr to name the occupied path %q, got: %s", absolute, stderr)
+	}
+
+	assertNothingCreated(t, dir, "feature/x")
+	assertFileContent(t, filepath.Join(absolute, "keep.txt"), "precious")
+	if _, err := os.Stat(worktreeRootFor(dir)); !os.IsNotExist(err) {
+		t.Errorf("Expected nothing under the computed worktree root %q", worktreeRootFor(dir))
+	}
+	if got := readCDFile(t, cdFile); got != "" {
+		t.Errorf("Expected the CD file to stay empty, got %q", got)
 	}
 }
 
@@ -1252,6 +1302,7 @@ func TestStartWorktreeChecksFilteredPathForOccupancy(t *testing.T) {
 // 2. Creates a non-empty directory at the computed path for the pre-filter name feature/x
 // 3. Runs 'git flow feature start x --worktree'
 // 4. Verifies exit code 0 and that the worktree landed at the filtered path
+// 5. Verifies the pre-filter obstruction is untouched
 func TestStartWorktreeIgnoresUnfilteredPathOccupancy(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
@@ -1259,7 +1310,8 @@ func TestStartWorktreeIgnoresUnfilteredPathOccupancy(t *testing.T) {
 	defer os.RemoveAll(worktreeRootFor(dir))
 
 	startVersionFilter(t, dir)
-	writeObstruction(t, computedWorktreePath(t, dir, "feature/x"), "keep.txt", "precious")
+	unfiltered := computedWorktreePath(t, dir, "feature/x")
+	writeObstruction(t, unfiltered, "keep.txt", "precious")
 
 	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "x", "--worktree")
 	if err != nil {
@@ -1267,6 +1319,12 @@ func TestStartWorktreeIgnoresUnfilteredPathOccupancy(t *testing.T) {
 	}
 
 	assertWorktreeCreatedAt(t, dir, "feature/x-filtered", computedWorktreePath(t, dir, "feature/x-filtered"))
+	// The pre-filter path is not merely ignored for validation — nothing writes to
+	// it either, so the directory that was in the way is still exactly as it was.
+	assertFileContent(t, filepath.Join(unfiltered, "keep.txt"), "precious")
+	if registered := registeredWorktreePath(t, dir, "feature/x"); registered != "" {
+		t.Errorf("Expected no worktree registered for the pre-filter name, found one at %s", registered)
+	}
 }
 
 // TestStartWorktreeFailureKeepsBranch covers E10 (decisions.md SC-8): when worktree
@@ -1379,6 +1437,7 @@ func TestStartWorktreeHonorsCustomPathTemplate(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
 
 	root := testutil.EvalPath(t, dir)
 	customRoot := filepath.Join(filepath.Dir(root), filepath.Base(root)+"-wt")
@@ -1412,6 +1471,7 @@ func TestStartWorktreeHonorsLowercasedPathTemplateKey(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
 
 	root := testutil.EvalPath(t, dir)
 	customRoot := filepath.Join(filepath.Dir(root), filepath.Base(root)+"-wt")
