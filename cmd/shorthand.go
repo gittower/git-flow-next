@@ -163,8 +163,13 @@ func RegisterShorthandCommands() {
 			}
 			// Collapse the fast-forward flag trio into the tri-state option. A
 			// conflicting pair exits with the usage code here, matching the
-			// per-type finish surface.
-			ffMode, ffErr := ffModeFromFlags(cmd.Flags().Changed("ff-only"), cmd.Flags().Changed("no-ff"), cmd.Flags().Changed("ff"))
+			// per-type finish surface. --ff-only is read by value so an explicit
+			// --ff-only=false leaves the gate inert instead of arming it, while
+			// --no-ff/--ff keep their long-standing "last one named wins"
+			// selection semantics.
+			ffOnly, _ := cmd.Flags().GetBool("ff-only")
+			noFFSelection := getBoolPtr(cmd, "no-ff", "ff")
+			ffMode, ffErr := ffModeFromFlags(ffOnly, noFFSelection != nil && *noFFSelection, noFFSelection != nil && !*noFFSelection)
 			if ffErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", ffErr)
 				os.Exit(int(flowerrors.ExitCodeInvalidInput))

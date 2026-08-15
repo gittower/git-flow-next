@@ -1076,6 +1076,33 @@ func TestShorthandFinishFFOnlyFastForwardsParent(t *testing.T) {
 	}
 }
 
+// TestShorthandFinishFFOnlyFalseDoesNotGate tests that the shorthand reads --ff-only by
+// value, so an explicit --ff-only=false leaves the gate inert just as the per-type
+// surface does.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates the diverged release topology, leaving HEAD on release/1.0.0
+// 3. Runs 'git flow finish --ff-only=false'
+// 4. Verifies success and that the ordinary merge produced a merge commit on main
+func TestShorthandFinishFFOnlyFalseDoesNotGate(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	tip := divergedRelease(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "finish", "--ff-only=false")
+	if err != nil {
+		t.Fatalf("Expected the shorthand finish to succeed with --ff-only=false: %v\nOutput: %s", err, output)
+	}
+	if got := commitParentCount(t, dir, "main"); got != 2 {
+		t.Errorf("Expected an ordinary merge commit on main, got %d parent(s)", got)
+	}
+	if got := revParse(t, dir, "main"); got == tip {
+		t.Errorf("Expected main to advance past the release tip %s via a merge commit", tip)
+	}
+}
+
 // TestFinishConfiguredFFOnlyWinsOverConfiguredFF tests that within Layer 2 the ff-only
 // key beats the ff key (E9).
 // Steps:
