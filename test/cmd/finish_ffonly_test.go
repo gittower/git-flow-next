@@ -1244,3 +1244,95 @@ func TestFinishFFAndNoFFFlagsStillResolveToNoFF(t *testing.T) {
 		t.Errorf("Expected main to advance past the release tip %s via a merge commit", tip)
 	}
 }
+
+// =============================================================================
+// Ref resolution regressions (R1-R2)
+// =============================================================================
+//
+// These pin the gate to refs/heads/*: Git's revision parser resolves
+// refs/tags/<name> before refs/heads/<name>, so an unqualified comparison would
+// judge a same-named tag instead of the branch it is supposed to move.
+
+// TestFinishFFOnlyGateReadsParentBranchNotTag tests that the gate compares the parent
+// branch and not a tag that happens to share its name (R1).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates feature/f1 with one commit, so develop can fast-forward onto it
+// 3. Creates a commit on main that feature/f1 does not contain and tags it 'develop'
+// 4. Runs 'git flow feature finish f1 --ff-only'
+// 5. Verifies the finish succeeds: reading the tag would have rejected it
+// 6. Verifies refs/heads/develop equals the feature tip and has a single parent
+func TestFinishFFOnlyGateReadsParentBranchNotTag(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "feature", "start", "f1"); err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, out)
+	}
+	commitFile(t, dir, "feature.txt", "feature content", "Add feature.txt")
+	tip := revParse(t, dir, "refs/heads/feature/f1")
+
+	// A commit on a sibling branch: not an ancestor of feature/f1, so a gate that
+	// resolved 'develop' to this tag would report "not fast-forwardable".
+	checkoutBranch(t, dir, "main")
+	commitFile(t, dir, "decoy.txt", "decoy content", "Add decoy.txt")
+	decoy := revParse(t, dir, "refs/heads/main")
+	if out, err := testutil.RunGit(t, dir, "tag", "develop", decoy); err != nil {
+		t.Fatalf("Failed to create the decoy tag: %v\nOutput: %s", err, out)
+	}
+	checkoutBranch(t, dir, "feature/f1")
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "f1", "--ff-only")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed against the develop branch: %v\nOutput: %s", err, output)
+	}
+	if got := revParse(t, dir, "refs/heads/develop"); got != tip {
+		t.Errorf("Expected develop to equal the feature tip %s, got %s", tip, got)
+	}
+	if got := commitParentCount(t, dir, "refs/heads/develop"); got != 1 {
+		t.Errorf("Expected develop's tip to have exactly one parent (fast-forward), got %d", got)
+	}
+}
+
+// TestFinishFFOnlyGateReadsTopicBranchNotTag tests that the gate compares the topic
+// branch and not a tag that happens to share its name (R2).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates an empty feature/f1 and advances develop with one commit
+// 3. Tags develop's tip 'feature/f1', a ref the parent trivially fast-forwards to
+// 4. Runs 'git flow feature finish f1 --ff-only'
+// 5. Verifies exit code 6: reading the tag would have accepted the finish
+// 6. Verifies develop is unchanged and feature/f1 still exists
+func TestFinishFFOnlyGateReadsTopicBranchNotTag(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "feature", "start", "f1"); err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, out)
+	}
+	checkoutBranch(t, dir, "develop")
+	commitFile(t, dir, "develop.txt", "develop content", "Add develop.txt")
+	developBefore := revParse(t, dir, "refs/heads/develop")
+
+	// The tag names the topic but points at develop's own tip, which satisfies the
+	// ancestry check by equality — the branch it shadows does not.
+	if out, err := testutil.RunGit(t, dir, "tag", "feature/f1", developBefore); err != nil {
+		t.Fatalf("Failed to create the decoy tag: %v\nOutput: %s", err, out)
+	}
+	checkoutBranch(t, dir, "feature/f1")
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "f1", "--ff-only")
+	if err == nil {
+		t.Fatalf("Expected finish to fail: develop is ahead of the feature branch. Output: %s", output)
+	}
+	assertExitCode(t, err, errors.ExitCodeValidationError)
+	assertGateMessage(t, output, "develop", "feature/f1")
+	if got := revParse(t, dir, "refs/heads/develop"); got != developBefore {
+		t.Errorf("Expected develop unchanged at %s, got %s", developBefore, got)
+	}
+	if !testutil.BranchExists(t, dir, "feature/f1") {
+		t.Error("Expected feature/f1 to still exist after a rejected finish")
+	}
+}

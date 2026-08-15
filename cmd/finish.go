@@ -280,7 +280,13 @@ func requireFastForwardable(repo *git.Repo, topic string, parent string) error {
 		return &errors.BranchNotFoundError{BranchName: parent}
 	}
 
-	fastForwardable, err := repo.IsAncestor(parent, topic)
+	// Compare fully qualified refs. Git's revision parser resolves refs/tags/<name>
+	// before refs/heads/<name>, so a tag sharing a branch's name would otherwise make
+	// the gate judge an object other than the branch BranchExists just verified — and
+	// other than the one the merge will move. IsAncestor stays a general-purpose
+	// ancestry helper that takes any revision, so the qualification belongs here. The
+	// error keeps the plain branch names the user typed.
+	fastForwardable, err := repo.IsAncestor("refs/heads/"+parent, "refs/heads/"+topic)
 	if err != nil {
 		return &errors.GitError{Operation: "check fast-forward precondition", Err: err}
 	}
