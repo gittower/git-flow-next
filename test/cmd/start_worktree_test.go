@@ -86,13 +86,19 @@ func assertWorktreeCreatedAt(t *testing.T, dir string, branch string, want strin
 // The destination is derived from the repository name rather than being a fixed
 // "../custom": SetupTestRepo creates every repository directly under the system
 // temp directory, so a fixed relative path would be the SAME directory in every
-// test that used it. The absolute form is built from the RAW dir, never the
-// symlink-resolved one — a hand-typed relative path is made absolute against the
-// invocation directory exactly as given and is not symlink-resolved.
+// test that used it.
+//
+// The absolute form is built from the symlink-RESOLVED repository directory. A
+// hand-typed relative path is made absolute with os.Getwd, which returns $PWD
+// only when $PWD identifies the real working directory and otherwise falls back
+// to the kernel's resolved path. These tests never override PWD, and the one they
+// inherit points at the package directory, so the child always gets the resolved
+// spelling. The repository root is resolved and the not-yet-existing sibling is
+// appended with Join — EvalSymlinks fails on a path that does not exist.
 func customWorktreeDest(t *testing.T, dir string) (relative string, absolute string) {
 	t.Helper()
 	name := filepath.Base(dir) + "-custom"
-	absolute = filepath.Join(filepath.Dir(dir), name)
+	absolute = filepath.Join(filepath.Dir(testutil.EvalPath(t, dir)), name)
 	t.Cleanup(func() { os.RemoveAll(absolute) })
 	return filepath.Join("..", name), absolute
 }
@@ -326,7 +332,7 @@ func TestStartNoWorktreeOverridesTypeDefault(t *testing.T) {
 // 1. Sets up a repository with git-flow defaults
 // 2. Runs 'git flow feature start x --worktree-path ../<repo>-custom' without --worktree
 // 3. Verifies exit code 0 and that the worktree is registered for feature/x at that path
-// 4. Verifies the printed path is the hand-typed destination in its unresolved form
+// 4. Verifies the printed path is the hand-typed destination, made absolute against the resolved invocation directory
 // 5. Verifies nothing was created under the computed worktree root
 func TestStartWorktreePathImpliesCreationAndMarks(t *testing.T) {
 	t.Parallel()
@@ -830,9 +836,9 @@ func TestStartWithoutWorktreeLeavesCDFileEmpty(t *testing.T) {
 // TestStartWorktreePathWritesAbsoluteDestination covers scenario 17: a relative
 // --worktree-path reaches the channel in absolute form.
 //
-// The expectation is built from the RAW repository directory: a hand-typed
-// relative path is made absolute against the invocation directory as given and is
-// not symlink-resolved, unlike a template-computed path.
+// The expectation is built from the symlink-resolved repository directory: this
+// test does not override PWD, so os.Getwd falls back to the kernel's resolved
+// working directory. See customWorktreeDest.
 // Steps:
 // 1. Sets up a repository with git-flow defaults and an empty GIT_FLOW_CD_FILE
 // 2. Runs 'git flow feature start x --worktree-path ../<repo>-custom' with the variable set
