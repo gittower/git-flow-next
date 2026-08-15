@@ -490,6 +490,30 @@ func (e *BaseBranchNotInSyncError) ExitCode() ExitCode {
 	return ExitCodeValidationError
 }
 
+// NotFastForwardableError indicates the --ff-only precondition failed: the parent
+// (merge-target) branch carries at least one commit the topic branch does not, so
+// what would land on the parent is a merge result rather than the tested topic
+// tip. It is deliberately stricter than `git merge --ff-only`, which reports
+// success when the parent is merely ahead of the topic. The message must not be
+// prefixed with "Error: " — the finish command adds that.
+type NotFastForwardableError struct {
+	Parent string
+	Topic  string
+}
+
+func (e *NotFastForwardableError) Error() string {
+	return fmt.Sprintf(`cannot fast-forward '%s' to '%s'
+
+'%s' has commits that are not in '%s'.
+--ff-only requires that what lands on '%s' is exactly the tested branch tip.
+Integrate '%s' into '%s' and re-test, then finish again.`,
+		e.Parent, e.Topic, e.Parent, e.Topic, e.Parent, e.Parent, e.Topic)
+}
+
+func (e *NotFastForwardableError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
 // RemoteNotConfiguredError indicates a required remote is not configured
 type RemoteNotConfiguredError struct {
 	Remote    string
