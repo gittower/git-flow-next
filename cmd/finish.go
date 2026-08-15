@@ -47,6 +47,7 @@
 package cmd
 
 import (
+	goerrors "errors"
 	"fmt"
 	"os"
 	"sort"
@@ -712,6 +713,18 @@ func handleMergeStep(repo *git.Repo, cfg *config.Config, state *mergestate.Merge
 	// Update state with the resolved strategy (might be different from branch default)
 	state.MergeStrategy = resolvedOptions.MergeStrategy
 
+	// Under --ff-only the merge has to move the parent onto the very object the gate
+	// judged, so it names the topic by its fully qualified ref: a tag sharing the branch
+	// name wins git's revision lookup, and one pointing at the parent would make the
+	// merge a no-op ("Already up to date") while finish went on to tag and delete a
+	// branch whose tip never landed. The qualification is confined to this mode because
+	// git echoes the given name in the default merge message ("Merge branch
+	// 'refs/heads/feature/x'"), and an --ff-only merge is the one that never writes one.
+	mergeRef := state.FullBranchName
+	if resolvedOptions.RequireFastForward {
+		mergeRef = "refs/heads/" + state.FullBranchName
+	}
+
 	// Perform merge based on resolved strategy
 	fmt.Printf("Merging using strategy: %v\n", resolvedOptions.MergeStrategy)
 	var mergeErr error
@@ -724,8 +737,16 @@ func handleMergeStep(repo *git.Repo, cfg *config.Config, state *mergestate.Merge
 		if err != nil {
 			return &errors.GitError{Operation: "checkout feature branch for rebase", Err: err}
 		}
-		// 2. Rebase onto target branch with options
-		mergeErr = repo.RebaseWithOptions(state.ParentBranch, resolvedOptions.PreserveMerges)
+		// 2. Rebase onto target branch with options — never under --ff-only, which
+		//    promises the tested topic tip lands unchanged. The checks above prove the
+		//    parent is an ancestor of the topic, which makes the rebase a no-op; if the
+		//    parent moves between them and here, the rebase would rewrite the topic onto
+		//    that new parent and hand the merge below a fast-forward it must not have.
+		//    Skipping closes that window rather than narrowing it: git's own --ff-only
+		//    then rejects the merge and the topic keeps its commits.
+		if !resolvedOptions.RequireFastForward {
+			mergeErr = repo.RebaseWithOptions(state.ParentBranch, resolvedOptions.PreserveMerges)
+		}
 		if mergeErr == nil {
 			// 3. If rebase succeeds, checkout target and merge
 			err = repo.Checkout(state.ParentBranch)
@@ -735,25 +756,41 @@ func handleMergeStep(repo *git.Repo, cfg *config.Config, state *mergestate.Merge
 			// Use custom merge message if provided, otherwise use default
 			if resolvedOptions.MergeMessage != "" {
 				expandedMsg := util.ExpandMessagePlaceholders(resolvedOptions.MergeMessage, state.FullBranchName, state.ParentBranch)
-				mergeErr = repo.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, resolvedOptions.RequireFastForward, resolvedOptions.NoVerify)
+				mergeErr = repo.MergeWithMessage(mergeRef, expandedMsg, resolvedOptions.NoFastForward, resolvedOptions.RequireFastForward, resolvedOptions.NoVerify)
 			} else {
-				mergeErr = repo.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, resolvedOptions.RequireFastForward, resolvedOptions.NoVerify)
+				mergeErr = repo.MergeWithOptions(mergeRef, resolvedOptions.NoFastForward, resolvedOptions.RequireFastForward, resolvedOptions.NoVerify)
 			}
 		}
 	case strategySquash:
+		// Unreachable under --ff-only: a squash always writes a new commit, so the two
+		// are rejected as a conflicting combination before finish runs.
 		mergeErr = repo.MergeSquashWithMessage(state.FullBranchName, resolvedOptions.SquashMessage, resolvedOptions.NoVerify)
 	case strategyMerge:
 		if resolvedOptions.MergeMessage != "" {
 			expandedMsg := util.ExpandMessagePlaceholders(resolvedOptions.MergeMessage, state.FullBranchName, state.ParentBranch)
-			mergeErr = repo.MergeWithMessage(state.FullBranchName, expandedMsg, resolvedOptions.NoFastForward, resolvedOptions.RequireFastForward, resolvedOptions.NoVerify)
+			mergeErr = repo.MergeWithMessage(mergeRef, expandedMsg, resolvedOptions.NoFastForward, resolvedOptions.RequireFastForward, resolvedOptions.NoVerify)
 		} else {
-			mergeErr = repo.MergeWithOptions(state.FullBranchName, resolvedOptions.NoFastForward, resolvedOptions.RequireFastForward, resolvedOptions.NoVerify)
+			mergeErr = repo.MergeWithOptions(mergeRef, resolvedOptions.NoFastForward, resolvedOptions.RequireFastForward, resolvedOptions.NoVerify)
 		}
 	default:
 		return &errors.GitError{Operation: fmt.Sprintf("unknown merge strategy: %s", resolvedOptions.MergeStrategy), Err: nil}
 	}
 
 	if mergeErr != nil {
+		// Git refused the --ff-only merge: the parent moved after the re-check above, so
+		// what the gate would have reported is what happened. Report it as the gate error
+		// rather than a generic merge failure, and leave the repository as the earlier
+		// abort does — no merge state to resume, back on the topic branch. The merge
+		// itself changed nothing, and the parent's own move stands either way.
+		if goerrors.Is(mergeErr, git.ErrNotFastForward) {
+			if clearErr := mergestate.ClearMergeState(repo); clearErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to clear merge state: %v\n", clearErr)
+			}
+			if checkoutErr := repo.Checkout(state.FullBranchName); checkoutErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to return to branch '%s': %v\n", state.FullBranchName, checkoutErr)
+			}
+			return &errors.NotFastForwardableError{Parent: state.ParentBranch, Topic: state.FullBranchName}
+		}
 		if strings.Contains(mergeErr.Error(), "conflict") {
 			// Save state before returning conflict error
 			state.CurrentStep = stepMerge

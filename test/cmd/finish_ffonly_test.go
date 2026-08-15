@@ -1541,3 +1541,225 @@ func TestShorthandFinishFFOnlyReadsNoFFByValue(t *testing.T) {
 	}
 	assertGateMessage(t, output, "main", "release/1.0.0")
 }
+
+// =============================================================================
+// Ref resolution and post-check parent moves (R8-R10)
+// =============================================================================
+//
+// The gate compares refs/heads/ refs, so the merge has to resolve the same objects:
+// R8 covers a tag shadowing the topic branch's name at the merge itself. R9 and R10
+// cover a parent advanced *after* the pre-merge re-check, which only a hook running
+// inside the finish can do deterministically: R9 requires that --ff-only never
+// rebases the topic onto such a parent to make it land, R10 that git's own refusal
+// to fast-forward is reported as the gate error rather than a generic merge failure.
+
+// advanceDevelopOnPostCheckout is a post-checkout hook that adds one commit to develop
+// the first time develop is checked out. git-flow checks the parent out inside the
+// merge step, after the pre-merge re-check has passed, so this stands in for a
+// concurrent process that moves the parent within that window. The marker keeps it to
+// a single commit; the branch guard keeps it off the topic branch's own checkouts.
+const advanceDevelopOnPostCheckout = `#!/bin/sh
+marker="$(git rev-parse --git-dir)/ffonly-post-checkout-fired"
+if [ ! -f "$marker" ] && [ "$(git symbolic-ref --short HEAD 2>/dev/null)" = "develop" ]; then
+	: > "$marker"
+	git commit -q --allow-empty -m "Concurrent commit on develop"
+fi
+exit 0
+`
+
+// TestFinishFFOnlyMergesTopicBranchNotTag tests that the merge lands the topic *branch*
+// and not a tag that happens to share its name (R8).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates feature/f1 with one commit, so the gate passes
+// 3. Tags develop's tip 'feature/f1', a ref develop is trivially already up to date with
+// 4. Runs 'git flow feature finish f1 --ff-only'
+// 5. Verifies develop equals the feature branch tip, not the shadowed tag it would merge
+// 6. Verifies develop carries the feature content
+func TestFinishFFOnlyMergesTopicBranchNotTag(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "feature", "start", "f1"); err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, out)
+	}
+	commitFile(t, dir, "feature.txt", "feature content", "Add feature.txt")
+	tip := revParse(t, dir, "refs/heads/feature/f1")
+	developBefore := revParse(t, dir, "refs/heads/develop")
+
+	// Git resolves refs/tags before refs/heads, so a merge given the bare name would
+	// merge this tag, report "Already up to date" and leave develop untouched.
+	if out, err := testutil.RunGit(t, dir, "tag", "feature/f1", developBefore); err != nil {
+		t.Fatalf("Failed to create the decoy tag: %v\nOutput: %s", err, out)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "f1", "--ff-only")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed: %v\nOutput: %s", err, output)
+	}
+	if got := revParse(t, dir, "refs/heads/develop"); got != tip {
+		t.Errorf("Expected develop to equal the feature branch tip %s, got %s", tip, got)
+	}
+	if !fileOnBranch(t, dir, "refs/heads/develop", "feature.txt") {
+		t.Error("Expected develop to carry the feature content after the merge")
+	}
+}
+
+// TestFinishFFOnlyWithRebaseDoesNotRebaseOntoMovedParent tests that --ff-only never
+// rebases the topic to make it land: a parent advanced after the pre-merge re-check is
+// rejected rather than rebased onto (R9).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates feature/f1 with one commit and captures its revision list
+// 3. Installs a post-checkout hook that advances develop once it is checked out
+// 4. Runs 'git flow feature finish f1 --ff-only --rebase'
+// 5. Verifies the hook actually moved develop, so the test cannot pass vacuously
+// 6. Verifies the failure came from the merge step, past the parent checkout
+// 7. Verifies exit code 6 and the gate error naming develop and feature/f1
+// 8. Verifies feature/f1's revision list is unchanged: no rebase rewrote it
+// 9. Verifies no rebase is in progress and no merge state was left behind
+func TestFinishFFOnlyWithRebaseDoesNotRebaseOntoMovedParent(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "feature", "start", "f1"); err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, out)
+	}
+	commitFile(t, dir, "feature.txt", "feature content", "Add feature.txt")
+	developBefore := revParse(t, dir, "refs/heads/develop")
+	revsBefore, err := testutil.RunGit(t, dir, "rev-list", "refs/heads/feature/f1")
+	if err != nil {
+		t.Fatalf("Failed to capture the feature revision list: %v", err)
+	}
+
+	createHookScript(t, dir, "post-checkout", advanceDevelopOnPostCheckout)
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "f1", "--ff-only", "--rebase")
+
+	if revParse(t, dir, "refs/heads/develop") == developBefore {
+		t.Fatalf("Expected the post-checkout hook to advance develop; it is still %s. Output: %s", developBefore, output)
+	}
+	if err == nil {
+		t.Fatalf("Expected finish to fail after the parent moved. Output: %s", output)
+	}
+	assertExitCode(t, err, errors.ExitCodeValidationError)
+	if !strings.Contains(output, "Switched to branch 'develop'") {
+		t.Errorf("Expected the finish to reach the merge step, so the rebase window is the one under test. Output: %s", output)
+	}
+	assertGateMessage(t, output, "develop", "feature/f1")
+
+	revsAfter, err := testutil.RunGit(t, dir, "rev-list", "refs/heads/feature/f1")
+	if err != nil {
+		t.Fatalf("Failed to re-read the feature revision list: %v", err)
+	}
+	if revsAfter != revsBefore {
+		t.Errorf("Expected feature/f1 history untouched by --ff-only.\nBefore:\n%s\nAfter:\n%s", revsBefore, revsAfter)
+	}
+	if testutil.FileExists(t, dir, ".git/rebase-merge") || testutil.FileExists(t, dir, ".git/rebase-apply") {
+		t.Error("Expected no rebase to be in progress after a rejected finish")
+	}
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected no git-flow merge state file after a rejected finish")
+	}
+}
+
+// TestFinishFFOnlyWithRebaseKeepsTopicHistoryOnSuccess tests that skipping the rebase
+// leaves a valid --ff-only --rebase finish intact: the topic keeps its exact commits
+// and the parent still fast-forwards onto them (spec scenario 17).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates the ff-capable release topology and captures 'git rev-list release/1.0.0'
+// 3. Runs 'git flow release finish 1.0.0 --ff-only --rebase --keep'
+// 4. Verifies success and an identical revision list on release/1.0.0 afterwards
+// 5. Verifies main equals the release tip with a single parent
+func TestFinishFFOnlyWithRebaseKeepsTopicHistoryOnSuccess(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	tip := ffCapableRelease(t, dir)
+	revsBefore, err := testutil.RunGit(t, dir, "rev-list", "refs/heads/release/1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to capture the release revision list: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0", "--ff-only", "--rebase", "--keep")
+	if err != nil {
+		t.Fatalf("Expected finish to succeed: %v\nOutput: %s", err, output)
+	}
+
+	revsAfter, err := testutil.RunGit(t, dir, "rev-list", "refs/heads/release/1.0.0")
+	if err != nil {
+		t.Fatalf("Failed to re-read the release revision list: %v", err)
+	}
+	if revsAfter != revsBefore {
+		t.Errorf("Expected release/1.0.0 history untouched.\nBefore:\n%s\nAfter:\n%s", revsBefore, revsAfter)
+	}
+	if got := revParse(t, dir, "refs/heads/main"); got != tip {
+		t.Errorf("Expected main to equal the release tip %s, got %s", tip, got)
+	}
+	if got := commitParentCount(t, dir, "refs/heads/main"); got != 1 {
+		t.Errorf("Expected main's tip to have exactly one parent (fast-forward), got %d", got)
+	}
+}
+
+// TestFinishFFOnlyReportsGitRefusalAsGateFailure tests that git's own refusal to
+// fast-forward — reachable when the parent moves after the pre-merge re-check — is
+// reported as the gate error and cleaned up, not as a generic merge failure (R10).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates feature/f1 with one commit
+// 3. Installs a post-checkout hook that advances develop once it is checked out
+// 4. Runs 'git flow feature finish f1 --ff-only'
+// 5. Verifies the hook actually moved develop, so the test cannot pass vacuously
+// 6. Verifies the failure came from the merge step, past the parent checkout
+// 7. Verifies exit code 6 and the gate error rather than a generic merge error
+// 8. Verifies develop carries no merge commit and none of the feature content
+// 9. Verifies feature/f1 survives, HEAD is back on it, and no merge state remains
+func TestFinishFFOnlyReportsGitRefusalAsGateFailure(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "feature", "start", "f1"); err != nil {
+		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, out)
+	}
+	commitFile(t, dir, "feature.txt", "feature content", "Add feature.txt")
+	developBefore := revParse(t, dir, "refs/heads/develop")
+
+	createHookScript(t, dir, "post-checkout", advanceDevelopOnPostCheckout)
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "f1", "--ff-only")
+
+	if revParse(t, dir, "refs/heads/develop") == developBefore {
+		t.Fatalf("Expected the post-checkout hook to advance develop; it is still %s. Output: %s", developBefore, output)
+	}
+	if err == nil {
+		t.Fatalf("Expected finish to fail after the parent moved. Output: %s", output)
+	}
+	assertExitCode(t, err, errors.ExitCodeValidationError)
+	if !strings.Contains(output, "Switched to branch 'develop'") {
+		t.Errorf("Expected the finish to reach the merge step, so git's own refusal is the one under test. Output: %s", output)
+	}
+	assertGateMessage(t, output, "develop", "feature/f1")
+	if strings.Contains(output, "failed to merge branch") {
+		t.Errorf("Expected the gate error rather than a generic merge failure. Output: %s", output)
+	}
+	if got := commitParentCount(t, dir, "refs/heads/develop"); got != 1 {
+		t.Errorf("Expected no merge commit on develop, got a tip with %d parents", got)
+	}
+	if fileOnBranch(t, dir, "refs/heads/develop", "feature.txt") {
+		t.Error("Expected develop not to carry the feature content after the rejected merge")
+	}
+	if !testutil.BranchExists(t, dir, "feature/f1") {
+		t.Error("Expected feature/f1 to still exist after a rejected finish")
+	}
+	if got := testutil.GetCurrentBranch(t, dir); got != "feature/f1" {
+		t.Errorf("Expected to be left on the topic branch, got %q", got)
+	}
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected no git-flow merge state file after a rejected finish")
+	}
+}
