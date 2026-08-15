@@ -730,3 +730,127 @@ func splitLines(s string) []string {
 	}
 	return lines
 }
+
+// =============================================================================
+// IsAncestor (issue #210): the read-only ancestry query behind the finish
+// --ff-only gate.
+// =============================================================================
+
+// setupAncestryRepo seeds commits c1 and c2 on the current branch and a second
+// branch "side" pointing at c1. It leaves the repository checked out on its
+// initial branch with a clean work tree.
+func setupAncestryRepo(t *testing.T, dir string) {
+	t.Helper()
+	testutil.WriteFile(t, dir, "c1.txt", "c1")
+	if _, err := testutil.RunGit(t, dir, "add", "c1.txt"); err != nil {
+		t.Fatalf("Failed to add c1.txt: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "c1"); err != nil {
+		t.Fatalf("Failed to commit c1: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "branch", "side"); err != nil {
+		t.Fatalf("Failed to create side branch: %v", err)
+	}
+	testutil.WriteFile(t, dir, "c2.txt", "c2")
+	if _, err := testutil.RunGit(t, dir, "add", "c2.txt"); err != nil {
+		t.Fatalf("Failed to add c2.txt: %v", err)
+	}
+	if _, err := testutil.RunGit(t, dir, "commit", "-m", "c2"); err != nil {
+		t.Fatalf("Failed to commit c2: %v", err)
+	}
+}
+
+// TestIsAncestorTrueForEqualRefs verifies IsAncestor reports true when both refs
+// name the same commit — the "gate passes when the branches are equal" rule the
+// finish --ff-only feature rests on.
+// Steps:
+// 1. Creates a repository with commits c1 and c2 plus a side branch at c1
+// 2. Captures HEAD and the porcelain status
+// 3. Calls IsAncestor with the same ref on both sides
+// 4. Verifies it returns (true, nil)
+// 5. Verifies HEAD and the work-tree status are unchanged (the helper is read-only)
+func TestIsAncestorTrueForEqualRefs(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+
+	repo := openRepo(t, dir)
+	headBefore, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+	statusBefore, err := testutil.RunGit(t, dir, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("Failed to read status: %v", err)
+	}
+
+	ok, err := repo.IsAncestor("side", "side")
+	if err != nil {
+		t.Fatalf("IsAncestor returned an error for identical refs: %v", err)
+	}
+	if !ok {
+		t.Error("Expected IsAncestor to report true for identical refs")
+	}
+
+	headAfter, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to re-read HEAD: %v", err)
+	}
+	if headAfter != headBefore {
+		t.Errorf("Expected HEAD unchanged. Before: %s After: %s", headBefore, headAfter)
+	}
+	statusAfter, err := testutil.RunGit(t, dir, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("Failed to re-read status: %v", err)
+	}
+	if statusAfter != statusBefore {
+		t.Errorf("Expected work-tree status unchanged. Before: %q After: %q", statusBefore, statusAfter)
+	}
+}
+
+// TestIsAncestorErrorsOnUnknownRef verifies an unknown ref surfaces as an error
+// rather than being collapsed into the boolean. git exits 128 here, which must
+// never be read as "not an ancestor".
+// Steps:
+// 1. Creates a repository with commits c1 and c2 plus a side branch at c1
+// 2. Captures HEAD and the porcelain status
+// 3. Calls IsAncestor with a ref that does not exist
+// 4. Verifies a non-nil error is returned (and not a bare false)
+// 5. Verifies HEAD and the work-tree status are unchanged
+func TestIsAncestorErrorsOnUnknownRef(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	setupAncestryRepo(t, dir)
+
+	repo := openRepo(t, dir)
+	headBefore, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to read HEAD: %v", err)
+	}
+	statusBefore, err := testutil.RunGit(t, dir, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("Failed to read status: %v", err)
+	}
+
+	ok, err := repo.IsAncestor("no-such-ref", "side")
+	if err == nil {
+		t.Fatalf("Expected an error for an unknown ref, got (%v, nil)", ok)
+	}
+
+	headAfter, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to re-read HEAD: %v", err)
+	}
+	if headAfter != headBefore {
+		t.Errorf("Expected HEAD unchanged. Before: %s After: %s", headBefore, headAfter)
+	}
+	statusAfter, err := testutil.RunGit(t, dir, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("Failed to re-read status: %v", err)
+	}
+	if statusAfter != statusBefore {
+		t.Errorf("Expected work-tree status unchanged. Before: %q After: %q", statusBefore, statusAfter)
+	}
+}
