@@ -1128,10 +1128,10 @@ func TestFinishReleaseWithMergeContinue(t *testing.T) {
 		t.Error("Expected no merge in progress after continue")
 	}
 
-	// Verify we're on the main branch
+	// Verify we're on the integration branch
 	currentBranch := testutil.GetCurrentBranch(t, dir)
-	if !strings.Contains(currentBranch, "main") {
-		t.Errorf("Expected to be on main branch after continue, got %s", currentBranch)
+	if currentBranch != "develop" {
+		t.Errorf("Expected to be on develop branch after continue, got %s", currentBranch)
 	}
 
 	// Verify the release branch was deleted
@@ -1139,7 +1139,11 @@ func TestFinishReleaseWithMergeContinue(t *testing.T) {
 		t.Error("Expected release branch to be deleted after successful finish")
 	}
 
-	// Verify the file content matches our resolution
+	// Verify the file content on main matches our resolution
+	_, err = testutil.RunGit(t, dir, "checkout", "main")
+	if err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
 	content := testutil.ReadFile(t, dir, "version.txt")
 	if content != "1.0.0" {
 		t.Errorf("Expected file content to be '1.0.0', got '%s'", content)

@@ -220,6 +220,8 @@ git-flow-next implements shorthand commands that work on the current branch:
 | `--ff-master` | ✅ | ❌ |
 | `--showcommands` | ✅ | ❌ |
 
+**Landing branch parity**: like AVH, a completed `release` or `hotfix` finish leaves you on `develop` rather than on `main`. git-flow-next derives that branch from the configured topology — the last auto-update child of the finished branch's parent, or the parent when it has none — instead of hardcoding a branch name, so the same rule holds for custom topologies where no branch is called `develop`.
+
 #### Other Commands
 | Command | Missing from git-flow-next |
 |---------|---------------------------|

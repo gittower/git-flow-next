@@ -18,7 +18,7 @@ The finish operation follows a strict state machine with these steps:
 1. **Merge**: Merges the topic branch to its parent branch using the configured upstream strategy
 2. **Create Tag**: Optionally creates and signs tags (if configured)
 3. **Update Children**: Updates any child branches that have `autoUpdate=true` using their downstream strategies
-4. **Delete Branch**: Optionally deletes the topic branch (local and/or remote)
+4. **Delete Branch**: Checks out the integration branch, optionally deletes the topic branch (local and/or remote), and reports the branch you are left on
 
 The operation maintains a persistent state file that allows it to resume after conflicts. If conflicts occur during any merge operation (main merge or child updates), the state is saved and the operation can be continued with **--continue** or aborted with **--abort**.
 
@@ -470,6 +470,12 @@ Only branches with `autoUpdate=true` are updated:
 ```bash
 git config gitflow.branch.develop.autoUpdate true
 ```
+
+### Landing Branch
+
+A completed finish leaves you on the **integration branch**: the last auto-update child of the topic branch's parent — the alphabetically last one when there are several — or on the parent itself when it has no auto-update children. In the default configuration that means `git flow release finish` and `git flow hotfix finish` end on `develop` rather than `main`, and `git flow feature finish` ends on `develop` as before. Finish reports the result as `You are now on branch '<name>'`.
+
+The branch is resolved from the configured topology, not from a branch named `develop`, so it is well defined for custom branch names. The rule is identical whether the topic branch is deleted or kept with **--keep**, on the first run and on **--continue** after a conflict, and for every merge strategy. **--abort** is unaffected: it returns you to the topic branch.
 
 ## CONFIGURATION
 
