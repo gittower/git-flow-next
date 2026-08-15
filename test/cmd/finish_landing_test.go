@@ -24,7 +24,7 @@ func setupParentMergeConflict(t *testing.T, dir string) {
 	if _, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
 		t.Fatalf("Failed to checkout main: %v", err)
 	}
-	writeAndCommit(t, dir, "shared.txt", "base", "Add shared file")
+	landingAddCommit(t, dir, "shared.txt", "base", "Add shared file")
 
 	if _, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
 		t.Fatalf("Failed to checkout develop: %v", err)
@@ -36,12 +36,12 @@ func setupParentMergeConflict(t *testing.T, dir string) {
 	if output, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
 		t.Fatalf("Failed to start release: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "shared.txt", "release", "Release change")
+	landingAddCommit(t, dir, "shared.txt", "release", "Release change")
 
 	if _, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
 		t.Fatalf("Failed to checkout main: %v", err)
 	}
-	writeAndCommit(t, dir, "shared.txt", "hotfix", "Diverging change on main")
+	landingAddCommit(t, dir, "shared.txt", "hotfix", "Diverging change on main")
 
 	if _, err := testutil.RunGit(t, dir, "checkout", "release/1.0.0"); err != nil {
 		t.Fatalf("Failed to checkout release/1.0.0: %v", err)
@@ -62,7 +62,7 @@ func setupChildUpdateConflict(t *testing.T, dir string) {
 	if _, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
 		t.Fatalf("Failed to checkout main: %v", err)
 	}
-	writeAndCommit(t, dir, "shared.txt", "base", "Add shared file")
+	landingAddCommit(t, dir, "shared.txt", "base", "Add shared file")
 
 	if _, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
 		t.Fatalf("Failed to checkout develop: %v", err)
@@ -74,20 +74,20 @@ func setupChildUpdateConflict(t *testing.T, dir string) {
 	if output, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
 		t.Fatalf("Failed to start release: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "shared.txt", "release", "Release change")
+	landingAddCommit(t, dir, "shared.txt", "release", "Release change")
 
 	if _, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
 		t.Fatalf("Failed to checkout develop: %v", err)
 	}
-	writeAndCommit(t, dir, "shared.txt", "develop", "Diverging change on develop")
+	landingAddCommit(t, dir, "shared.txt", "develop", "Diverging change on develop")
 
 	if _, err := testutil.RunGit(t, dir, "checkout", "release/1.0.0"); err != nil {
 		t.Fatalf("Failed to checkout release/1.0.0: %v", err)
 	}
 }
 
-// writeAndCommit writes a file in the test repository and commits it.
-func writeAndCommit(t *testing.T, dir string, name string, content string, message string) {
+// landingAddCommit writes a file in the test repository and commits it.
+func landingAddCommit(t *testing.T, dir string, name string, content string, message string) {
 	t.Helper()
 
 	if err := testutil.WriteFile(t, dir, name, content); err != nil {
@@ -155,7 +155,7 @@ func TestFinishReleaseLandsOnIntegrationBranch(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
 		t.Fatalf("Failed to start release: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "version.txt", "1.0.0", "Add version file")
+	landingAddCommit(t, dir, "version.txt", "1.0.0", "Add version file")
 
 	releaseSha, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
 	if err != nil {
@@ -213,7 +213,7 @@ func TestFinishHotfixLandsOnIntegrationBranch(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "hotfix", "start", "1.0.1"); err != nil {
 		t.Fatalf("Failed to start hotfix: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "hotfix.txt", "fix", "Add hotfix file")
+	landingAddCommit(t, dir, "hotfix.txt", "fix", "Add hotfix file")
 
 	if output, err := testutil.RunGitFlow(t, dir, "hotfix", "finish", "1.0.1"); err != nil {
 		t.Fatalf("Failed to finish hotfix: %v\nOutput: %s", err, output)
@@ -245,7 +245,7 @@ func TestFinishFeatureLandsOnDevelop(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "feature", "start", "f1"); err != nil {
 		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "f.txt", "feature", "Add feature file")
+	landingAddCommit(t, dir, "f.txt", "feature", "Add feature file")
 
 	if output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "f1"); err != nil {
 		t.Fatalf("Failed to finish feature: %v\nOutput: %s", err, output)
@@ -277,7 +277,7 @@ func TestFinishBugfixLandsOnDevelop(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "bugfix", "start", "b1"); err != nil {
 		t.Fatalf("Failed to start bugfix: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "b.txt", "bugfix", "Add bugfix file")
+	landingAddCommit(t, dir, "b.txt", "bugfix", "Add bugfix file")
 
 	if output, err := testutil.RunGitFlow(t, dir, "bugfix", "finish", "b1"); err != nil {
 		t.Fatalf("Failed to finish bugfix: %v\nOutput: %s", err, output)
@@ -309,7 +309,7 @@ func TestFinishLandsOnParentWithoutAutoUpdateChildren(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "feature", "start", "f1"); err != nil {
 		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "f.txt", "feature", "Add feature file")
+	landingAddCommit(t, dir, "f.txt", "feature", "Add feature file")
 
 	if output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "f1"); err != nil {
 		t.Fatalf("Failed to finish feature: %v\nOutput: %s", err, output)
@@ -354,7 +354,7 @@ func TestFinishLandsOnCustomIntegrationBranch(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "rel", "start", "1.0.0"); err != nil {
 		t.Fatalf("Failed to start rel: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "r.txt", "rel", "Add rel file")
+	landingAddCommit(t, dir, "r.txt", "rel", "Add rel file")
 
 	if output, err := testutil.RunGitFlow(t, dir, "rel", "finish", "1.0.0"); err != nil {
 		t.Fatalf("Failed to finish rel: %v\nOutput: %s", err, output)
@@ -386,7 +386,7 @@ func TestFinishWithKeepLandsOnIntegrationBranch(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
 		t.Fatalf("Failed to start release: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "version.txt", "1.0.0", "Add version file")
+	landingAddCommit(t, dir, "version.txt", "1.0.0", "Add version file")
 
 	if output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0", "--keep"); err != nil {
 		t.Fatalf("Failed to finish release: %v\nOutput: %s", err, output)
@@ -469,6 +469,9 @@ func TestFinishContinueAfterChildConflictLandsOnIntegrationBranch(t *testing.T) 
 		t.Fatalf("Failed to continue release finish: %v\nOutput: %s", err, output)
 	}
 
+	if testutil.IsMergeInProgress(t, dir) {
+		t.Error("Expected no merge in progress after continue")
+	}
 	if current := testutil.GetCurrentBranch(t, dir); current != "develop" {
 		t.Errorf("Expected to be on develop after continue, got %s", current)
 	}
@@ -634,11 +637,13 @@ func TestFinishReportsLandingBranch(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
 		t.Fatalf("Failed to start release: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "version.txt", "1.0.0", "Add version file")
+	landingAddCommit(t, dir, "version.txt", "1.0.0", "Add version file")
 
-	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0")
+	// Use the split streams so the report line is pinned to stdout, where the
+	// rest of the finish progress output goes.
+	stdout, stderr, err := testutil.RunGitFlowStreams(t, dir, "release", "finish", "1.0.0")
 	if err != nil {
-		t.Fatalf("Failed to finish release: %v\nOutput: %s", err, output)
+		t.Fatalf("Failed to finish release: %v\nStdout: %s\nStderr: %s", err, stdout, stderr)
 	}
 
 	current := testutil.GetCurrentBranch(t, dir)
@@ -646,8 +651,8 @@ func TestFinishReportsLandingBranch(t *testing.T) {
 		t.Errorf("Expected to be on develop after release finish, got %s", current)
 	}
 	expected := fmt.Sprintf("You are now on branch '%s'", current)
-	if !strings.Contains(output, expected) {
-		t.Errorf("Expected output to contain %q, got: %s", expected, output)
+	if !strings.Contains(stdout, expected) {
+		t.Errorf("Expected stdout to contain %q, got: %s", expected, stdout)
 	}
 }
 
@@ -669,11 +674,11 @@ func TestFinishReportsLandingBranchWithoutChildren(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "feature", "start", "f1"); err != nil {
 		t.Fatalf("Failed to start feature: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "f.txt", "feature", "Add feature file")
+	landingAddCommit(t, dir, "f.txt", "feature", "Add feature file")
 
-	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "f1")
+	stdout, stderr, err := testutil.RunGitFlowStreams(t, dir, "feature", "finish", "f1")
 	if err != nil {
-		t.Fatalf("Failed to finish feature: %v\nOutput: %s", err, output)
+		t.Fatalf("Failed to finish feature: %v\nStdout: %s\nStderr: %s", err, stdout, stderr)
 	}
 
 	current := testutil.GetCurrentBranch(t, dir)
@@ -681,8 +686,8 @@ func TestFinishReportsLandingBranchWithoutChildren(t *testing.T) {
 		t.Errorf("Expected to be on main after feature finish, got %s", current)
 	}
 	expected := fmt.Sprintf("You are now on branch '%s'", current)
-	if !strings.Contains(output, expected) {
-		t.Errorf("Expected output to contain %q, got: %s", expected, output)
+	if !strings.Contains(stdout, expected) {
+		t.Errorf("Expected stdout to contain %q, got: %s", expected, stdout)
 	}
 }
 
@@ -704,7 +709,7 @@ func TestFinishFromUnrelatedBranchLandsOnIntegrationBranch(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
 		t.Fatalf("Failed to start release: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "version.txt", "1.0.0", "Add version file")
+	landingAddCommit(t, dir, "version.txt", "1.0.0", "Add version file")
 
 	if _, err := testutil.RunGit(t, dir, "checkout", "-b", "unrelated", "main"); err != nil {
 		t.Fatalf("Failed to create unrelated branch: %v", err)
@@ -740,7 +745,7 @@ func TestFinishShorthandLandsOnIntegrationBranch(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
 		t.Fatalf("Failed to start release: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "version.txt", "1.0.0", "Add version file")
+	landingAddCommit(t, dir, "version.txt", "1.0.0", "Add version file")
 
 	if output, err := testutil.RunGitFlow(t, dir, "finish"); err != nil {
 		t.Fatalf("Failed to finish via shorthand: %v\nOutput: %s", err, output)
@@ -775,12 +780,18 @@ func TestFinishSquashStrategyLandsOnIntegrationBranch(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
 		t.Fatalf("Failed to start release: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "version.txt", "1.0.0", "Add version file")
+	landingAddCommit(t, dir, "version.txt", "1.0.0", "Add version file")
 
-	if output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0"); err != nil {
+	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0")
+	if err != nil {
 		t.Fatalf("Failed to finish release: %v\nOutput: %s", err, output)
 	}
 
+	// Confirm the squash path was actually taken, so the test cannot pass by
+	// silently falling back to the default merge strategy.
+	if !strings.Contains(output, "Merging using strategy: squash") {
+		t.Errorf("Expected finish to use the squash strategy, got: %s", output)
+	}
 	if current := testutil.GetCurrentBranch(t, dir); current != "develop" {
 		t.Errorf("Expected to be on develop after squash finish, got %s", current)
 	}
@@ -810,12 +821,18 @@ func TestFinishRebaseStrategyLandsOnIntegrationBranch(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
 		t.Fatalf("Failed to start release: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "version.txt", "1.0.0", "Add version file")
+	landingAddCommit(t, dir, "version.txt", "1.0.0", "Add version file")
 
-	if output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0"); err != nil {
+	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0")
+	if err != nil {
 		t.Fatalf("Failed to finish release: %v\nOutput: %s", err, output)
 	}
 
+	// Confirm the rebase path was actually taken, so the test cannot pass by
+	// silently falling back to the default merge strategy.
+	if !strings.Contains(output, "Merging using strategy: rebase") {
+		t.Errorf("Expected finish to use the rebase strategy, got: %s", output)
+	}
 	if current := testutil.GetCurrentBranch(t, dir); current != "develop" {
 		t.Errorf("Expected to be on develop after rebase finish, got %s", current)
 	}
@@ -842,7 +859,7 @@ func TestFinishSupportLandsOnIntegrationBranch(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "support", "start", "1.x"); err != nil {
 		t.Fatalf("Failed to start support: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "s.txt", "support", "Add support file")
+	landingAddCommit(t, dir, "s.txt", "support", "Add support file")
 
 	if output, err := testutil.RunGitFlow(t, dir, "support", "finish", "1.x"); err != nil {
 		t.Fatalf("Failed to finish support: %v\nOutput: %s", err, output)
@@ -850,6 +867,9 @@ func TestFinishSupportLandsOnIntegrationBranch(t *testing.T) {
 
 	if current := testutil.GetCurrentBranch(t, dir); current != "develop" {
 		t.Errorf("Expected to be on develop after support finish, got %s", current)
+	}
+	if testutil.BranchExists(t, dir, "support/1.x") {
+		t.Error("Expected support/1.x to be deleted after finish")
 	}
 }
 
@@ -886,7 +906,7 @@ func TestFinishLandsOnLastAutoUpdateChild(t *testing.T) {
 	if output, err := testutil.RunGitFlow(t, dir, "release", "start", "1.0.0"); err != nil {
 		t.Fatalf("Failed to start release: %v\nOutput: %s", err, output)
 	}
-	writeAndCommit(t, dir, "version.txt", "1.0.0", "Add version file")
+	landingAddCommit(t, dir, "version.txt", "1.0.0", "Add version file")
 
 	output, err := testutil.RunGitFlow(t, dir, "release", "finish", "1.0.0")
 	if err != nil {
