@@ -443,6 +443,10 @@ When adding a new option, the key question is: **does this describe what the bra
 3. **Only if it's a branch type characteristic** add Layer 1 (`gitflow.branch.<type>.<property>`) — and add it to the `BranchConfig` struct
 4. **Update documentation** — add to `docs/gitflow-config.5.md` and `CONFIGURATION.md` in the appropriate layer sections
 
+**Narrow exception to rule 2 — a pure Layer-1 identity property.** When an option belongs to Layer 1 *and* a Layer-2 twin would mean exactly the same thing for exactly one command, ship Layer 1 + Layer 3 only. A second key with identical meaning is a resolution trap: users cannot tell which one wins, and the resolver has to invent a precedence that carries no information. The shipped example is `gitflow.branch.<type>.worktree` (`git flow <type> start --worktree`/`--no-worktree`), where `gitflow.<type>.start.worktree` would have been that twin.
+
+This is the exception, not an escape hatch. It does **not** apply when Layer 2 would say something Layer 1 cannot — a different value per command (`fetch` on `start` vs `finish`), or a command behavior that is not part of the branch type's identity. If in doubt, add Layer 2. When the exception is taken, say why in the resolver's godoc so the omission reads as deliberate.
+
 ### Input Validation
 
 Always validate inputs early in the execute function:
