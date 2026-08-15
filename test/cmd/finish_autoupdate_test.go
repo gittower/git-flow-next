@@ -256,3 +256,141 @@ func TestFinishNoChildrenWithAutoUpdate(t *testing.T) {
 		t.Error("Staging should not have been updated (autoUpdate=false)")
 	}
 }
+
+// childOrder extracts the child base branch names from the lines of a finish
+// run's output that start with prefix, in the order they were printed. Used with
+// the "Found child base branch '" prefix it yields the order the children were
+// collected in; with "Updating child base branch '" it yields the order they
+// were actually integrated in, which is also the order persisted into merge
+// state — the signal that matters for issue #204.
+func childOrder(output string, prefix string) []string {
+	var names []string
+	for _, line := range strings.Split(output, "\n") {
+		start := strings.Index(line, prefix)
+		if start < 0 {
+			continue
+		}
+		rest := line[start+len(prefix):]
+		end := strings.Index(rest, "'")
+		if end < 0 {
+			continue
+		}
+		names = append(names, rest[:end])
+	}
+	return names
+}
+
+// assertChildOrder fails the test unless got matches want exactly, in order.
+func assertChildOrder(t *testing.T, iteration int, label string, got []string, want []string, output string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("iteration %d: %s listed %d child base branches %v, want %d %v\nOutput: %s",
+			iteration, label, len(got), got, len(want), want, output)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("iteration %d: %s order = %v, want %v\nOutput: %s",
+				iteration, label, got, want, output)
+		}
+	}
+}
+
+// TestFinishChildBranchOrderIsDeterministic verifies that finish processes the
+// auto-update child base branches in a stable, sorted order rather than in Go's
+// randomized map iteration order.
+// Steps:
+//  1. Sets up a test repository and initializes git-flow with defaults
+//  2. Configures three auto-update child base branches of main — alpha, develop
+//     and zulu — created in the order zulu, alpha so a sorted result cannot be
+//     mistaken for insertion or configuration order
+//  3. Starts a hotfix, commits a change, and finishes it
+//  4. Verifies the children are reported in sorted order (alpha, develop, zulu)
+//  5. Verifies they are updated in that same order, which is the order persisted
+//     into merge state and therefore the resume order after a conflict
+//  6. Verifies every child actually received the hotfix — sorting decides the
+//     order, never the selection
+//  7. Repeats the whole scenario in five independent repositories, since with
+//     three children an unsorted collection lands on sorted order by chance
+//     about one run in six
+func TestFinishChildBranchOrderIsDeterministic(t *testing.T) {
+	t.Parallel()
+
+	// Sorted order of the three auto-update children configured below.
+	want := []string{"alpha", "develop", "zulu"}
+
+	const iterations = 5
+	for i := 0; i < iterations; i++ {
+		// The iteration body is a closure so each repository is cleaned up as
+		// its iteration ends rather than all five at the end of the test.
+		func() {
+			dir := testutil.SetupTestRepo(t)
+			defer testutil.CleanupTestRepo(t, dir)
+
+			output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+			if err != nil {
+				t.Fatalf("iteration %d: failed to initialize git-flow: %v\nOutput: %s", i, err, output)
+			}
+
+			// A silently dropped config key would change the configured child
+			// set the assertions below are written against.
+			setConfig := func(key string, value string) {
+				if _, err := testutil.RunGit(t, dir, "config", key, value); err != nil {
+					t.Fatalf("iteration %d: failed to set %s: %v", i, key, err)
+				}
+			}
+
+			// develop is already an auto-update child of main; add two more that
+			// bracket it alphabetically.
+			setConfig("gitflow.branch.develop.autoUpdate", "true")
+			for _, name := range []string{"zulu", "alpha"} {
+				if _, err := testutil.RunGit(t, dir, "checkout", "-b", name, "main"); err != nil {
+					t.Fatalf("iteration %d: failed to create %s branch: %v", i, name, err)
+				}
+				setConfig("gitflow.branch."+name+".type", "base")
+				setConfig("gitflow.branch."+name+".parent", "main")
+				setConfig("gitflow.branch."+name+".autoUpdate", "true")
+				setConfig("gitflow.branch."+name+".downstreamStrategy", "merge")
+			}
+
+			output, err = testutil.RunGitFlow(t, dir, "hotfix", "start", "order-check")
+			if err != nil {
+				t.Fatalf("iteration %d: failed to create hotfix: %v\nOutput: %s", i, err, output)
+			}
+
+			if err := testutil.WriteFile(t, dir, "hotfix-order.txt", "Order determinism test"); err != nil {
+				t.Fatalf("iteration %d: failed to write file: %v", i, err)
+			}
+			if _, err := testutil.RunGit(t, dir, "add", "hotfix-order.txt"); err != nil {
+				t.Fatalf("iteration %d: failed to add file: %v", i, err)
+			}
+			if _, err := testutil.RunGit(t, dir, "commit", "-m", "Hotfix for order determinism test"); err != nil {
+				t.Fatalf("iteration %d: failed to commit: %v", i, err)
+			}
+
+			output, err = testutil.RunGitFlow(t, dir, "hotfix", "finish", "order-check")
+			if err != nil {
+				t.Fatalf("iteration %d: failed to finish hotfix: %v\nOutput: %s", i, err, output)
+			}
+
+			// The reported order and the order the children are actually
+			// updated in must both be sorted: a fix that sorted only for
+			// display would leave the integration and merge-state order random.
+			assertChildOrder(t, i, "collection", childOrder(output, "Found child base branch '"), want, output)
+			assertChildOrder(t, i, "update", childOrder(output, "Updating child base branch '"), want, output)
+
+			// Every child must still actually receive the hotfix — sorting
+			// decides the order, never the selection.
+			for _, name := range want {
+				// A failed checkout would leave the working tree on the
+				// previous branch, where the file exists — the check would
+				// then pass while inspecting the wrong branch.
+				if _, err := testutil.RunGit(t, dir, "checkout", name); err != nil {
+					t.Fatalf("iteration %d: failed to check out %s: %v", i, name, err)
+				}
+				if !testutil.FileExists(t, dir, "hotfix-order.txt") {
+					t.Errorf("iteration %d: branch %s was not auto-updated", i, name)
+				}
+			}
+		}()
+	}
+}

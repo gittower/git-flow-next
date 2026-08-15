@@ -449,6 +449,8 @@ For release and hotfix branches, finish typically performs dual merges:
 
 After merging to the parent, any child branches configured with `autoUpdate=true` will be automatically updated with the new changes from their parent branch. Each child branch uses its own configured downstream strategy for receiving updates.
 
+Child branches are updated in alphabetical order by branch name. The order is stable across runs, so it also determines where a finish interrupted by a conflict resumes.
+
 The update process:
 1. Checks out each child branch in sequence
 2. Merges the parent branch using the child's downstream strategy

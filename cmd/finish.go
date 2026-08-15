@@ -49,6 +49,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/gittower/git-flow-next/internal/config"
@@ -284,11 +285,18 @@ func finishBranch(repo *git.Repo, cfg *config.Config, branchType string, name st
 	childStrategies := make(map[string]string)
 	for branchName, branch := range cfg.Branches {
 		if branch.Type == string(config.BranchTypeBase) && branch.Parent == targetBranch && branch.AutoUpdate {
-			fmt.Printf("Found child base branch '%s' with auto-update enabled\n", branchName)
 			childBranches = append(childBranches, branchName)
 			// Store the downstream strategy for this child branch
 			childStrategies[branchName] = branch.DownstreamStrategy
 		}
+	}
+	// Ranging a map yields nondeterministic order; sort so children are updated
+	// in a stable, reproducible order (and so tests can assert per-child
+	// outcomes). Reporting happens after the sort so the output, the
+	// integration order and the persisted ChildBranches all agree.
+	sort.Strings(childBranches)
+	for _, branchName := range childBranches {
+		fmt.Printf("Found child base branch '%s' with auto-update enabled\n", branchName)
 	}
 
 	// Resolve all options once at the beginning
