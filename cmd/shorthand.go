@@ -163,13 +163,17 @@ func RegisterShorthandCommands() {
 			}
 			// Collapse the fast-forward flag trio into the tri-state option. A
 			// conflicting pair exits with the usage code here, matching the
-			// per-type finish surface. --ff-only is read by value so an explicit
-			// --ff-only=false leaves the gate inert instead of arming it, while
-			// --no-ff/--ff keep their long-standing "last one named wins"
-			// selection semantics.
+			// per-type finish surface. All three are read by value rather than
+			// through getBoolPtr, which treats any mention of a flag as a
+			// selection: that would read --no-ff=false as a no-ff selection and
+			// reject '--ff-only --no-ff=false' as a conflict, while the per-type
+			// command accepts it. Reading values keeps the two surfaces
+			// identical, and the precedence between --ff and --no-ff lives in
+			// ffModeFromFlags for both of them.
 			ffOnly, _ := cmd.Flags().GetBool("ff-only")
-			noFFSelection := getBoolPtr(cmd, "no-ff", "ff")
-			ffMode, ffErr := ffModeFromFlags(ffOnly, noFFSelection != nil && *noFFSelection, noFFSelection != nil && !*noFFSelection)
+			noFF, _ := cmd.Flags().GetBool("no-ff")
+			ff, _ := cmd.Flags().GetBool("ff")
+			ffMode, ffErr := ffModeFromFlags(ffOnly, noFF, ff)
 			if ffErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", ffErr)
 				os.Exit(int(flowerrors.ExitCodeInvalidInput))

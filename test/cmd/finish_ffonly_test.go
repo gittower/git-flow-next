@@ -1447,12 +1447,13 @@ git commit -q -m "Hook bumped the version"
 }
 
 // =============================================================================
-// Merge-level enforcement (R5-R6)
+// Merge-level enforcement and flag parity (R5-R7)
 // =============================================================================
 //
-// These cover the user's own `merge.ff = false`, which turns every git merge
+// R5 and R6 cover the user's own `merge.ff = false`, which turns every git merge
 // into a merge commit. No amount of checking beforehand changes what that merge
-// does, so the upstream merge itself has to carry --ff-only.
+// does, so the upstream merge itself has to carry --ff-only. R7 covers the
+// shorthand reading the fast-forward flags by value, like the per-type command.
 
 // TestFinishFFOnlyOverridesMergeFFFalseConfig tests that --ff-only still fast-forwards
 // when the repository sets merge.ff=false (R5).
@@ -1512,4 +1513,31 @@ func TestFinishFFOnlyWithRebaseOverridesMergeFFFalseConfig(t *testing.T) {
 	if got := commitParentCount(t, dir, "refs/heads/main"); got != 1 {
 		t.Errorf("Expected main's tip to have exactly one parent (fast-forward), got %d", got)
 	}
+}
+
+// TestShorthandFinishFFOnlyReadsNoFFByValue tests that the shorthand reads the
+// fast-forward flags by value, so an explicit --no-ff=false is not mistaken for a
+// conflicting selection the way the per-type command never does (R7).
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates the diverged release topology, leaving HEAD on release/1.0.0
+// 3. Runs 'git flow finish --ff-only --no-ff=false'
+// 4. Verifies exit code 6, not the usage error 2: --ff-only stands unopposed
+// 5. Verifies the gate error rather than the conflicting-options error
+func TestShorthandFinishFFOnlyReadsNoFFByValue(t *testing.T) {
+	t.Parallel()
+	dir := setupFFOnlyRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	divergedRelease(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "finish", "--ff-only", "--no-ff=false")
+	if err == nil {
+		t.Fatalf("Expected the shorthand finish to fail on a diverged parent. Output: %s", output)
+	}
+	assertExitCode(t, err, errors.ExitCodeValidationError)
+	if strings.Contains(output, "cannot combine") {
+		t.Errorf("Expected --no-ff=false not to count as a conflicting selection. Output: %s", output)
+	}
+	assertGateMessage(t, output, "main", "release/1.0.0")
 }
