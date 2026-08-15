@@ -208,19 +208,36 @@ func (r *Repo) refuseMainWorktree(path string, operation string) error {
 // SamePath reports whether two paths denote the same location, resolving
 // symlinks on BOTH sides. This matters on macOS, where a temporary directory is
 // reached through /var while git records the real /private/var path.
+//
+// Case is folded on Windows, where the casing git records for a worktree need
+// not match what the user typed or what os.Getwd returns.
 func SamePath(a, b string) bool {
-	return resolvePath(a) == resolvePath(b)
+	return foldPath(resolvePath(a)) == foldPath(resolvePath(b))
 }
 
 // IsWithin reports whether child is parent or lives underneath it, comparing on
 // a separator boundary so /a/foobar is not treated as being inside /a/foo. Both
-// sides are symlink-resolved.
+// sides are symlink-resolved, and case is folded on Windows as in SamePath.
 func IsWithin(child, parent string) bool {
-	c, p := resolvePath(child), resolvePath(parent)
+	c, p := foldPath(resolvePath(child)), foldPath(resolvePath(parent))
 	if c == p {
 		return true
 	}
 	return strings.HasPrefix(c, p+string(filepath.Separator))
+}
+
+// foldPath returns p in the form used for comparison: unchanged where path
+// names are case-sensitive, lowercased where they are not. Windows path names
+// ignore case, so two spellings of one location must compare equal there, while
+// Linux and a case-sensitive macOS volume both distinguish case and must not.
+//
+// Only comparisons see the folded form. Paths stored, passed to git or reported
+// to the user keep the casing they arrived with.
+func foldPath(p string) string {
+	if isWindows {
+		return strings.ToLower(p)
+	}
+	return p
 }
 
 // resolvePath returns an absolute, symlink-resolved form of p, tolerating a path
