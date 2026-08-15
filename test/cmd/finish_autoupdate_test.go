@@ -328,28 +328,38 @@ func TestFinishChildBranchOrderIsDeterministic(t *testing.T) {
 
 			output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
 			if err != nil {
-				t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+				t.Fatalf("iteration %d: failed to initialize git-flow: %v\nOutput: %s", i, err, output)
+			}
+
+			// A silently dropped config key would change the configured child
+			// set the assertions below are written against.
+			setConfig := func(key string, value string) {
+				if _, err := testutil.RunGit(t, dir, "config", key, value); err != nil {
+					t.Fatalf("iteration %d: failed to set %s: %v", i, key, err)
+				}
 			}
 
 			// develop is already an auto-update child of main; add two more that
 			// bracket it alphabetically.
-			testutil.RunGit(t, dir, "config", "gitflow.branch.develop.autoUpdate", "true")
+			setConfig("gitflow.branch.develop.autoUpdate", "true")
 			for _, name := range []string{"zulu", "alpha"} {
 				if _, err := testutil.RunGit(t, dir, "checkout", "-b", name, "main"); err != nil {
-					t.Fatalf("Failed to create %s branch: %v", name, err)
+					t.Fatalf("iteration %d: failed to create %s branch: %v", i, name, err)
 				}
-				testutil.RunGit(t, dir, "config", "gitflow.branch."+name+".type", "base")
-				testutil.RunGit(t, dir, "config", "gitflow.branch."+name+".parent", "main")
-				testutil.RunGit(t, dir, "config", "gitflow.branch."+name+".autoUpdate", "true")
-				testutil.RunGit(t, dir, "config", "gitflow.branch."+name+".downstreamStrategy", "merge")
+				setConfig("gitflow.branch."+name+".type", "base")
+				setConfig("gitflow.branch."+name+".parent", "main")
+				setConfig("gitflow.branch."+name+".autoUpdate", "true")
+				setConfig("gitflow.branch."+name+".downstreamStrategy", "merge")
 			}
 
 			output, err = testutil.RunGitFlow(t, dir, "hotfix", "start", "order-check")
 			if err != nil {
-				t.Fatalf("Failed to create hotfix: %v\nOutput: %s", err, output)
+				t.Fatalf("iteration %d: failed to create hotfix: %v\nOutput: %s", i, err, output)
 			}
 
-			testutil.WriteFile(t, dir, "hotfix-order.txt", "Order determinism test")
+			if err := testutil.WriteFile(t, dir, "hotfix-order.txt", "Order determinism test"); err != nil {
+				t.Fatalf("iteration %d: failed to write file: %v", i, err)
+			}
 			if _, err := testutil.RunGit(t, dir, "add", "hotfix-order.txt"); err != nil {
 				t.Fatalf("iteration %d: failed to add file: %v", i, err)
 			}
@@ -359,7 +369,7 @@ func TestFinishChildBranchOrderIsDeterministic(t *testing.T) {
 
 			output, err = testutil.RunGitFlow(t, dir, "hotfix", "finish", "order-check")
 			if err != nil {
-				t.Fatalf("Failed to finish hotfix: %v\nOutput: %s", err, output)
+				t.Fatalf("iteration %d: failed to finish hotfix: %v\nOutput: %s", i, err, output)
 			}
 
 			// The reported order and the order the children are actually
