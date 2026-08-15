@@ -149,7 +149,9 @@ func TestIntegrateMultipleChildrenMixedStrategies(t *testing.T) {
 //  4. Assert the "Found child base branch" order is alpha, develop, zulu.
 //  5. Assert the "Updating child base branch" order is the same, so a fix that
 //     sorted only for display would not satisfy the test.
-//  6. Repeat across five independent repositories, since with three children an
+//  6. Assert every child actually received the integration, since sorting must
+//     decide the order and never the selection.
+//  7. Repeat across five independent repositories, since with three children an
 //     unsorted collection lands on sorted order by chance about one run in six.
 func TestIntegrateChildBranchReportOrderIsDeterministic(t *testing.T) {
 	t.Parallel()
@@ -190,7 +192,7 @@ func TestIntegrateChildBranchReportOrderIsDeterministic(t *testing.T) {
 
 			// Give develop a commit main does not have, so integrating it is
 			// not a no-op and every child has something to receive.
-			integAddCommit(t, dir, "develop", "c.txt", "C", "Add C on develop")
+			cCommit := integAddCommit(t, dir, "develop", "c.txt", "C", "Add C on develop")
 
 			out, err := testutil.RunGitFlow(t, dir, "integrate", "develop")
 			if err != nil {
@@ -202,6 +204,15 @@ func TestIntegrateChildBranchReportOrderIsDeterministic(t *testing.T) {
 			// display would leave the reporting and the updating disagreeing.
 			assertChildOrder(t, i, "collection", childOrder(out, "Found child base branch '"), want, out)
 			assertChildOrder(t, i, "update", childOrder(out, "Updating child base branch '"), want, out)
+
+			// Every child must still actually receive the integration — sorting
+			// decides the order, never the selection. This fixture's children
+			// are covered nowhere else, so the check belongs here.
+			for _, name := range want {
+				if !integIsAncestor(t, dir, cCommit, name) {
+					t.Errorf("iteration %d: expected C (%s) to be reachable on %s", i, cCommit, name)
+				}
+			}
 		}()
 	}
 }

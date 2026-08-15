@@ -257,12 +257,12 @@ func TestFinishNoChildrenWithAutoUpdate(t *testing.T) {
 	}
 }
 
-// childOrder extracts the child base branch names from the lines of a finish
-// run's output that start with prefix, in the order they were printed. Used with
-// the "Found child base branch '" prefix it yields the order the children were
-// collected in; with "Updating child base branch '" it yields the order they
-// were actually integrated in, which is also the order persisted into merge
-// state — the signal that matters for issue #204.
+// childOrder extracts the child base branch names from the lines of a finish or
+// integrate run's output that start with prefix, in the order they were printed.
+// Used with the "Found child base branch '" prefix it yields the order the
+// children were collected in; with "Updating child base branch '" it yields the
+// order they were actually integrated in, which is also the order persisted into
+// merge state — the signal that matters for issues #204 and #211.
 func childOrder(output string, prefix string) []string {
 	var names []string
 	for _, line := range strings.Split(output, "\n") {
