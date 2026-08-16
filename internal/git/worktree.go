@@ -175,7 +175,7 @@ func (r *Repo) WorktreeHasChanges(path string) (bool, error) {
 
 // WorktreeChangeCount returns how many entries `git status --porcelain` reports
 // for the worktree at path. It counts ENTRIES, not files: an untracked directory
-// is one entry, because the default untracked handling collapses it.
+// is one entry, because normal untracked handling collapses it.
 func (r *Repo) WorktreeChangeCount(path string) (int, error) {
 	lines, err := worktreeStatusLines(path)
 	if err != nil {
@@ -189,15 +189,19 @@ func (r *Repo) WorktreeChangeCount(path string) (int, error) {
 // work tree — so it answers for the worktree being asked about rather than the
 // one the command was invoked from.
 //
-// Untracked files are reported with git's DEFAULT handling and never with -uall:
-// -uall walks every untracked directory, which is pathological in exactly the
-// worktree full of build output that makes the count worth showing.
+// Untracked handling is pinned to --untracked-files=normal rather than left to
+// git's default, which status.showUntrackedFiles overrides: a user who set it to
+// "no" would otherwise get a count of zero for a visibly dirty worktree. Normal
+// is the mode the count is defined against — it still collapses each untracked
+// directory into one entry, unlike -uall, which walks every one of them and is
+// pathological in exactly the worktree full of build output that makes the count
+// worth showing.
 //
 // Only stdout is parsed. CombinedOutput would fold a stray git warning into the
 // porcelain the callers read, so a clean worktree could report changes; git's
 // stderr is instead recovered from the failure for the error message.
 func worktreeStatusLines(path string) ([]string, error) {
-	output, err := gitCommand(path, "status", "--porcelain").Output()
+	output, err := gitCommand(path, "status", "--porcelain", "--untracked-files=normal").Output()
 	if err != nil {
 		if detail := stderrOf(err); detail != "" {
 			return nil, fmt.Errorf("failed to check status of worktree at %s: %s: %w", path, detail, err)

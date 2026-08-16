@@ -218,6 +218,44 @@ func TestListWorktreesCountsEntriesNotFiles(t *testing.T) {
 	}
 }
 
+// TestListWorktreesCountsUntrackedDespiteStatusConfig pins the other half of
+// SC-6: the count is defined against NORMAL untracked handling, not against
+// whatever the user configured. status.showUntrackedFiles overrides git's
+// default, so a user who set it to "no" would see a worktree holding untracked
+// work reported as clean — the annotation would be silently wrong exactly where
+// it matters.
+// Steps:
+// 1. Creates feature/user-auth with a worktree
+// 2. Sets status.showUntrackedFiles=no in the repository
+// 3. Writes one untracked top-level file into the worktree
+// 4. Runs 'feature list --worktrees'
+// 5. Verifies the cell equals exactly "<relpath> [1]"
+func TestListWorktreesCountsUntrackedDespiteStatusConfig(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	createFreeBranch(t, dir, "feature/user-auth")
+	wtPath := addWorktree(t, dir, "feature/user-auth")
+	if out, err := testutil.RunGit(t, dir, "config", "status.showUntrackedFiles", "no"); err != nil {
+		t.Fatalf("Failed to set status.showUntrackedFiles: %v\nOutput: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(wtPath, "notes.txt"), []byte("notes"), 0644); err != nil {
+		t.Fatalf("Failed to write the untracked file: %v", err)
+	}
+
+	stdout, stderr, err := testutil.RunGitFlowStreams(t, dir, "feature", "list", "--worktrees")
+	if err != nil {
+		t.Fatalf("Failed to list feature branches: %v\nStderr: %s", err, stderr)
+	}
+
+	want := relCell(t, dir, wtPath) + " [1]"
+	if cell := listCell(t, stdout, "user-auth"); cell != want {
+		t.Errorf("Expected cell %q, got %q\nOutput:\n%s", want, cell, stdout)
+	}
+}
+
 // TestListWorktreesCleanWorktreeHasNoCount covers spec scenario 3: a clean
 // worktree shows its path and nothing else. The cell is asserted by equality, so
 // a "(clean)" tag or any other annotation fails.
