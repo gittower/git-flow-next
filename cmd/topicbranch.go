@@ -306,6 +306,11 @@ func registerBranchCommand(branchType string) {
 	// types get the flag along with the built-in ones. Plural and with no
 	// shorthand: it selects a column about many worktrees, unlike the singular
 	// --worktree elsewhere, which requests an action on one.
+	//
+	// Layer 3 only, deliberately: there is no gitflow.<type>.list.worktrees. The
+	// flag selects a presentation column for one invocation rather than settling
+	// how a command executes, so it carries no persistent-preference meaning — the
+	// same reason --quiet on start, checkout and worktree add has no key either.
 	listCmd.Flags().Bool("worktrees", false, "Show each branch's worktree path, changed entries and provenance")
 	branchCmd.AddCommand(listCmd)
 
