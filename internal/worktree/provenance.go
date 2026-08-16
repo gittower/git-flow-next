@@ -63,26 +63,60 @@ func ClearMarker(repo *git.Repo, branch string) error {
 	return nil
 }
 
-// ListMarkers returns the branch names that carry a provenance marker, read from
-// local config only — the scope markers are written to.
+// ListMarkers returns the branch names whose provenance marker says git-flow
+// created the worktree, read from local config only — the scope markers are
+// written to.
+//
+// The VALUE decides, not the key's presence, so every consumer agrees with
+// IsManaged. MarkManaged only ever writes "true", but a hand-written
+// gitflow.worktree.<branch>.managed=false must read unmanaged wherever it is
+// read: over-claiming managed-ness is the direction that misleads about whether
+// the cleanup commands remove a worktree or merely detach it.
 func ListMarkers(repo *git.Repo) ([]string, error) {
-	lines, err := repo.GetConfigLocalRegexpLines(`^gitflow\.worktree\..*\.managed$`)
+	order, values, err := listMarkers(repo)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list worktree provenance markers: %w", err)
+		return nil, err
 	}
 
 	var branches []string
-	seen := map[string]bool{}
-	for _, line := range lines {
-		key := strings.SplitN(strings.TrimSpace(line), " ", 2)[0]
-		match := markerKeyPattern.FindStringSubmatch(key)
-		if match == nil || seen[match[1]] {
-			continue
+	for _, branch := range order {
+		if config.ParseBool(values[branch]) {
+			branches = append(branches, branch)
 		}
-		seen[match[1]] = true
-		branches = append(branches, match[1])
 	}
 	return branches, nil
+}
+
+// listMarkers returns every marked branch in the order git reported it, plus each
+// branch's raw marker value.
+//
+// A branch is listed once however many values its key carries, and the LAST value
+// wins, which is what `git config --get` returns and therefore what IsManaged
+// sees.
+func listMarkers(repo *git.Repo) ([]string, map[string]string, error) {
+	lines, err := repo.GetConfigLocalRegexpLines(`^gitflow\.worktree\..*\.managed$`)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list worktree provenance markers: %w", err)
+	}
+
+	var order []string
+	values := map[string]string{}
+	for _, line := range lines {
+		fields := strings.SplitN(strings.TrimSpace(line), " ", 2)
+		match := markerKeyPattern.FindStringSubmatch(fields[0])
+		if match == nil {
+			continue
+		}
+		branch := match[1]
+		if _, seen := values[branch]; !seen {
+			order = append(order, branch)
+		}
+		values[branch] = ""
+		if len(fields) > 1 {
+			values[branch] = fields[1]
+		}
+	}
+	return order, values, nil
 }
 
 // SweepMarkers drops every marker whose branch has no live worktree, so markers
@@ -95,6 +129,10 @@ func ListMarkers(repo *git.Repo) ([]string, error) {
 // could later be inherited by a worktree the user created by hand for the same
 // branch, and the cleanup commands would then delete their work. The worst case
 // this way round is a git-flow-created worktree being left alone.
+//
+// The sweep reads the marker KEYS, not ListMarkers' filtered view: a marker
+// written false still has a key, and leaving it behind would let it outlive the
+// worktree it describes.
 func SweepMarkers(repo *git.Repo) error {
 	entries, err := repo.ListWorktrees()
 	if err != nil {
@@ -107,7 +145,7 @@ func SweepMarkers(repo *git.Repo) error {
 		}
 	}
 
-	markers, err := ListMarkers(repo)
+	markers, _, err := listMarkers(repo)
 	if err != nil {
 		return err
 	}

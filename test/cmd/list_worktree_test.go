@@ -610,6 +610,49 @@ func TestListWorktreesDegradesWhenStatusFails(t *testing.T) {
 	}
 }
 
+// TestListWorktreesFalseMarkerReadsUnmanagedEverywhere pins that the provenance
+// marker's VALUE decides, not the key's presence, and that both commands that
+// report provenance agree about it. 'worktree list' parses the value per row,
+// this column reads the markers in bulk, and a hand-written 'false' is the case
+// where key-presence matching and value parsing disagree — in the unsafe
+// direction, since claiming a worktree is managed misleads about whether cleanup
+// removes it or merely detaches it.
+// Steps:
+// 1. Creates feature/by-flow with 'git flow worktree add', which writes the marker as true
+// 2. Rewrites the marker to false by hand, which is the only way that value arises
+// 3. Runs 'feature list --worktrees' and verifies the cell carries "(unmanaged)"
+// 4. Runs 'worktree list' and verifies its row for the same worktree carries the same tag
+func TestListWorktreesFalseMarkerReadsUnmanagedEverywhere(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	createFreeBranch(t, dir, "feature/by-flow")
+	flowPath := addWorktree(t, dir, "feature/by-flow")
+	if out, err := testutil.RunGit(t, dir, "config", "gitflow.worktree.feature/by-flow.managed", "false"); err != nil {
+		t.Fatalf("Failed to rewrite the provenance marker: %v\nOutput: %s", err, out)
+	}
+
+	stdout, stderr, err := testutil.RunGitFlowStreams(t, dir, "feature", "list", "--worktrees")
+	if err != nil {
+		t.Fatalf("Failed to list feature branches: %v\nStderr: %s", err, stderr)
+	}
+	want := relCell(t, dir, flowPath) + " (unmanaged)"
+	if cell := listCell(t, stdout, "by-flow"); cell != want {
+		t.Errorf("Expected cell %q, got %q\nOutput:\n%s", want, cell, stdout)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "worktree", "list")
+	if err != nil {
+		t.Fatalf("Failed to list worktrees: %v\nOutput: %s", err, output)
+	}
+	wantRow := fmt.Sprintf("feature/by-flow  %s  (unmanaged)", flowPath)
+	if !strings.Contains(output, wantRow) {
+		t.Errorf("Expected row %q in 'worktree list' output:\n%s", wantRow, output)
+	}
+}
+
 // TestListWorktreesRendersCountBeforeUnmanagedTag covers SC-11/SC-12: the
 // annotation order is path, then change count, then provenance tag.
 // Steps:
