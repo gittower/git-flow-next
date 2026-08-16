@@ -130,6 +130,9 @@ The operation maintains a persistent state file that allows it to resume after c
 **--ff**
 : Allow fast-forward merge when possible (default)
 
+**--ff-only**
+: Require that the merge into the parent branch be a fast-forward. This is a precondition, not a merge strategy: if the parent branch carries any commit the topic branch does not — whether the two have truly diverged or the parent is merely ahead — finish runs the configured fetch and then aborts before touching any local branch, tag or the working tree, so what lands on the parent is exactly the tested topic tip. Integrate the parent into the topic branch, re-test, and finish again. The condition is re-checked immediately before the merge, so a parent branch advanced in the meantime — by the pre-finish hook or by a concurrent process — is caught as well; that later abort still performs no merge, creates no tag and deletes no branch, but it is not a no-op, because the pre-finish hook has already run and whatever it did stands. The merge itself is run with Git's own `--ff-only`, so a repository that sets `merge.ff = false` still gets a fast-forward rather than a merge commit, and a parent that moves even later is refused and reported as the same error, with nothing merged — including a parent that moved *past* the topic tip, which Git's `--ff-only` calls "already up to date" and would leave unlanded. `--ff-only` never rewrites the topic branch to make it land: combined with a rebase strategy, the rebase step is skipped — a topology that satisfies the precondition makes it a no-op anyway, and one that does not must be reported rather than rebased away. Overrides git config setting `gitflow.<type>.finish.ff-only`.
+
 ### Remote Fetch Options
 
 **--fetch**
@@ -248,6 +251,7 @@ The following options modify strategy behavior:
 - **--preserve-merges**: Only valid with rebase operations
 - **--no-ff**: Forces creation of merge commits, even for fast-forward cases
 - **--ff**: Allows fast-forward merges when possible (default)
+- **--ff-only**: Requires the merge into the parent to be a fast-forward. `--ff`, `--no-ff` and `--ff-only` are three values of one setting, so combining `--ff-only` with either of the others is rejected, as is combining it with a squash strategy (squashing always creates a new commit). It combines with a rebase strategy, but suppresses the rebase itself, since `--ff-only` never rewrites the topic branch to make it land. It constrains the upstream merge only — the automatic update of child base branches still creates merge commits as usual.
 
 ## MESSAGE PLACEHOLDERS
 
@@ -364,6 +368,11 @@ git flow feature finish my-feature --rebase --preserve-merges
 Create merge commit even for fast-forward:
 ```bash
 git flow feature finish my-feature --no-ff
+```
+
+Refuse to finish unless the parent can be fast-forwarded:
+```bash
+git flow feature finish my-feature --ff-only
 ```
 
 Override configured squash with regular merge:
@@ -485,6 +494,7 @@ git config gitflow.<type>.finish.rebase true
 git config gitflow.<type>.finish.squash false
 git config gitflow.<type>.finish.preserve-merges true
 git config gitflow.<type>.finish.no-ff true
+git config gitflow.<type>.finish.ff-only true
 
 # Tag creation overrides
 git config gitflow.<type>.finish.sign true
@@ -504,25 +514,22 @@ git config gitflow.<type>.finish.noverify true
 ## EXIT STATUS
 
 **0**
-: Successful finish operation
+: Success.
 
 **1**
-: Topic branch not found
+: git-flow is not initialized.
 
 **2**
-: Git operation failed (conflicts, etc.)
+: Invalid input (an unknown branch type, an invalid branch name, or conflicting options such as `--ff-only` combined with `--no-ff`, `--ff`, or a squash strategy).
 
 **3**
-: Invalid branch name or configuration
-
-**4**
-: Merge conflicts require manual resolution
+: A Git operation failed, a merge or rebase is already in progress, unresolved conflicts remain, a required fetch failed, or there is no in-progress operation to continue.
 
 **5**
-: Tag creation failed
+: A required branch (the topic branch or its parent) does not exist.
 
 **6**
-: GPG signing failed
+: A validation error (the topic or parent branch is not in sync with its remote, or the `--ff-only` precondition failed because the parent carries commits the topic branch does not).
 
 ## SEE ALSO
 

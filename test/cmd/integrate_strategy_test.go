@@ -1,6 +1,7 @@
 package cmd_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/gittower/git-flow-next/test/testutil"
@@ -197,5 +198,127 @@ func TestIntegrateLayer2SquashOverriddenByFlag(t *testing.T) {
 	}
 	if !integIsAncestor(t, dir, c2, "main") {
 		t.Errorf("Expected C2 (%s) reachable on main by original hash", c2)
+	}
+}
+
+// =============================================================================
+// Regression guards for issue #210: finish gains --ff-only, integrate does not.
+// =============================================================================
+
+// TestIntegrateNoFFFlagStillCreatesMergeCommit verifies integrate --no-ff is unchanged
+// by the finish-side tri-state refactor.
+//
+// Steps:
+//  1. init --defaults; commit develop.txt on develop only (main can fast-forward).
+//  2. Run: git flow integrate develop --no-ff.
+//  3. Assert main's tip is a merge commit despite a fast-forward being possible.
+func TestIntegrateNoFFFlagStillCreatesMergeCommit(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+	integAddCommit(t, dir, "develop", "develop.txt", "D", "Add develop.txt on develop")
+
+	out, err := testutil.RunGitFlow(t, dir, "integrate", "develop", "--no-ff")
+	if err != nil {
+		t.Fatalf("integrate develop --no-ff failed: %v\nOutput: %s", err, out)
+	}
+	if got := commitParentCount(t, dir, "main"); got != 2 {
+		t.Errorf("Expected main's tip to be a merge commit (2 parents), got %d", got)
+	}
+}
+
+// TestIntegrateFFFlagStillFastForwards verifies integrate --ff is unchanged by the
+// finish-side tri-state refactor.
+//
+// Steps:
+//  1. init --defaults; set gitflow.develop.integrate.no-ff true so --ff has a Layer-2
+//     setting to override — without it Layer 1 already fast-forwards and the flag
+//     would be a no-op that no assertion could catch.
+//  2. Commit develop.txt on develop only and capture its tip.
+//  3. Run: git flow integrate develop --ff.
+//  4. Assert main equals the captured develop tip with a single-parent tip commit.
+func TestIntegrateFFFlagStillFastForwards(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, dir, "config", "gitflow.develop.integrate.no-ff", "true"); err != nil {
+		t.Fatalf("Failed to set no-ff config: %v\nOutput: %s", err, out)
+	}
+	developTip := integAddCommit(t, dir, "develop", "develop.txt", "D", "Add develop.txt on develop")
+
+	out, err := testutil.RunGitFlow(t, dir, "integrate", "develop", "--ff")
+	if err != nil {
+		t.Fatalf("integrate develop --ff failed: %v\nOutput: %s", err, out)
+	}
+	if got := integRevParse(t, dir, "main"); got != developTip {
+		t.Errorf("Expected main to equal the develop tip %s, got %s", developTip, got)
+	}
+	if got := commitParentCount(t, dir, "main"); got != 1 {
+		t.Errorf("Expected main's tip to have exactly one parent (fast-forward), got %d", got)
+	}
+}
+
+// TestIntegrateRejectsFFOnlyFlag verifies integrate never registers --ff-only, so cobra
+// rejects it as an unknown flag.
+//
+// Steps:
+//  1. init --defaults.
+//  2. Run: git flow integrate develop --ff-only.
+//  3. Assert the command fails and the output reports an unknown flag. The exit code is
+//     cobra's own (1 via main.go), not a git-flow usage code, so it is not asserted.
+func TestIntegrateRejectsFFOnlyFlag(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+
+	out, err := testutil.RunGitFlow(t, dir, "integrate", "develop", "--ff-only")
+	if err == nil {
+		t.Fatalf("Expected integrate --ff-only to be rejected. Output: %s", out)
+	}
+	if !strings.Contains(out, "unknown flag: --ff-only") {
+		t.Errorf("Expected an 'unknown flag: --ff-only' error. Output: %s", out)
+	}
+}
+
+// TestIntegrateFFOnlyConfigHasNoEffect verifies the ff-only Layer-2 key is inert outside
+// the finish namespace.
+//
+// Steps:
+//  1. init --defaults; set gitflow.develop.integrate.ff-only true.
+//  2. Commit develop.txt on develop and main.txt on main (diverged).
+//  3. Run: git flow integrate develop.
+//  4. Assert it succeeds and main's tip is a merge commit — no gate fired.
+func TestIntegrateFFOnlyConfigHasNoEffect(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if out, err := testutil.RunGitFlow(t, dir, "init", "--defaults"); err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, out)
+	}
+	if _, err := testutil.RunGit(t, dir, "config", "gitflow.develop.integrate.ff-only", "true"); err != nil {
+		t.Fatalf("Failed to set integrate.ff-only config: %v", err)
+	}
+	integAddCommit(t, dir, "develop", "develop.txt", "D", "Add develop.txt on develop")
+	integAddCommit(t, dir, "main", "main.txt", "M", "Add main.txt on main")
+
+	out, err := testutil.RunGitFlow(t, dir, "integrate", "develop")
+	if err != nil {
+		t.Fatalf("integrate develop failed: %v\nOutput: %s", err, out)
+	}
+	if got := commitParentCount(t, dir, "main"); got != 2 {
+		t.Errorf("Expected main's tip to be a merge commit (2 parents), got %d", got)
 	}
 }

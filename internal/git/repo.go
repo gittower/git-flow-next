@@ -16,6 +16,14 @@ import (
 // transport failure.
 var ErrRemoteRefNotFound = errors.New("remote ref not found")
 
+// ErrNotFastForward is a sentinel error wrapped by the merge helpers when a --ff-only
+// merge did not fast-forward the current branch onto the merged ref: either git refused
+// it outright because the merged ref is not a descendant of HEAD, or git reported success
+// without moving anything because the current branch was already ahead of it. Callers
+// check it with errors.Is to report the same actionable error as their own pre-merge
+// fast-forward check, instead of a generic merge failure or a false success.
+var ErrNotFastForward = errors.New("merge is not a fast-forward")
+
 // BranchSyncStatus represents the sync status between a local branch and its remote tracking branch
 type BranchSyncStatus string
 
@@ -200,6 +208,28 @@ func (r *Repo) BranchOrCommitExists(ref string) error {
 		return fmt.Errorf("reference '%s' does not exist", ref)
 	}
 	return nil
+}
+
+// IsAncestor reports whether ancestor is an ancestor of (or identical to)
+// descendant. Identical refs yield true, which is exactly the "already
+// fast-forwarded" rule the finish --ff-only precondition relies on.
+//
+// The query is read-only: it inspects refs and never touches HEAD, the index, or
+// the work tree. MergeFFOnly is not a substitute — it checks out and mutates the
+// target branch, and it reports success when the target is merely ahead.
+//
+// git merge-base --is-ancestor exits 0 for true and 1 for false. Any other exit
+// status (notably 128 for an unknown ref or a broken repository) is returned as
+// an error rather than collapsed into the boolean.
+func (r *Repo) IsAncestor(ancestor string, descendant string) (bool, error) {
+	output, err := r.gitCmd("merge-base", "--is-ancestor", ancestor, descendant).CombinedOutput()
+	if err == nil {
+		return true, nil
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, fmt.Errorf("failed to check whether '%s' is an ancestor of '%s': %w: %s", ancestor, descendant, err, strings.TrimSpace(string(output)))
 }
 
 // CreateBranch creates a new branch
@@ -588,10 +618,21 @@ func (r *Repo) MergeFFOnly(branch string) error {
 }
 
 // MergeWithOptions merges a branch into current branch with optional no-fast-forward
-func (r *Repo) MergeWithOptions(branchName string, noFF bool, noVerify bool) error {
+// or fast-forward-only handling.
+//
+// noFF and ffOnly are opposite values of a single setting and are never both true;
+// each is passed on the command line, where it overrides the user's merge.ff config.
+// Passing neither leaves the decision to git, which is what the plain default means.
+//
+// Under ffOnly the result is verified as well as requested: git's own success is not
+// proof that the merged ref landed (see verifyFastForwardLanded).
+func (r *Repo) MergeWithOptions(branchName string, noFF bool, ffOnly bool, noVerify bool) error {
 	args := []string{"merge"}
 	if noFF {
 		args = append(args, "--no-ff")
+	}
+	if ffOnly {
+		args = append(args, "--ff-only")
 	}
 	if noVerify {
 		args = append(args, "--no-verify")
@@ -599,29 +640,95 @@ func (r *Repo) MergeWithOptions(branchName string, noFF bool, noVerify bool) err
 	args = append(args, branchName)
 
 	output, err := r.gitCmd(args...).CombinedOutput()
-	outputStr := string(output)
-
 	if err != nil {
-		conflictOutput, _ := r.gitCmd("ls-files", "--unmerged").Output()
-
-		if len(conflictOutput) > 0 ||
-			strings.Contains(outputStr, "Automatic merge failed") ||
-			strings.Contains(outputStr, "CONFLICT") ||
-			strings.Contains(outputStr, "merge failed") ||
-			strings.Contains(outputStr, "needs merge") {
-			return fmt.Errorf("merge conflict: %s", outputStr)
-		}
-		return fmt.Errorf("failed to merge branch: %s", outputStr)
+		return r.classifyMergeFailure(branchName, ffOnly, string(output))
 	}
 
+	return r.verifyFastForwardLanded(branchName, ffOnly)
+}
+
+// verifyFastForwardLanded checks the postcondition of a --ff-only merge git reported as
+// successful: the current branch must now point at the very object that was merged.
+//
+// Exit 0 is not enough on its own. When the current branch is *ahead* of the merged ref,
+// git reports "Already up to date." and succeeds without moving anything — the merged tip
+// never lands, and the branch keeps commits the merged ref does not have. That is exactly
+// the parent-ahead-only topology --ff-only exists to reject, and the callers' own
+// pre-merge ancestry check cannot rule it out because the parent may move between that
+// check and the merge. Comparing the two refs afterwards closes the window.
+//
+// Equality is the success case, so a merge that was already up to date because the two
+// refs are the *same* commit still passes. A ref that does not resolve leaves the
+// postcondition unverifiable and is reported as a failure rather than assumed to hold.
+func (r *Repo) verifyFastForwardLanded(branchName string, ffOnly bool) error {
+	if !ffOnly {
+		return nil
+	}
+
+	head, err := r.resolveCommit("HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to verify fast-forward of %q: %w", branchName, err)
+	}
+	merged, err := r.resolveCommit(branchName)
+	if err != nil {
+		return fmt.Errorf("failed to verify fast-forward of %q: %w", branchName, err)
+	}
+
+	if head != merged {
+		return fmt.Errorf("%w: merging %q left the current branch at %s rather than %s", ErrNotFastForward, branchName, head, merged)
+	}
 	return nil
 }
 
-// MergeWithMessage merges a branch into current branch with a custom commit message
-func (r *Repo) MergeWithMessage(branchName string, message string, noFF bool, noVerify bool) error {
+// resolveCommit resolves a revision to the commit it names. The ^{commit} peel keeps an
+// annotated tag from resolving to its tag object, so two revisions naming the same commit
+// compare equal however they were written.
+func (r *Repo) resolveCommit(rev string) (string, error) {
+	output, err := r.gitCmd("rev-parse", "--verify", "--quiet", rev+"^{commit}").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve '%s': %w", rev, err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// classifyMergeFailure turns a failed `git merge` into a typed error: a merge conflict,
+// a fast-forward git refused to make, or a generic failure carrying git's output.
+//
+// The fast-forward case is derived from the refs rather than from git's "Not possible to
+// fast-forward, aborting." sentence, which a translated git renders differently: when
+// --ff-only was requested and the merged ref is not a descendant of HEAD, the merge
+// cannot have been a fast-forward, whatever else went wrong. A ref that does not resolve
+// leaves the ancestry unknown, and falls through to the generic error.
+func (r *Repo) classifyMergeFailure(branchName string, ffOnly bool, outputStr string) error {
+	conflictOutput, _ := r.gitCmd("ls-files", "--unmerged").Output()
+
+	if len(conflictOutput) > 0 ||
+		strings.Contains(outputStr, "Automatic merge failed") ||
+		strings.Contains(outputStr, "CONFLICT") ||
+		strings.Contains(outputStr, "merge failed") ||
+		strings.Contains(outputStr, "needs merge") {
+		return fmt.Errorf("merge conflict: %s", outputStr)
+	}
+
+	if ffOnly {
+		if fastForwardable, ancestryErr := r.IsAncestor("HEAD", branchName); ancestryErr == nil && !fastForwardable {
+			return fmt.Errorf("%w: %s", ErrNotFastForward, outputStr)
+		}
+	}
+
+	return fmt.Errorf("failed to merge branch: %s", outputStr)
+}
+
+// MergeWithMessage merges a branch into current branch with a custom commit message.
+// noFF and ffOnly behave as in MergeWithOptions. A fast-forward creates no commit,
+// so git ignores the message in that case.
+func (r *Repo) MergeWithMessage(branchName string, message string, noFF bool, ffOnly bool, noVerify bool) error {
 	args := []string{"merge"}
 	if noFF {
 		args = append(args, "--no-ff")
+	}
+	if ffOnly {
+		args = append(args, "--ff-only")
 	}
 	if noVerify {
 		args = append(args, "--no-verify")
@@ -629,22 +736,11 @@ func (r *Repo) MergeWithMessage(branchName string, message string, noFF bool, no
 	args = append(args, "-m", message, branchName)
 
 	output, err := r.gitCmd(args...).CombinedOutput()
-	outputStr := string(output)
-
 	if err != nil {
-		conflictOutput, _ := r.gitCmd("ls-files", "--unmerged").Output()
-
-		if len(conflictOutput) > 0 ||
-			strings.Contains(outputStr, "Automatic merge failed") ||
-			strings.Contains(outputStr, "CONFLICT") ||
-			strings.Contains(outputStr, "merge failed") ||
-			strings.Contains(outputStr, "needs merge") {
-			return fmt.Errorf("merge conflict: %s", outputStr)
-		}
-		return fmt.Errorf("failed to merge branch: %s", outputStr)
+		return r.classifyMergeFailure(branchName, ffOnly, string(output))
 	}
 
-	return nil
+	return r.verifyFastForwardLanded(branchName, ffOnly)
 }
 
 // Commit creates a commit with the given message

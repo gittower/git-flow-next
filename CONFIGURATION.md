@@ -164,6 +164,9 @@ The finish command supports per-branch-type configuration:
 | Option | Description | Values | Default |
 |--------|-------------|--------|---------|
 | `merge` | Override merge strategy | `merge`, `rebase`, `squash` | From branch config |
+| `no-ff` | Always create a merge commit | `true`, `false` | `false` |
+| `ff` | Allow a fast-forward merge when possible | `true`, `false` | `true` |
+| `ff-only` | Require the merge into the parent to be a fast-forward, aborting otherwise (wins over `no-ff` and `ff` within this layer) | `true`, `false` | `false` |
 | `notag` | Disable tag creation | `true`, `false` | Opposite of branch `tag` |
 | `sign` | Sign created tags | `true`, `false` | `false` |
 | `signingkey` | GPG key for signing | Key ID | Git default |

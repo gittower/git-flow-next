@@ -531,6 +531,11 @@ The finish command supports extensive merge strategy configuration through comma
 : *Type*: boolean
 : *Default*: true
 
+**gitflow.*type*.finish.ff-only**
+: Require that the merge into the parent branch be a fast-forward, aborting the finish when the parent carries any commit the topic branch does not. Within this layer `ff-only` wins over both `no-ff` and `ff`; a command-line `--ff` or `--no-ff` overrides it.
+: *Type*: boolean
+: *Default*: false
+
 ### Remote Fetch Options
 
 **gitflow.*type*.finish.fetch**
@@ -660,6 +665,7 @@ Unlike finish, integrate defaults tagging and fetching **off**:
 
 **gitflow.*branch*.integrate.no-ff**, **gitflow.*branch*.integrate.ff**
 : Force a merge commit for a fast-forward, or allow fast-forward.
+: There is deliberately no `gitflow.*branch*.integrate.ff-only` key: the fast-forward precondition is a finish-only setting, and the key is inert in this namespace.
 
 ### Message and Fetch Options
 
