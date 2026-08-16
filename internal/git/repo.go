@@ -263,6 +263,29 @@ func (r *Repo) CreateBranch(name string, startPoint string) error {
 	return nil
 }
 
+// CreateBranchNoCheckout creates a branch and leaves HEAD where it is.
+//
+// It exists because a branch can be checked out in only one worktree: 'start
+// --worktree' has to create the branch and then hand it to 'git worktree add',
+// which git refuses if the branch is already checked out here. Unlike
+// CreateBranch it never creates an initial commit — a commit-less repository is
+// refused before this is reached, since the only branch there is necessarily the
+// checked-out one.
+func (r *Repo) CreateBranchNoCheckout(name string, startPoint string) error {
+	if startPoint == "" {
+		currentBranch, err := r.GetCurrentBranch()
+		if err != nil {
+			return fmt.Errorf("failed to get current branch: %w", err)
+		}
+		startPoint = currentBranch
+	}
+
+	if output, err := r.gitCmd("branch", name, startPoint).CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create branch: %s: %w", strings.TrimSpace(string(output)), err)
+	}
+	return nil
+}
+
 // Checkout checks out a branch
 func (r *Repo) Checkout(branch string) error {
 	if _, err := r.gitCmd("checkout", branch).Output(); err != nil {

@@ -524,6 +524,29 @@ func ResolveStartShouldFetch(cfg *Config, branchType string, fetch *bool) bool {
 	return resolveShouldFetch(cfg, branchType, "start", true, fetch)
 }
 
+// ResolveStartShouldCreateWorktree resolves whether 'start' creates a worktree for
+// the new branch: the branch type's Layer-1 worktree property, overridden by the
+// --worktree/--no-worktree flags.
+//
+// There is deliberately no Layer-2 key: the setting is defined as a branch-type
+// property only, and a second key meaning the same thing would be a resolution
+// trap. An unknown branch type resolves to false, leaving the caller's own
+// invalid-type error to report the real problem.
+func ResolveStartShouldCreateWorktree(cfg *Config, branchType string, worktree *bool) bool {
+	// Layer 1: branch type definition
+	create := false
+	if branchConfig, ok := cfg.Branches[branchType]; ok {
+		create = branchConfig.Worktree
+	}
+
+	// Layer 3: Command-line flags override config
+	if worktree != nil {
+		create = *worktree
+	}
+
+	return create
+}
+
 // resolveFinishNoVerify resolves whether to skip pre-commit and commit-msg hooks
 func resolveFinishNoVerify(cfg *Config, branchType string, noVerify *bool) bool {
 	// Layer 1: Default is to run hooks (no-verify = false)

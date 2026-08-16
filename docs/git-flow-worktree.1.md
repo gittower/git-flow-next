@@ -60,7 +60,7 @@ git-flow records the worktrees it creates by writing a provenance marker in Git 
 **GIT_FLOW_CD_FILE**
 : When set to a writable path, a command that navigates writes its absolute destination there. git-flow runs as a subprocess and cannot change its parent shell's working directory, so this variable is how a caller asks for that destination in a form it can act on: point the variable at a file, run the command, then read the file and change directory yourself. The variable is an input git-flow reads, never one it sets, which is why it is not a Git config key: it describes one invocation's calling environment, not a repository preference.
 
-: **add** writes the new worktree's path once it exists. **remove** writes only when it would otherwise strand the user: if the current directory is inside the worktree being removed, it writes the main worktree's path, so the shell is never left in a deleted directory. Run from anywhere else, **remove** writes nothing.
+: **add** writes the new worktree's path once it exists, and **git flow *type* start --worktree** writes the new worktree's path on the same terms. **remove** writes only when it would otherwise strand the user: if the current directory is inside the worktree being removed, it writes the main worktree's path, so the shell is never left in a deleted directory. Run from anywhere else, **remove** writes nothing.
 
 : The destination is written **only after** the operation it follows has succeeded, so a refused or failed command leaves the file empty. **--no-cd** suppresses the write even when the variable is set. A failure to write the destination is **not fatal**: the operation still succeeds and a warning is printed to standard error.
 
@@ -143,7 +143,7 @@ git config gitflow.worktreePath '~/worktrees/{{ topicType }}/{{ branchName }}'
 
 ## SEE ALSO
 
-**git-flow**(1), **git-flow-checkout**(1), **git-flow-shell-init**(1), **gitflow-config**(5), **git-worktree**(1)
+**git-flow**(1), **git-flow-start**(1), **git-flow-checkout**(1), **git-flow-shell-init**(1), **gitflow-config**(5), **git-worktree**(1)
 
 ## NOTES
 

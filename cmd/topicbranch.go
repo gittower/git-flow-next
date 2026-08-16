@@ -87,27 +87,22 @@ func registerBranchCommand(branchType string) {
 		},
 	}
 
+	// The three worktree flags of 'start' resolve against one shared intent, so
+	// the last of them on the command line wins. It has to exist before the
+	// command literal, which reads it in Run.
+	startWorktree := &startWorktreeIntent{}
+
 	// Add start subcommand
 	startCmd := &cobra.Command{
 		Use:     "start [name] [base]",
 		Short:   fmt.Sprintf("Start a new %s branch", branchType),
 		Long:    fmt.Sprintf("Start a new %s branch from the appropriate base branch or specified base", branchType),
-		Example: fmt.Sprintf("  git flow %s start my-new-feature\n  git flow %s start emergency-fix abc123def", branchType, branchType),
+		Example: fmt.Sprintf("  git flow %s start my-new-feature\n  git flow %s start emergency-fix abc123def\n  git flow %s start my-new-feature --worktree", branchType, branchType, branchType),
 		Args:    cobra.RangeArgs(0, 2),
 		Run: func(cmd *cobra.Command, args []string) {
 			// Get fetch flag values
 			fetch, _ := cmd.Flags().GetBool("fetch")
 			noFetch, _ := cmd.Flags().GetBool("no-fetch")
-
-			// Pass nil if no flags are set, otherwise create an appropriate bool pointer
-			var shouldFetch *bool
-			if fetch {
-				t := true
-				shouldFetch = &t
-			} else if noFetch {
-				f := false
-				shouldFetch = &f
-			}
 
 			// Get name argument if provided; when omitted, the version filter
 			// may supply it (see start()).
@@ -122,15 +117,24 @@ func registerBranchCommand(branchType string) {
 				base = args[1]
 			}
 
-			// Call the generic start command with the branch type, name, base, and fetch flags
-			StartCommand(branchType, name, base, shouldFetch)
+			opts := StartOptions{
+				ShouldFetch: getBoolFlag(fetch, noFetch),
+				// Deliberately NOT getBoolFlag: --worktree, --no-worktree and
+				// --worktree-path resolve by command-line order, whichever comes
+				// last (see startWorktreeIntent). With none of them given the
+				// intent stays nil, leaving the branch type's default in force.
+				Worktree:     startWorktree.create,
+				WorktreePath: startWorktree.path,
+			}
+			opts.NoCD, _ = cmd.Flags().GetBool("no-cd")
+			opts.Quiet, _ = cmd.Flags().GetBool("quiet")
+
+			// Call the generic start command with the branch type, name, base and options
+			StartCommand(branchType, name, base, opts)
 		},
 	}
 
-	// Add fetch-related flags
-	startCmd.Flags().Bool("fetch", false, "Fetch from remote before creating branch")
-	startCmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before creating branch")
-
+	addStartFlags(startCmd, startWorktree)
 	branchCmd.AddCommand(startCmd)
 
 	// Add finish subcommand
@@ -457,6 +461,28 @@ func addUpdateFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolP("continue", "c", false, "Continue the update operation after resolving conflicts")
 	cmd.Flags().BoolP("abort", "a", false, "Abort the update operation and return to the original state; a no-op success when none is in progress")
 	cmd.Flags().Bool("rebase", false, "Force rebase strategy instead of the configured strategy")
+}
+
+// addStartFlags adds the start command's fetch and worktree flags. It mirrors
+// addFinishFlags/addUpdateFlags so the registration lives in one place.
+//
+// -w and -q are free on start: the command declares no shorthands of its own and
+// the root command's only persistent shorthand is -v. The path flag is named
+// --worktree-path rather than 'worktree add's --path, because 'start' already
+// takes a branch name and a base and a bare --path would read as either.
+//
+// The three worktree flags are registered by addStartWorktreeFlags against the
+// caller's intent, because they resolve by command-line order rather than by the
+// house "positive flag wins" rule.
+func addStartFlags(cmd *cobra.Command, worktree *startWorktreeIntent) {
+	// Fetch Flags
+	cmd.Flags().Bool("fetch", false, "Fetch from remote before creating branch")
+	cmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before creating branch")
+
+	// Worktree Flags
+	addStartWorktreeFlags(cmd, worktree)
+	cmd.Flags().Bool("no-cd", false, "Do not write a navigation destination for the calling shell")
+	cmd.Flags().BoolP("quiet", "q", false, "Do not print the shell-init tip")
 }
 
 // addFinishFlags adds common finish flags to the given Cobra command

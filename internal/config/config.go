@@ -32,6 +32,7 @@ type BranchConfig struct {
 	AutoUpdate         bool
 	Tag                bool   // whether to create a tag when finishing
 	TagPrefix          string // prefix to use for tag names
+	Worktree           bool   // whether 'start' creates a worktree for this branch type by default
 }
 
 // ResolveBranchName resolves a branch reference to its canonical (stored) name
@@ -320,6 +321,9 @@ func ParseBranchConfigLines(branchLines []string) map[string]BranchConfig {
 		}
 		if tagPrefix, ok := properties["tagprefix"]; ok {
 			branchConfig.TagPrefix = tagPrefix
+		}
+		if worktreeValue, ok := properties["worktree"]; ok {
+			branchConfig.Worktree = ParseBool(worktreeValue)
 		}
 
 		branches[branchName] = branchConfig
@@ -724,6 +728,19 @@ func SaveConfigWithScope(config *Config, scope git.ConfigScope, filePath string)
 		err = git.SetConfigWithScope(fmt.Sprintf("gitflow.branch.%s.tag", branchName), strconv.FormatBool(branchConfig.Tag), scope, filePath)
 		if err != nil {
 			return fmt.Errorf("failed to set tag configuration for %s: %w", branchName, err)
+		}
+
+		// Set the worktree default, for TOPIC types only. autoUpdate and tag
+		// above are written unconditionally so an explicit local false shadows a
+		// true inherited from an outer scope; the same reasoning applies here,
+		// but only where the setting means something. A worktree default on a
+		// base branch has no effect — start never creates one for a base branch —
+		// and writing it would put noise into every committed .gitflow.
+		if branchConfig.Type == string(BranchTypeTopic) {
+			err = git.SetConfigWithScope(fmt.Sprintf("gitflow.branch.%s.worktree", branchName), strconv.FormatBool(branchConfig.Worktree), scope, filePath)
+			if err != nil {
+				return fmt.Errorf("failed to set worktree configuration for %s: %w", branchName, err)
+			}
 		}
 
 		// Set tag prefix if it exists

@@ -294,6 +294,8 @@ These properties define the branch type's identity and process characteristics. 
 - **downstreamStrategy**: How to receive updates from parent (process)
 - **tag**: Whether the branch type produces tags on finish (process)
 - **tagPrefix**: Prefix for created tags (process)
+- **deleteRemote**: Whether finishing also deletes the remote branch (process)
+- **worktree**: Whether `start` gives every new branch its own worktree (process)
 
 ### Merge Strategies
 

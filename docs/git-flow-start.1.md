@@ -2,17 +2,19 @@
 
 ## NAME
 
-git-flow-start - Create and checkout topic branches
+git-flow-start - Create a topic branch, checked out or in its own worktree
 
 ## SYNOPSIS
 
-**git-flow** *topic* **start** [*name*] [*base*] [*options*]
+**git-flow** *topic* **start** [*name*] [*base*] [**--worktree**|**--no-worktree**] [**--worktree-path** *path*] [**--no-cd**] [**--quiet**] [*options*]
 
 ## DESCRIPTION
 
-Create and checkout a new topic branch of the specified type. This command works with any topic branch type (feature, release, hotfix, support, or custom types defined in your configuration).
+Create a new topic branch of the specified type and check it out, or create it in its own worktree. This command works with any topic branch type (feature, release, hotfix, support, or custom types defined in your configuration).
 
 The new branch is created from the configured starting point for the topic branch type, or from the specified base commit/branch if provided.
+
+With **--worktree** — or a branch type whose `gitflow.branch.<type>.worktree` default is true — the branch is created **without being checked out here** and a worktree is created for it instead. The current worktree's HEAD is unchanged, because Git allows a branch to be checked out in only one worktree at a time. See **WORKTREES** below.
 
 By default, start fetches from the remote before creating the branch, so its remote-tracking refs are current first. (The branch is still created from the configured local start point; the fetch refreshes remote-tracking refs but does not fast-forward that start point.) Opt out with **--no-fetch** or by setting `gitflow.<type>.start.fetch false`. If no remote is configured, the fetch is skipped silently, and a fetch failure is a non-fatal warning — the branch is still created (start has no sync gate).
 
@@ -34,6 +36,35 @@ By default, start fetches from the remote before creating the branch, so its rem
 
 **--no-fetch**
 : Don't fetch from remote before creating branch. Use this to opt out of the default fetch. Overrides git config setting `gitflow.<type>.start.fetch`.
+
+**--worktree**, **-w**
+: Create a worktree for the new branch instead of checking the branch out here. The worktree is created at the path the **gitflow.worktreePath** template computes and is recorded as git-flow-created. Overrides git config setting `gitflow.branch.<type>.worktree`.
+
+**--no-worktree**
+: Don't create a worktree, even when the branch type defaults to one. Overrides git config setting `gitflow.branch.<type>.worktree`.
+
+: Passing **--worktree** and **--no-worktree** together is not an error: the one that appears **last** on the command line wins. **--worktree-path** joins the same ordering, because naming a path is itself a request to create a worktree — so `--worktree-path ../x --no-worktree` creates no worktree, while `--no-worktree --worktree-path ../x` creates one at `../x`. An explicit value states the negation of the flag it is attached to, so `--worktree=false` reads exactly like `--no-worktree` and `--no-worktree=false` reads exactly like `--worktree`. When none of the three is given, the branch type's `gitflow.branch.<type>.worktree` default decides.
+
+: This last-one-wins rule is specific to **start**'s worktree flags. Every other **--x**/**--no-x** pair in git-flow prefers the positive flag whatever the order.
+
+**--worktree-path** *path*
+: Create the worktree at *path* instead of at the computed one. Implies **--worktree**, and can therefore be overridden by a later **--no-worktree**. A relative *path* resolves against the **invocation directory**, the way a hand-typed path is meant to; note the deliberate asymmetry with the **gitflow.worktreePath** template, whose relative values resolve against the main worktree root.
+
+**--no-cd**
+: Do not write a navigation destination for the calling shell, even when **GIT_FLOW_CD_FILE** is set. The path is still printed for manual use, and the branch and worktree are still created.
+
+**--quiet**, **-q**
+: Do not print the tip about **git flow shell-init**. The tip is printed only when a worktree was created and **GIT_FLOW_CD_FILE** is unset, so this matters exactly when the calling shell has no wrapper installed.
+
+## WORKTREES
+
+A worktree lets the new branch live in its own directory, so an in-progress branch does not have to be stashed away before another one can be started. Because Git allows a branch in only one worktree at a time, **start --worktree** creates the branch **without checking it out** where you ran it: the invocation worktree stays on the branch it was on, and the new branch is checked out in the new worktree.
+
+The worktree's path comes from the **gitflow.worktreePath** template unless **--worktree-path** overrides it. Missing parent directories are created. An existing **empty** directory is accepted as the target, matching plain **git worktree add**; a file or a directory with content in it is refused, and nothing is created. A **--worktree-path** inside the repository work tree is allowed, again matching Git's own behavior; the worktree simply shows up as an untracked directory.
+
+The target path is validated early — after the version filter, which may rewrite the branch name and therefore the path, but **before** the fetch and before the `pre-flow-<type>-start` hook — so a command that cannot succeed leaves no branch, no worktree and no provenance marker behind. A `filter-flow-<type>-start-version` hook is the one thing that has already run at that point, so a filter with side effects of its own will have had them. One consequence is worth knowing: when the target path is occupied **and** the branch already exists, the occupied path is what you are told about (exit status **6**), not the existing branch. Clear the path first.
+
+If worktree creation fails *after* the branch was created — a full disk, a permission problem, a race — the **branch is kept** and the failure is reported. Nothing deletes a branch on an error path. Retry with **git flow worktree add** *branch* once the cause is fixed.
 
 ## BRANCH NAMING
 
@@ -103,6 +134,23 @@ Start hotfix from specific tag:
 git flow hotfix start 1.1.1 v1.1.0
 ```
 
+### Starting in a Worktree
+
+Start a feature in its own worktree, leaving the current one where it is:
+```bash
+git flow feature start user-authentication --worktree
+```
+
+Choose the worktree's location instead of using the computed one:
+```bash
+git flow feature start review-copy --worktree-path ../review-copy
+```
+
+Combine a worktree with an explicit start point:
+```bash
+git flow hotfix start 1.1.1 v1.1.0 --worktree
+```
+
 ### Without Remote Synchronization
 
 Start fetches by default; skip the fetch to work offline or avoid touching the network:
@@ -127,6 +175,14 @@ git config gitflow.branch.feature.prefix feature/
 git config gitflow.branch.release.prefix release/
 git config gitflow.branch.hotfix.prefix hotfix/
 ```
+
+### Worktree Defaults
+```bash
+# Give every new feature its own worktree, without passing --worktree
+git config gitflow.branch.feature.worktree true
+```
+
+`gitflow.branch.<type>.worktree` is a branch-type property, like `prefix` and `startPoint`, and it defaults to **false**. It applies to topic branch types only — git-flow writes it for those and not for base branches, where a worktree default would have no effect. **--worktree** and **--no-worktree** override it per command. Where the worktree ends up is a separate setting, `gitflow.worktreePath`; see **git-flow-worktree**(1).
 
 ### Command Overrides
 ```bash
@@ -168,29 +224,37 @@ git push -u origin feature/new-api
 git flow feature start team-feature
 ```
 
+## ENVIRONMENT
+
+**GIT_FLOW_CD_FILE**
+: When a worktree is created and this variable points at a writable file, start writes the worktree's absolute path there, so the calling shell can change directory to it. **--no-cd** suppresses the write; a start that creates no worktree never writes anything. See **git-flow-worktree**(1) for the full description of the channel.
+
 ## EXIT STATUS
 
 **0**
 : Successful branch creation
 
 **1**
-: Invalid topic branch type
+: git-flow is not initialized in this repository
 
 **2**
-: Branch already exists
+: Invalid input — an unknown topic branch type, an empty branch name, or **--worktree** in a repository with no commits
 
 **3**
-: Invalid branch name
+: A Git operation failed, including a worktree that could not be created after the branch was
 
 **4**
-: Base commit/branch not found
+: Branch already exists
 
 **5**
-: Git operation failed
+: The start point branch, tag, or commit does not exist
+
+**6**
+: A refusal: the target path of the new worktree is occupied
 
 ## SEE ALSO
 
-**git-flow**(1), **git-flow-finish**(1), **git-flow-config**(1), **git-flow-list**(1), **gitflow-config**(5)
+**git-flow**(1), **git-flow-finish**(1), **git-flow-config**(1), **git-flow-list**(1), **git-flow-worktree**(1), **git-flow-checkout**(1), **git-flow-shell-init**(1), **gitflow-config**(5)
 
 ## NOTES
 
@@ -199,3 +263,8 @@ git flow feature start team-feature
 - Custom topic branch types work exactly like built-in types
 - The base argument overrides the configured starting point for this specific branch
 - Branch creation fails if a branch with the same full name already exists
+- With a worktree the current worktree's HEAD is **unchanged**; without one the new branch is checked out as it always was
+- An existing **empty** target directory is accepted; a file or a non-empty directory is refused
+- A worktree created by start is recorded through its provenance marker, so **git flow worktree list** shows it as git-flow-created and later cleanup can recognize it
+- When the target path is occupied **and** the branch already exists, the occupied-path refusal (exit **6**) is the one reported — clear the path first
+- The EXIT STATUS codes above were corrected against the implementation; earlier versions of this page listed codes that the command never returned

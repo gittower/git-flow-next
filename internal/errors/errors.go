@@ -646,7 +646,10 @@ type WorktreePathOccupiedError struct {
 }
 
 func (e *WorktreePathOccupiedError) Error() string {
-	return fmt.Sprintf("path %s already exists and is not empty; move it aside or pass --path to choose another location", e.Path)
+	// Phrased without naming a flag: the callers spell the override differently
+	// ('worktree add --path', 'start --worktree-path'), so naming one of them
+	// would misdirect the users of the other.
+	return fmt.Sprintf("path %s already exists and is not empty; move it aside or choose another location", e.Path)
 }
 
 func (e *WorktreePathOccupiedError) ExitCode() ExitCode {
