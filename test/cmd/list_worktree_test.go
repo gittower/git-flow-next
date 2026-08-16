@@ -691,6 +691,48 @@ func TestListWorktreesFalseMarkerReadsUnmanagedEverywhere(t *testing.T) {
 	}
 }
 
+// TestListWorktreesPaddedMarkerReadsManagedEverywhere pins the other direction of
+// the same agreement: a marker stored with surrounding whitespace must read
+// managed for both readers. 'worktree list' reads the value per row through a
+// getter that trims, while this column reads the markers in bulk, where git puts
+// its separator before the raw value — so an untrimmed bulk read would report
+// (unmanaged) for a worktree git-flow created and still owns.
+// Steps:
+// 1. Creates feature/by-flow with 'git flow worktree add', which writes the marker as true
+// 2. Rewrites the marker to " true " by hand, padding it with spaces
+// 3. Runs 'feature list --worktrees' and verifies the cell carries no tag
+// 4. Runs 'worktree list' and verifies its row for the same worktree carries none either
+func TestListWorktreesPaddedMarkerReadsManagedEverywhere(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	createFreeBranch(t, dir, "feature/by-flow")
+	flowPath := addWorktree(t, dir, "feature/by-flow")
+	if out, err := testutil.RunGit(t, dir, "config", "gitflow.worktree.feature/by-flow.managed", " true "); err != nil {
+		t.Fatalf("Failed to pad the provenance marker: %v\nOutput: %s", err, out)
+	}
+
+	stdout, stderr, err := testutil.RunGitFlowStreams(t, dir, "feature", "list", "--worktrees")
+	if err != nil {
+		t.Fatalf("Failed to list feature branches: %v\nStderr: %s", err, stderr)
+	}
+	want := relCell(t, dir, flowPath)
+	if cell := listCell(t, stdout, "by-flow"); cell != want {
+		t.Errorf("Expected cell %q, got %q\nOutput:\n%s", want, cell, stdout)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "worktree", "list")
+	if err != nil {
+		t.Fatalf("Failed to list worktrees: %v\nOutput: %s", err, output)
+	}
+	wantRow := fmt.Sprintf("feature/by-flow  %s", flowPath)
+	if !strings.Contains(output, wantRow) || strings.Contains(output, "(unmanaged)") {
+		t.Errorf("Expected an untagged row %q in 'worktree list' output:\n%s", wantRow, output)
+	}
+}
+
 // TestListWorktreesMarksUnusableWorktreeMissing pins that "(missing)" means the
 // worktree is not present as a worktree, not merely that os.Stat failed: a
 // regular file at the recorded path raises ENOTDIR rather than ENOENT, which

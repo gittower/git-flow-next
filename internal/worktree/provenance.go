@@ -113,7 +113,11 @@ func listMarkers(repo *git.Repo) ([]string, map[string]string, error) {
 		}
 		values[branch] = ""
 		if len(fields) > 1 {
-			values[branch] = fields[1]
+			// The separator sits before the raw value, so a value stored with
+			// surrounding whitespace arrives with it attached. Trim it, or
+			// " true " would parse false here while IsManaged — reading through
+			// GetConfigLocal, which trims — parses the same marker true.
+			values[branch] = strings.TrimSpace(fields[1])
 		}
 	}
 	return order, values, nil
