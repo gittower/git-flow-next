@@ -59,6 +59,23 @@ func assertNothingCreated(t *testing.T, dir string, branch string) {
 	}
 }
 
+// assertBranchWithoutWorktree fails unless start created the branch and nothing
+// else: no registered worktree and no provenance marker. It is the counterpart of
+// assertNothingCreated for the cases where the branch IS expected — an opt-out
+// from a worktree is not an opt-out from starting the branch.
+func assertBranchWithoutWorktree(t *testing.T, dir string, branch string) {
+	t.Helper()
+	if !testutil.BranchExists(t, dir, branch) {
+		t.Errorf("Expected branch %s to be created", branch)
+	}
+	if path := registeredWorktreePath(t, dir, branch); path != "" {
+		t.Errorf("Expected no worktree registered for %s, found one at %s", branch, path)
+	}
+	if marker := testutil.GitConfigValue(t, dir, managedMarkerFor(branch)); marker != "" {
+		t.Errorf("Expected no provenance marker for %s, got %q", branch, marker)
+	}
+}
+
 // assertWorktreeCreatedAt fails unless branch has a worktree at want: the
 // directory exists, git registers it for the branch, and the provenance marker
 // records git-flow as its creator.
@@ -152,15 +169,7 @@ func TestStartWithoutWorktreeCreatesNoWorktree(t *testing.T) {
 		t.Fatalf("feature start failed: %v\nOutput: %s", err, output)
 	}
 
-	if !testutil.BranchExists(t, dir, "feature/x") {
-		t.Error("Expected branch feature/x to be created")
-	}
-	if path := registeredWorktreePath(t, dir, "feature/x"); path != "" {
-		t.Errorf("Expected no worktree for feature/x, found one at %s", path)
-	}
-	if marker := testutil.GitConfigValue(t, dir, managedMarkerFor("feature/x")); marker != "" {
-		t.Errorf("Expected no provenance marker, got %q", marker)
-	}
+	assertBranchWithoutWorktree(t, dir, "feature/x")
 
 	list, err := testutil.RunGitFlow(t, dir, "worktree", "list")
 	if err != nil {
@@ -313,15 +322,7 @@ func TestStartNoWorktreeOverridesTypeDefault(t *testing.T) {
 		t.Fatalf("feature start --no-worktree failed: %v\nOutput: %s", err, output)
 	}
 
-	if !testutil.BranchExists(t, dir, "feature/x") {
-		t.Error("Expected branch feature/x to be created")
-	}
-	if path := registeredWorktreePath(t, dir, "feature/x"); path != "" {
-		t.Errorf("Expected no worktree for feature/x, found one at %s", path)
-	}
-	if marker := testutil.GitConfigValue(t, dir, managedMarkerFor("feature/x")); marker != "" {
-		t.Errorf("Expected no provenance marker, got %q", marker)
-	}
+	assertBranchWithoutWorktree(t, dir, "feature/x")
 
 	list, err := testutil.RunGitFlow(t, dir, "worktree", "list")
 	if err != nil {
@@ -363,15 +364,17 @@ func TestStartWorktreePathImpliesCreationAndMarks(t *testing.T) {
 	}
 }
 
-// TestStartWorktreePathBeatsNoWorktree covers scenario 6 Test B: --worktree-path
-// implies creation, so it is the POSITIVE side of the --worktree/--no-worktree
-// pair and beats --no-worktree (decisions.md SC-11).
+// TestStartWorktreePathThenNoWorktreeCreatesNoWorktree covers scenario 6 Test B:
+// --worktree-path implies creation, so it takes its turn in the ordering like the
+// other two flags — and a later --no-worktree therefore wins (decisions.md
+// SC-5/SC-6, SC-11).
 // Steps:
 // 1. Sets up a repository with git-flow defaults
 // 2. Runs 'git flow feature start x --worktree-path ../<repo>-custom --no-worktree'
 // 3. Verifies exit code 0 and that feature/x exists
-// 4. Verifies the worktree was still created at the hand-typed path and is marked
-func TestStartWorktreePathBeatsNoWorktree(t *testing.T) {
+// 4. Verifies no registered worktree and no provenance marker
+// 5. Verifies nothing was created at the hand-typed path
+func TestStartWorktreePathThenNoWorktreeCreatesNoWorktree(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -383,10 +386,40 @@ func TestStartWorktreePathBeatsNoWorktree(t *testing.T) {
 		t.Fatalf("feature start --worktree-path --no-worktree failed: %v\nOutput: %s", err, output)
 	}
 
+	assertBranchWithoutWorktree(t, dir, "feature/x")
+	if _, err := os.Stat(absolute); !os.IsNotExist(err) {
+		t.Errorf("Expected nothing at the hand-typed path %q", absolute)
+	}
+}
+
+// TestStartNoWorktreeThenWorktreePathCreatesAtPath covers scenario 6 Test C,
+// the order-sensitivity control for --worktree-path: naming a path after
+// --no-worktree revives creation AND supplies the destination, so the flag counts
+// as a creation signal rather than as a mere setting consulted later.
+// Steps:
+// 1. Sets up a repository with git-flow defaults
+// 2. Runs 'git flow feature start x --no-worktree --worktree-path ../<repo>-custom'
+// 3. Verifies exit code 0 and that feature/x exists
+// 4. Verifies the worktree was created at the hand-typed path and is marked
+// 5. Verifies nothing was created under the computed worktree root
+func TestStartNoWorktreeThenWorktreePathCreatesAtPath(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	relative, absolute := customWorktreeDest(t, dir)
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "x", "--no-worktree", "--worktree-path", relative)
+	if err != nil {
+		t.Fatalf("feature start --no-worktree --worktree-path failed: %v\nOutput: %s", err, output)
+	}
+
 	if !testutil.BranchExists(t, dir, "feature/x") {
 		t.Error("Expected branch feature/x to be created")
 	}
 	assertWorktreeCreatedAt(t, dir, "feature/x", absolute)
+	if _, err := os.Stat(worktreeRootFor(dir)); !os.IsNotExist(err) {
+		t.Errorf("Expected nothing under the computed worktree root %q", worktreeRootFor(dir))
+	}
 }
 
 // TestStartWorktreeQuietSuppressesShellInitTip covers scenario 7: --quiet drops the
@@ -478,17 +511,17 @@ func TestStartWorktreeOccupiedPathCreatesNothing(t *testing.T) {
 	}
 }
 
-// TestStartWorktreeBeatsNoWorktree covers scenario 9 with the assertion
-// deliberately INVERTED per decisions.md SC-5/SC-6: the positive flag wins, as it
-// does for all ~38 other --x/--no-x pairs in this CLI, so the combination creates
-// the branch AND the worktree instead of erroring.
+// TestStartWorktreeThenNoWorktreeCreatesNoWorktree covers scenario 9 as the user
+// decided it (decisions.md SC-5/SC-6): the combination is not an error, and the
+// flag that appears LAST wins. The branch is still created — opting out of a
+// worktree is not opting out of starting the branch.
 // Steps:
 // 1. Sets up a repository with git-flow defaults
 // 2. Runs 'git flow feature start x --worktree --no-worktree'
 // 3. Verifies exit code 0 and that feature/x exists
-// 4. Verifies the worktree exists at the computed path, is registered and is marked
-// 5. Verifies stdout carries the worktree line
-func TestStartWorktreeBeatsNoWorktree(t *testing.T) {
+// 4. Verifies no registered worktree and no provenance marker
+// 5. Verifies stdout carries no worktree line
+func TestStartWorktreeThenNoWorktreeCreatesNoWorktree(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -499,24 +532,21 @@ func TestStartWorktreeBeatsNoWorktree(t *testing.T) {
 		t.Fatalf("feature start --worktree --no-worktree failed: %v\nOutput: %s", err, output)
 	}
 
-	if !testutil.BranchExists(t, dir, "feature/x") {
-		t.Error("Expected branch feature/x to be created")
-	}
-	assertWorktreeCreatedAt(t, dir, "feature/x", computedWorktreePath(t, dir, "feature/x"))
-	if !strings.Contains(output, "Created worktree for branch 'feature/x' at ") {
-		t.Errorf("Expected the worktree line, got: %s", output)
+	assertBranchWithoutWorktree(t, dir, "feature/x")
+	if strings.Contains(output, "Created worktree") {
+		t.Errorf("Expected no worktree line, got: %s", output)
 	}
 }
 
-// TestStartNoWorktreeBeforeWorktreeStillCreatesWorktree covers scenario 9 Test B:
-// the outcome is order-independent, because pflag records only whether each flag
-// was set, never their relative order (decisions.md SC-5/SC-6).
+// TestStartNoWorktreeThenWorktreeCreatesWorktree covers scenario 9 Test B, the
+// order-sensitivity control: reversing the same two flags reverses the outcome,
+// so a build that simply ignored one of them cannot pass both tests.
 // Steps:
 // 1. Sets up a repository with git-flow defaults
 // 2. Runs 'git flow feature start x --no-worktree --worktree' with the flags reversed
 // 3. Verifies exit code 0 and that feature/x exists
 // 4. Verifies the worktree exists at the computed path, is registered and is marked
-func TestStartNoWorktreeBeforeWorktreeStillCreatesWorktree(t *testing.T) {
+func TestStartNoWorktreeThenWorktreeCreatesWorktree(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -531,6 +561,58 @@ func TestStartNoWorktreeBeforeWorktreeStillCreatesWorktree(t *testing.T) {
 		t.Error("Expected branch feature/x to be created")
 	}
 	assertWorktreeCreatedAt(t, dir, "feature/x", computedWorktreePath(t, dir, "feature/x"))
+}
+
+// TestStartWorktreeShorthandThenNoWorktreeCreatesNoWorktree covers scenario 9 with
+// the shorthand spelling. It is asserted separately from the long form, contrary
+// to the suite's usual "long variants only" rule, because the ordering is resolved
+// by a custom pflag.Value rather than by a plain boolean flag: -w reaches it
+// through a different parser path than --worktree, and clustering (-wq) through a
+// third.
+// Steps:
+// 1. Sets up a repository with git-flow defaults
+// 2. Runs 'git flow feature start x -wq --no-worktree', clustering the shorthand
+// 3. Verifies exit code 0 and that feature/x exists
+// 4. Verifies no registered worktree and no provenance marker
+func TestStartWorktreeShorthandThenNoWorktreeCreatesNoWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "x", "-wq", "--no-worktree")
+	if err != nil {
+		t.Fatalf("feature start -wq --no-worktree failed: %v\nOutput: %s", err, output)
+	}
+
+	assertBranchWithoutWorktree(t, dir, "feature/x")
+}
+
+// TestStartWorktreeExplicitFalseOverridesTypeDefault pins what an explicit
+// '--worktree=false' means: it states the negation of the flag, so it is an
+// ordinary participant in the ordering and shadows a type default of true. It
+// does NOT mean "flag absent".
+// Steps:
+// 1. Sets up a repository with git-flow defaults and gitflow.branch.feature.worktree true
+// 2. Runs 'git flow feature start x --worktree=false'
+// 3. Verifies exit code 0 and that feature/x exists
+// 4. Verifies no registered worktree and no provenance marker
+func TestStartWorktreeExplicitFalseOverridesTypeDefault(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	if out, err := testutil.RunGit(t, dir, "config", "gitflow.branch.feature.worktree", "true"); err != nil {
+		t.Fatalf("Failed to set the type default: %v\nOutput: %s", err, out)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "start", "x", "--worktree=false")
+	if err != nil {
+		t.Fatalf("feature start --worktree=false failed: %v\nOutput: %s", err, output)
+	}
+
+	assertBranchWithoutWorktree(t, dir, "feature/x")
 }
 
 // TestStartWorktreeWithCustomStartPoint covers scenario 10: an explicit start point
@@ -689,7 +771,7 @@ func TestStartWorktreeFetchFlagOverridesConfig(t *testing.T) {
 // Steps:
 // 1. Sets up a repository with git-flow defaults
 // 2. Sets gitflow.branch.feature.worktree false
-// 3. Runs 'git flow feature start x'
+// 3. Runs 'git flow feature start x' with no worktree flag, so the intent is untouched
 // 4. Verifies feature/x exists with no worktree and no provenance marker
 func TestStartExplicitFalseTypeDefaultCreatesNoWorktree(t *testing.T) {
 	t.Parallel()
@@ -706,15 +788,7 @@ func TestStartExplicitFalseTypeDefaultCreatesNoWorktree(t *testing.T) {
 		t.Fatalf("feature start failed: %v\nOutput: %s", err, output)
 	}
 
-	if !testutil.BranchExists(t, dir, "feature/x") {
-		t.Error("Expected branch feature/x to be created")
-	}
-	if path := registeredWorktreePath(t, dir, "feature/x"); path != "" {
-		t.Errorf("Expected no worktree for feature/x, found one at %s", path)
-	}
-	if marker := testutil.GitConfigValue(t, dir, managedMarkerFor("feature/x")); marker != "" {
-		t.Errorf("Expected no provenance marker, got %q", marker)
-	}
+	assertBranchWithoutWorktree(t, dir, "feature/x")
 }
 
 // TestStartWorktreeWritesNavigationDestination covers scenario 13: with

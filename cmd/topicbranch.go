@@ -87,6 +87,11 @@ func registerBranchCommand(branchType string) {
 		},
 	}
 
+	// The three worktree flags of 'start' resolve against one shared intent, so
+	// the last of them on the command line wins. It has to exist before the
+	// command literal, which reads it in Run.
+	startWorktree := &startWorktreeIntent{}
+
 	// Add start subcommand
 	startCmd := &cobra.Command{
 		Use:     "start [name] [base]",
@@ -98,11 +103,6 @@ func registerBranchCommand(branchType string) {
 			// Get fetch flag values
 			fetch, _ := cmd.Flags().GetBool("fetch")
 			noFetch, _ := cmd.Flags().GetBool("no-fetch")
-
-			// Get worktree flag values
-			worktree, _ := cmd.Flags().GetBool("worktree")
-			noWorktree, _ := cmd.Flags().GetBool("no-worktree")
-			worktreePath, _ := cmd.Flags().GetString("worktree-path")
 
 			// Get name argument if provided; when omitted, the version filter
 			// may supply it (see start()).
@@ -119,11 +119,12 @@ func registerBranchCommand(branchType string) {
 
 			opts := StartOptions{
 				ShouldFetch: getBoolFlag(fetch, noFetch),
-				// --worktree-path implies creation, so it counts as the positive
-				// side of the pair. getBoolFlag prefers the positive flag
-				// irrespective of order, as every other --x/--no-x pair does.
-				Worktree:     getBoolFlag(worktree || strings.TrimSpace(worktreePath) != "", noWorktree),
-				WorktreePath: worktreePath,
+				// Deliberately NOT getBoolFlag: --worktree, --no-worktree and
+				// --worktree-path resolve by command-line order, whichever comes
+				// last (see startWorktreeIntent). With none of them given the
+				// intent stays nil, leaving the branch type's default in force.
+				Worktree:     startWorktree.create,
+				WorktreePath: startWorktree.path,
 			}
 			opts.NoCD, _ = cmd.Flags().GetBool("no-cd")
 			opts.Quiet, _ = cmd.Flags().GetBool("quiet")
@@ -133,7 +134,7 @@ func registerBranchCommand(branchType string) {
 		},
 	}
 
-	addStartFlags(startCmd)
+	addStartFlags(startCmd, startWorktree)
 	branchCmd.AddCommand(startCmd)
 
 	// Add finish subcommand
@@ -463,15 +464,17 @@ func addUpdateFlags(cmd *cobra.Command) {
 // the root command's only persistent shorthand is -v. The path flag is named
 // --worktree-path rather than 'worktree add's --path, because 'start' already
 // takes a branch name and a base and a bare --path would read as either.
-func addStartFlags(cmd *cobra.Command) {
+//
+// The three worktree flags are registered by addStartWorktreeFlags against the
+// caller's intent, because they resolve by command-line order rather than by the
+// house "positive flag wins" rule.
+func addStartFlags(cmd *cobra.Command, worktree *startWorktreeIntent) {
 	// Fetch Flags
 	cmd.Flags().Bool("fetch", false, "Fetch from remote before creating branch")
 	cmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before creating branch")
 
 	// Worktree Flags
-	cmd.Flags().BoolP("worktree", "w", false, "Create a worktree for the new branch")
-	cmd.Flags().Bool("no-worktree", false, "Do not create a worktree, even if the branch type defaults to one")
-	cmd.Flags().String("worktree-path", "", "Create the worktree at this path instead of the computed one (implies --worktree)")
+	addStartWorktreeFlags(cmd, worktree)
 	cmd.Flags().Bool("no-cd", false, "Do not write a navigation destination for the calling shell")
 	cmd.Flags().BoolP("quiet", "q", false, "Do not print the shell-init tip")
 }
