@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/gittower/git-flow-next/internal/config"
@@ -72,6 +73,10 @@ func overview(repo *git.Repo) error {
 			}
 		}
 	}
+	// Ranging a map yields nondeterministic order; sort so identical runs on an
+	// unchanged repository list the branches in the same order.
+	sort.Strings(trunkBranches)
+	sort.Strings(childBranches)
 
 	// Print trunk branches
 	for _, name := range trunkBranches {
@@ -100,6 +105,8 @@ func overview(repo *git.Repo) error {
 			topicTypes = append(topicTypes, name)
 		}
 	}
+	// Sorted by branch type name for the same reason as the base branches above.
+	sort.Strings(topicTypes)
 
 	for _, name := range topicTypes {
 		branch := cfg.Branches[name]
@@ -149,8 +156,13 @@ func overview(repo *git.Repo) error {
 	branchTypeMap := make(map[string]string)
 
 	for _, branchName := range branches {
-		for name, branch := range cfg.Branches {
-			if branch.Type == string(config.BranchTypeTopic) && strings.HasPrefix(branchName, branch.Prefix) {
+		// Iterate the sorted type list rather than the map: where one configured
+		// prefix extends another, more than one type matches and the first match
+		// wins, which map order would leave up to chance. This only makes the
+		// existing choice reproducible; it is not a longest-prefix match.
+		for _, name := range topicTypes {
+			branch := cfg.Branches[name]
+			if strings.HasPrefix(branchName, branch.Prefix) {
 				activeTopicBranches = append(activeTopicBranches, branchName)
 				branchTypeMap[branchName] = name
 				break

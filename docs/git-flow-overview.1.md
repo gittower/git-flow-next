@@ -37,6 +37,8 @@ The overview command is useful for understanding the current state of a git-flow
 - **Topic Branch Types**: Configured topic branch templates
 - **Active Branches**: Currently existing topic branches
 
+Trunk branches, child base branches and topic branch types are each listed alphabetically by branch type name within their own group, so identical runs on an unchanged repository produce the same output.
+
 ### Workflow Status
 - **Health**: Configuration validation status
 - **Warnings**: Potential issues or misconfigurations
