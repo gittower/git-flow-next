@@ -328,3 +328,174 @@ func TestOverviewWithAVHConfig(t *testing.T) {
 		t.Errorf("Expected output to contain '* feature/test-feature (feature)', got: %s", output)
 	}
 }
+
+// runOverviewRepeatedly runs the overview command the given number of times and
+// returns each run's output. Go randomizes map iteration per run, so a single
+// run cannot distinguish a stable order from a lucky one.
+func runOverviewRepeatedly(t *testing.T, dir string, runs int) []string {
+	t.Helper()
+
+	outputs := make([]string, 0, runs)
+	for i := 0; i < runs; i++ {
+		output, err := testutil.RunGitFlow(t, dir, "overview")
+		if err != nil {
+			t.Fatalf("Failed to run git-flow overview (run %d): %v\nOutput: %s", i+1, err, output)
+		}
+		outputs = append(outputs, output)
+	}
+	return outputs
+}
+
+// overviewLinesMatching returns the lines of overview output matching the given
+// predicate, in the order they appear.
+func overviewLinesMatching(output string, match func(line string) bool) []string {
+	var lines []string
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if match(line) {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+// setOverviewConfig sets a git config key, failing the test if it does not take.
+// A silently dropped key would change the configured branch set the assertions
+// are written against.
+func setOverviewConfig(t *testing.T, dir string, key string, value string) {
+	t.Helper()
+
+	if _, err := testutil.RunGit(t, dir, "config", key, value); err != nil {
+		t.Fatalf("Failed to set %s: %v", key, err)
+	}
+}
+
+// createOverviewBranch creates a branch off the given start point, failing the
+// test if it does not come into existence.
+func createOverviewBranch(t *testing.T, dir string, name string, startPoint string) {
+	t.Helper()
+
+	if _, err := testutil.RunGit(t, dir, "checkout", "-b", name, startPoint); err != nil {
+		t.Fatalf("Failed to create branch %s: %v", name, err)
+	}
+}
+
+// TestOverviewTopicTypeOrderIsDeterministic tests that the topic branch type
+// sections are listed in a stable, alphabetical order across identical runs.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Runs the overview command several times
+// 3. Verifies every run lists the topic type sections sorted by branch type name
+func TestOverviewTopicTypeOrderIsDeterministic(t *testing.T) {
+	t.Parallel()
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// The default topic types, sorted by branch type name. Their prefixes carry
+	// the same order, so the section headers spell it out directly.
+	expected := []string{"bugfix/*:", "feature/*:", "hotfix/*:", "release/*:", "support/*:"}
+
+	for i, out := range runOverviewRepeatedly(t, dir, 5) {
+		headers := overviewLinesMatching(out, func(line string) bool {
+			return strings.HasSuffix(line, "*:")
+		})
+		if strings.Join(headers, " ") != strings.Join(expected, " ") {
+			t.Errorf("Run %d: expected topic type sections %v, got %v\nOutput: %s", i+1, expected, headers, out)
+		}
+	}
+}
+
+// TestOverviewBaseBranchOrderIsDeterministic tests that the base branch lists
+// are stable across identical runs. The default configuration has a single
+// trunk and a single child base branch, so a second one of each is configured.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds a second trunk branch and a second child base branch
+// 3. Runs the overview command several times
+// 4. Verifies every run lists both trunks and both children in sorted order
+func TestOverviewBaseBranchOrderIsDeterministic(t *testing.T) {
+	t.Parallel()
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// A second trunk (no parent), sorting before the default main
+	createOverviewBranch(t, dir, "archive", "main")
+	setOverviewConfig(t, dir, "gitflow.branch.archive.type", "base")
+
+	// A second child base branch, sorting after the default develop
+	createOverviewBranch(t, dir, "staging", "main")
+	setOverviewConfig(t, dir, "gitflow.branch.staging.type", "base")
+	setOverviewConfig(t, dir, "gitflow.branch.staging.parent", "main")
+
+	expectedTrunks := []string{"  archive (root)", "  main (root)"}
+	expectedChildren := []string{"  develop → main [auto-update]", "  staging → main"}
+
+	for i, out := range runOverviewRepeatedly(t, dir, 5) {
+		trunks := overviewLinesMatching(out, func(line string) bool {
+			return strings.HasSuffix(line, "(root)")
+		})
+		if strings.Join(trunks, " ") != strings.Join(expectedTrunks, " ") {
+			t.Errorf("Run %d: expected trunk branches %v, got %v\nOutput: %s", i+1, expectedTrunks, trunks, out)
+		}
+
+		children := overviewLinesMatching(out, func(line string) bool {
+			return strings.Contains(line, "→")
+		})
+		if strings.Join(children, " ") != strings.Join(expectedChildren, " ") {
+			t.Errorf("Run %d: expected child base branches %v, got %v\nOutput: %s", i+1, expectedChildren, children, out)
+		}
+	}
+}
+
+// TestOverviewActiveBranchTypeIsDeterministic tests that the branch type
+// reported for an active topic branch is stable when more than one configured
+// prefix matches it. The first match in sorted branch type order wins.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Adds a topic type whose prefix extends the default feature prefix
+// 3. Creates a branch matching both prefixes
+// 4. Runs the overview command several times
+// 5. Verifies every run reports the same branch type for that branch
+func TestOverviewActiveBranchTypeIsDeterministic(t *testing.T) {
+	t.Parallel()
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// A topic type whose prefix extends the default 'feature/' prefix, so a
+	// branch below it matches two configured types
+	setOverviewConfig(t, dir, "gitflow.branch.exp.type", "topic")
+	setOverviewConfig(t, dir, "gitflow.branch.exp.parent", "develop")
+	setOverviewConfig(t, dir, "gitflow.branch.exp.prefix", "feature/exp/")
+
+	createOverviewBranch(t, dir, "feature/exp/trial", "develop")
+
+	// 'exp' sorts before 'feature', so it is the type reported for the branch
+	expected := "* feature/exp/trial (exp)"
+
+	for i, out := range runOverviewRepeatedly(t, dir, 5) {
+		if !strings.Contains(out, expected) {
+			t.Errorf("Run %d: expected output to contain %q, got: %s", i+1, expected, out)
+		}
+	}
+}
