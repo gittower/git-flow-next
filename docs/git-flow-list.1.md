@@ -6,7 +6,7 @@ git-flow-list - List topic branches
 
 ## SYNOPSIS
 
-**git-flow** *topic* **list**
+**git-flow** *topic* **list** [**--worktrees**]
 
 ## DESCRIPTION
 
@@ -19,6 +19,19 @@ The list command displays all local branches that match the topic branch type's 
 *topic*
 : The topic branch type (feature, release, hotfix, support, or any configured custom type)
 
+## OPTIONS
+
+**--worktrees**
+: Append a column reporting each branch's linked worktree. The cell takes one of four forms: `-` when the branch has no linked worktree, the worktree's path when it is live and clean, `<path> [n]` when it has *n* changed entries, and `<path> (missing)` when the worktree is still registered but its directory is gone. A worktree git-flow did not create is additionally tagged `(unmanaged)`, always last, so a dirty hand-made worktree reads `<path> [2] (unmanaged)`. Available for every topic branch type, including custom ones. There is no short form.
+
+: The count is of **git status --porcelain** entries, not of files: under Git's default untracked handling an untracked directory is one entry however many files it holds, and `-uall` is deliberately never used, since it would walk every untracked directory in a worktree full of build output. A `(missing)` row never carries a count — there is nothing there to count.
+
+: Paths are shown relative to the **main worktree root**, not to the directory the command was run from, so the same listing reads the same from anywhere in the repository. A path with no relative form — a different volume on Windows — is shown in full instead.
+
+: A branch checked out in the **main worktree** shows `-`. The column reports *linked* worktrees, and the repository root is not one of them; **git-flow-checkout**(1) makes the opposite choice, because navigating to a branch and listing the worktrees it lives in are different questions.
+
+: If the status of one worktree cannot be read, that row degrades to its bare path, a warning naming the worktree goes to standard error, and the rest of the listing is printed as usual. A failure to read the worktree list or the provenance markers is fatal instead (exit 3): reporting every branch as having no worktree, or every worktree as unmanaged, would be worse than an error.
+
 ## OUTPUT FORMAT
 
 The list command prints a heading and one branch per line, indented by two spaces:
@@ -26,10 +39,22 @@ The list command prints a heading and one branch per line, indented by two space
 $ git flow feature list
 Feature branches:
   api-v2
+  docs
   user-auth
 ```
 
 Branch names are shown without the prefix for readability.
+
+With **--worktrees**, the branch column is padded and the worktree column follows:
+```
+$ git flow feature list --worktrees
+Feature branches:
+  api-v2     ../review-copy [3] (unmanaged)
+  docs       -
+  user-auth  ../my-project-worktrees/feature/user-auth
+```
+
+Without the flag the output is exactly what it was before the column existed.
 
 ## EXAMPLES
 
@@ -48,6 +73,13 @@ git flow release list
 List all hotfix branches:
 ```bash
 git flow hotfix list
+```
+
+### Worktree Status
+
+See which features have a worktree, and which of those have uncommitted work:
+```bash
+git flow feature list --worktrees
 ```
 
 ### Custom Branch Types
@@ -129,7 +161,7 @@ git ls-remote --heads origin | grep feature/
 
 ## SEE ALSO
 
-**git-flow**(1), **git-flow-start**(1), **git-flow-delete**(1), **git-branch**(1), **git-ls-remote**(1)
+**git-flow**(1), **git-flow-start**(1), **git-flow-delete**(1), **git-flow-worktree**(1), **git-branch**(1), **git-ls-remote**(1)
 
 ## NOTES
 
@@ -138,3 +170,6 @@ git ls-remote --heads origin | grep feature/
 - The command takes no arguments; there is no name-pattern filter
 - Empty results are not considered an error condition
 - Custom topic branch types work exactly like built-in types
+- **--worktrees** does not change the empty-result message, and the flag alone decides whether the column appears
+- A worktree whose HEAD is detached has no branch, so it never appears in this listing; **git flow worktree list** shows it
+- A `(missing)` row is a registered worktree whose directory was deleted by hand. **git flow worktree prune** drops the entry and the row with it
