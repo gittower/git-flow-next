@@ -174,7 +174,41 @@ gh pr merge <pr> --merge --delete-branch
 still succeeds — confirm `merged: true` / exit 0 and ignore the warning. If it
 reports not-merged, Escalation 9.
 
-### Step 6: Clean up and report
+### Step 6: Close the parent report
+
+`Resolves #<spec>` closes the **spec** issue automatically. GitHub does not
+cascade that to the spec's parent, so a user report that the spec was written
+for stays open unless you close it — shipped work then sits in the open-issue
+list looking unstarted. See
+[ISSUE_GUIDELINES.md](../../../ISSUE_GUIDELINES.md) §Relation to User Reports.
+
+Check whether the spec has a parent: the spec body usually opens with
+"Refs #<report>", and the report may list the spec as a native sub-issue.
+
+```bash
+gh issue view <spec> --json body --jq '.body' | head -5   # look for "Refs #N"
+```
+
+If a parent exists and the spec fully completes it, comment what shipped —
+naming the spec, the PR and the merge commit — and close it:
+
+```bash
+gh issue comment <report> --body "$(cat <<'EOF'
+Shipped. The spec for this was #<spec>, implemented in #<pr> and merged to `main` in <sha>.
+
+<2-4 sentences on the user-visible behavior that now exists, written for the reporter rather than the implementer.>
+
+Closing as completed by #<spec>.
+EOF
+)"
+gh issue close <report>
+```
+
+Do **not** close the parent when the spec only partly completes it — several
+specs may hang off one report. In that case comment what shipped and leave it
+open. Repeat up the chain if the report itself has a parent.
+
+### Step 7: Clean up and report
 
 After a successful merge, remove the worktree and local branch:
 
@@ -185,9 +219,10 @@ git branch -D feature/<n>-<slug>   # if it still exists locally
 git fetch --prune
 ```
 
-Report: the merged PR URL, the issue it closed, a one-line-per-round summary of
-Copilot findings addressed, whether a base update was needed, and confirmation
-the branch/worktree were cleaned up.
+Report: the merged PR URL, the issue it closed, any parent report closed (or
+why it was left open), a one-line-per-round summary of Copilot findings
+addressed, whether a base update was needed, and confirmation the
+branch/worktree were cleaned up.
 
 ---
 

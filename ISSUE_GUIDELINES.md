@@ -193,10 +193,19 @@ sub-issue — the report is the parent, the spec is the child — with the spec
 body also carrying "Refs #N". The report stays the place to follow progress;
 the spec is the implementation source of truth beneath it.
 
-The report closes when the spec ships: the fix PR carries "Resolves #<spec>"
-(closing the spec), then the report is closed with a short "shipped in
-<version>" note. Nesting is expected — a report parents a spec, which in turn
-parents its sub-specs.
+The report closes when the spec ships — when the fix merges to `main`, not when
+it is released. The fix PR carries "Resolves #<spec>", which closes the spec
+automatically, but GitHub does **not** cascade that to the parent: the report
+has to be closed explicitly, with a short note saying what shipped and pointing
+at the PR and merge commit (name the version too, once there is one). Nesting is
+expected — a report parents a spec, which in turn parents its sub-specs, and the
+same rule applies at every level.
+
+This is easy to miss precisely because the spec closes itself and the parent
+silently does not, leaving shipped work sitting in the open-issue list. Any
+workflow that merges a spec's PR owns closing the report as part of that merge —
+see the merge steps in [/ship-issue](.claude/skills/ship-issue/SKILL.md) and
+[/quick-fix](.claude/skills/quick-fix/SKILL.md).
 
 ## What to Avoid
 

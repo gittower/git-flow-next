@@ -196,10 +196,15 @@ On confirmation (run from the main clone, since `main` lives there):
    deletes the branch. Fall back to
    `git checkout main && git merge --no-ff feature/quick-<slug> && git branch -d feature/quick-<slug>` if needed
 3. Push main if confirmed
-4. If the task came from an issue: closing it is a public action — the
-   `Resolves #N` reference only auto-closes on merge to main (at the next
-   release), so ask whether to close it now with a short comment noting
-   the fix is on main
+4. If the task came from an issue: closing it is a public action — a local
+   merge fires no `Resolves #N` reference at all, so nothing closes by
+   itself. Ask whether to close it now with a short comment noting the fix
+   is on main and naming the merge commit. If that issue is itself a spec
+   with a parent user report ("Refs #N" in its body), ask about the parent
+   too — GitHub never cascades a close upwards, so a shipped report is left
+   sitting open. See [ISSUE_GUIDELINES.md](../../../ISSUE_GUIDELINES.md)
+   §Relation to User Reports. Leave the parent open if this fix only
+   partly completes it.
 
 **Verify**: main contains the merge, the feature branch is gone, and
 `go test ./...` passes on main.
