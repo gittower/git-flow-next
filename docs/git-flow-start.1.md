@@ -43,10 +43,12 @@ By default, start fetches from the remote before creating the branch, so its rem
 **--no-worktree**
 : Don't create a worktree, even when the branch type defaults to one. Overrides git config setting `gitflow.branch.<type>.worktree`.
 
-: Passing **--worktree** and **--no-worktree** together is not an error: the positive flag wins regardless of the order they appear in, as it does for every **--x**/**--no-x** pair in git-flow. **--worktree-path** counts as a positive flag too, because it implies creation.
+: Passing **--worktree** and **--no-worktree** together is not an error: the one that appears **last** on the command line wins. **--worktree-path** joins the same ordering, because naming a path is itself a request to create a worktree — so `--worktree-path ../x --no-worktree` creates no worktree, while `--no-worktree --worktree-path ../x` creates one at `../x`. An explicit value states the negation of the flag it is attached to, so `--worktree=false` reads exactly like `--no-worktree` and `--no-worktree=false` reads exactly like `--worktree`. When none of the three is given, the branch type's `gitflow.branch.<type>.worktree` default decides.
+
+: This last-one-wins rule is specific to **start**'s worktree flags. Every other **--x**/**--no-x** pair in git-flow prefers the positive flag whatever the order.
 
 **--worktree-path** *path*
-: Create the worktree at *path* instead of at the computed one. Implies **--worktree**. A relative *path* resolves against the **invocation directory**, the way a hand-typed path is meant to; note the deliberate asymmetry with the **gitflow.worktreePath** template, whose relative values resolve against the main worktree root.
+: Create the worktree at *path* instead of at the computed one. Implies **--worktree**, and can therefore be overridden by a later **--no-worktree**. A relative *path* resolves against the **invocation directory**, the way a hand-typed path is meant to; note the deliberate asymmetry with the **gitflow.worktreePath** template, whose relative values resolve against the main worktree root.
 
 **--no-cd**
 : Do not write a navigation destination for the calling shell, even when **GIT_FLOW_CD_FILE** is set. The path is still printed for manual use, and the branch and worktree are still created.
