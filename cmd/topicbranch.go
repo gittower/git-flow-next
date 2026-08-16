@@ -294,13 +294,19 @@ func registerBranchCommand(branchType string) {
 		Use:     "list",
 		Short:   fmt.Sprintf("List all %s branches", branchType),
 		Long:    fmt.Sprintf("List all %s branches in the repository", branchType),
-		Example: fmt.Sprintf("  git flow %s list", branchType),
+		Example: fmt.Sprintf("  git flow %s list\n  git flow %s list --worktrees", branchType, branchType),
 		Args:    cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
+			showWorktrees, _ := cmd.Flags().GetBool("worktrees")
 			// Call the generic list command with the branch type
-			ListCommand(branchType)
+			ListCommand(branchType, showWorktrees)
 		},
 	}
+	// Registered here, the one place every topic branch type is built, so custom
+	// types get the flag along with the built-in ones. Plural and with no
+	// shorthand: it selects a column about many worktrees, unlike the singular
+	// --worktree elsewhere, which requests an action on one.
+	listCmd.Flags().Bool("worktrees", false, "Show each branch's worktree path, changed entries and provenance")
 	branchCmd.AddCommand(listCmd)
 
 	// Add update subcommand
