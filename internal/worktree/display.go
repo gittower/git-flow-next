@@ -14,7 +14,10 @@ import "path/filepath"
 // the same `git worktree list --porcelain` output and are therefore already in
 // git's resolved form, so resolving again would cost a stat per row and change
 // nothing. A caller that ever passes a path from os.Getwd or a config template
-// must run it through git.SamePath first.
+// must symlink-resolve it itself first — with filepath.EvalSymlinks, or whatever
+// tolerates a path that does not exist yet. git.SamePath is not that tool: it
+// resolves internally but only answers whether two paths match, so it cannot
+// hand back the resolved form this function needs.
 //
 // The case-folding half of the same rule is satisfied by the standard library:
 // filepath.Rel compares path elements with sameWord, which is strings.EqualFold
