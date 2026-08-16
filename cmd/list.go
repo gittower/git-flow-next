@@ -175,11 +175,18 @@ func worktreeCells(repo *git.Repo, prefix string, names []string) (map[string]st
 
 	for name, entry := range matched {
 		cell := worktree.RelativeDisplayPath(mainRoot, entry.Path)
-		if _, err := os.Stat(entry.Path); err != nil {
-			// Any stat failure means a status could not be taken there either,
-			// so the row reports the recorded path as stale rather than guessing
-			// at a count (SC-5). Staleness is decided here and never from the
+		if present, statErr := worktreeIsPresent(entry.Path); statErr == nil && !present {
+			// The row reports the recorded path as stale rather than guessing at
+			// a count (SC-5). Staleness is decided here and never from the
 			// porcelain 'prunable' field, which needs Git 2.36+.
+			//
+			// worktreeIsPresent rather than a bare stat: it also answers "a file
+			// sits at that path" and "the directory has no .git", both of which
+			// are just as unusable as an absent directory, and it keeps a stat
+			// failure that is NOT absence — permission denied, I/O — off this
+			// branch. Such a failure falls through to the status attempt below,
+			// which fails on the same condition and degrades with a warning
+			// instead of claiming the directory is gone (SC-9).
 			cell += " " + missingTag
 		} else if count, err := repo.WorktreeChangeCount(entry.Path); err != nil {
 			// One broken worktree must not make the whole listing useless, so

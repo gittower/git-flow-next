@@ -22,7 +22,7 @@ The list command displays all local branches that match the topic branch type's 
 ## OPTIONS
 
 **--worktrees**
-: Append a column reporting each branch's linked worktree. The cell takes one of four forms: `-` when the branch has no linked worktree, the worktree's path when it is live and clean, `<path> [n]` when it has *n* changed entries, and `<path> (missing)` when the worktree is still registered but its directory is gone. A worktree git-flow did not create is additionally tagged `(unmanaged)`, always last, so a dirty hand-made worktree reads `<path> [2] (unmanaged)`. Available for every topic branch type, including custom ones. There is no short form.
+: Append a column reporting each branch's linked worktree. The cell takes one of four forms: `-` when the branch has no linked worktree, the worktree's path when it is live and clean, `<path> [n]` when it has *n* changed entries, and `<path> (missing)` when the worktree is still registered but is no longer present at that path. A worktree git-flow did not create is additionally tagged `(unmanaged)`, always last, so a dirty hand-made worktree reads `<path> [2] (unmanaged)`. Available for every topic branch type, including custom ones. There is no short form.
 
 : The count is of **git status --porcelain** entries, not of files: under Git's default untracked handling an untracked directory is one entry however many files it holds, and `-uall` is deliberately never used, since it would walk every untracked directory in a worktree full of build output. A `(missing)` row never carries a count — there is nothing there to count.
 
@@ -172,4 +172,5 @@ git ls-remote --heads origin | grep feature/
 - Custom topic branch types work exactly like built-in types
 - **--worktrees** does not change the empty-result message, and the flag alone decides whether the column appears
 - A worktree whose HEAD is detached has no branch, so it never appears in this listing; **git flow worktree list** shows it
-- A `(missing)` row is a registered worktree whose directory was deleted by hand. **git flow worktree prune** drops the entry and the row with it
+- A `(missing)` row is a registered worktree that is not present at its recorded path: the directory was deleted by hand, something that is not a directory sits there now, or the directory holds no `.git` entry. Any of the three makes it unusable as a worktree. **git flow worktree prune** drops the entry and the row with it
+- A path that cannot be examined at all — a permission or I/O failure rather than an absence — is *not* reported as `(missing)`: the row shows the bare path with no count and a warning on standard error, exactly as a failed status does

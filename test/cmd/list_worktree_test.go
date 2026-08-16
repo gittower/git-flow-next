@@ -653,6 +653,44 @@ func TestListWorktreesFalseMarkerReadsUnmanagedEverywhere(t *testing.T) {
 	}
 }
 
+// TestListWorktreesMarksUnusableWorktreeMissing pins that "(missing)" means the
+// worktree is not present as a worktree, not merely that os.Stat failed: a
+// regular file at the recorded path raises ENOTDIR rather than ENOENT, which
+// os.IsNotExist does not recognize, and it is exactly as unusable as an absent
+// directory. The row must not degrade to a bare path, and must not warn.
+// Steps:
+// 1. Creates feature/by-flow with a worktree
+// 2. Replaces its directory with a regular file of the same name
+// 3. Runs 'feature list --worktrees'
+// 4. Verifies exit 0, the cell equals exactly "<relpath> (missing)", and stderr is empty
+func TestListWorktreesMarksUnusableWorktreeMissing(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	createFreeBranch(t, dir, "feature/by-flow")
+	flowPath := addWorktree(t, dir, "feature/by-flow")
+	want := relCell(t, dir, flowPath) + " (missing)"
+	if err := os.RemoveAll(flowPath); err != nil {
+		t.Fatalf("Failed to remove the worktree directory: %v", err)
+	}
+	if err := os.WriteFile(flowPath, []byte("not a worktree\n"), 0644); err != nil {
+		t.Fatalf("Failed to write a file at the worktree path: %v", err)
+	}
+
+	stdout, stderr, err := testutil.RunGitFlowStreams(t, dir, "feature", "list", "--worktrees")
+	if code := worktreeExitCode(err); code != 0 {
+		t.Fatalf("Expected exit code 0, got %d\nStderr: %s", code, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("Expected empty stderr, got: %s", stderr)
+	}
+	if cell := listCell(t, stdout, "by-flow"); cell != want {
+		t.Errorf("Expected cell %q, got %q\nOutput:\n%s", want, cell, stdout)
+	}
+}
+
 // TestListWorktreesRendersCountBeforeUnmanagedTag covers SC-11/SC-12: the
 // annotation order is path, then change count, then provenance tag.
 // Steps:
