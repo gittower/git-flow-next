@@ -6,32 +6,55 @@ git-flow-list - List topic branches
 
 ## SYNOPSIS
 
-**git-flow** *topic* **list** [*pattern*]
+**git-flow** *topic* **list** [**--worktrees**]
 
 ## DESCRIPTION
 
 List all topic branches of the specified type. This command works with any topic branch type (feature, release, hotfix, support, or custom types defined in your configuration).
 
-The list command displays all local branches that match the topic branch type's prefix pattern, with optional filtering by name pattern.
+The list command displays all local branches that match the topic branch type's prefix.
 
 ## ARGUMENTS
 
 *topic*
 : The topic branch type (feature, release, hotfix, support, or any configured custom type)
 
-*pattern*
-: Optional pattern to filter branch names. Supports shell-style wildcards.
+## OPTIONS
+
+**--worktrees**
+: Append a column reporting each branch's linked worktree. The cell takes one of four forms: `-` when the branch has no linked worktree, the worktree's path when it is live and clean, `<path> [n]` when it has *n* changed entries, and `<path> (missing)` when the worktree is still registered but is no longer present at that path. A worktree git-flow did not create is additionally tagged `(unmanaged)`, always last, so a dirty hand-made worktree reads `<path> [2] (unmanaged)`. Available for every topic branch type, including custom ones. There is no short form.
+
+: The count is of **git status --porcelain** entries, not of files: it is taken under Git's *normal* untracked handling, where an untracked directory is one entry however many files it holds. That mode is passed explicitly rather than inherited from **status.showUntrackedFiles**, so the count means the same thing in every repository, and `-uall` is deliberately never used, since it would walk every untracked directory in a worktree full of build output. A `(missing)` row never carries a count — there is nothing there to count.
+
+: Paths are shown relative to the **main worktree root**, not to the directory the command was run from, so the same listing reads the same from anywhere in the repository. A path with no relative form — a different volume on Windows — is shown in full instead.
+
+: A branch checked out in the **main worktree** shows `-`. The column reports *linked* worktrees, and the repository root is not one of them; **git-flow-checkout**(1) makes the opposite choice, because navigating to a branch and listing the worktrees it lives in are different questions.
+
+: If the status of one worktree cannot be read, that row degrades to its bare path, a warning naming the worktree goes to standard error, and the rest of the listing is printed as usual. A failure to read the worktree list or the provenance markers is fatal instead (exit 3): reporting every branch as having no worktree, or every worktree as unmanaged, would be worse than an error.
 
 ## OUTPUT FORMAT
 
-The list command displays branches in this format:
+The list command prints a heading and one branch per line, indented by two spaces:
 ```
-  branch-name-1
-* branch-name-2    (current branch, marked with asterisk)
-  branch-name-3
+$ git flow feature list
+Feature branches:
+  api-v2
+  docs
+  user-auth
 ```
 
 Branch names are shown without the prefix for readability.
+
+With **--worktrees**, the branch column is padded and the worktree column follows:
+```
+$ git flow feature list --worktrees
+Feature branches:
+  api-v2     ../review-copy [3] (unmanaged)
+  docs       -
+  user-auth  ../my-project-worktrees/feature/user-auth
+```
+
+Without the flag the output is exactly what it was before the column existed.
 
 ## EXAMPLES
 
@@ -52,21 +75,11 @@ List all hotfix branches:
 git flow hotfix list
 ```
 
-### Pattern Filtering
+### Worktree Status
 
-List features matching pattern:
+See which features have a worktree, and which of those have uncommitted work:
 ```bash
-git flow feature list "user-*"
-```
-
-List releases for version 1.x:
-```bash
-git flow release list "1.*"
-```
-
-List hotfixes containing "security":
-```bash
-git flow hotfix list "*security*"
+git flow feature list --worktrees
 ```
 
 ### Custom Branch Types
@@ -76,31 +89,6 @@ List custom branch type:
 git flow bugfix list
 git flow epic list
 ```
-
-## PATTERN MATCHING
-
-Patterns support shell-style globbing:
-
-- **`*`** - Matches any characters
-- **`?`** - Matches single character  
-- **`[abc]`** - Matches any character in brackets
-- **`[a-z]`** - Matches any character in range
-
-Examples:
-```bash
-git flow feature list "api-*"        # Starts with "api-"
-git flow feature list "*-test"       # Ends with "-test"
-git flow feature list "user-?"       # "user-" plus one character
-git flow feature list "[a-m]*"       # Starts with letters a through m
-```
-
-## BRANCH STATUS INDICATORS
-
-**Current Branch**
-: Marked with asterisk (`*`) when you're currently on that branch
-
-**Tracking Information**
-: Shows if branch has remote tracking (implementation dependent)
 
 ## WORKFLOW INTEGRATION
 
@@ -115,9 +103,6 @@ git flow feature start new-feature
 ```bash
 # See all active releases
 git flow release list
-
-# Check specific pattern
-git flow feature list "*api*"
 ```
 
 ### Cleanup Planning
@@ -129,16 +114,10 @@ git flow feature delete old-feature
 
 ## EMPTY RESULTS
 
-When no branches match the criteria:
+When no branches of the type exist:
 ```bash
 $ git flow feature list
-No feature branches found.
-```
-
-With pattern filtering:
-```bash
-$ git flow feature list "nonexistent-*"
-No feature branches matching 'nonexistent-*' found.
+No feature branches found
 ```
 
 ## CONFIGURATION
@@ -172,23 +151,26 @@ git ls-remote --heads origin | grep feature/
 : Successful listing (even if no branches found)
 
 **1**
-: Invalid topic branch type
+: git-flow is not initialized in this repository, or the command line could not be parsed — an unknown flag, or an argument where the command takes none
 
 **2**
-: Git operation failed
+: Invalid topic branch type
 
 **3**
-: Invalid pattern syntax
+: A Git operation failed
 
 ## SEE ALSO
 
-**git-flow**(1), **git-flow-start**(1), **git-flow-delete**(1), **git-branch**(1), **git-ls-remote**(1)
+**git-flow**(1), **git-flow-start**(1), **git-flow-delete**(1), **git-flow-worktree**(1), **git-branch**(1), **git-ls-remote**(1)
 
 ## NOTES
 
 - Only shows local branches - use **git branch -r** for remote branches
 - Branch names are displayed without the prefix for readability
-- Pattern matching uses shell-style globbing, not regex
+- The command takes no arguments; there is no name-pattern filter
 - Empty results are not considered an error condition
-- Current branch is highlighted with an asterisk
 - Custom topic branch types work exactly like built-in types
+- **--worktrees** does not change the empty-result message, and the flag alone decides whether the column appears
+- A worktree whose HEAD is detached has no branch, so it never appears in this listing; **git flow worktree list** shows it
+- A `(missing)` row is a registered worktree that is not present at its recorded path: the directory was deleted by hand, something that is not a directory sits there now, or the directory holds no `.git` entry. Any of the three makes it unusable as a worktree. **git flow worktree prune** drops the entry and the row with it
+- A path that cannot be examined at all — a permission or I/O failure rather than an absence — is *not* reported as `(missing)`: the row shows the bare path with no count and a warning on standard error, exactly as a failed status does

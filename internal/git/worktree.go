@@ -164,22 +164,58 @@ func (r *Repo) DetachWorktree(path string) error {
 }
 
 // WorktreeHasChanges reports whether the worktree at path has uncommitted or
-// untracked changes. It runs `git status --porcelain` with path as the working
-// directory — not this handle's work tree — so it answers for the worktree being
-// asked about rather than the one the command was invoked from.
+// untracked changes.
+func (r *Repo) WorktreeHasChanges(path string) (bool, error) {
+	lines, err := worktreeStatusLines(path)
+	if err != nil {
+		return false, err
+	}
+	return len(lines) > 0, nil
+}
+
+// WorktreeChangeCount returns how many entries `git status --porcelain` reports
+// for the worktree at path. It counts ENTRIES, not files: an untracked directory
+// is one entry, because normal untracked handling collapses it.
+func (r *Repo) WorktreeChangeCount(path string) (int, error) {
+	lines, err := worktreeStatusLines(path)
+	if err != nil {
+		return 0, err
+	}
+	return len(lines), nil
+}
+
+// worktreeStatusLines returns the non-empty `git status --porcelain` lines of the
+// worktree at path. It runs with path as the working directory — not any handle's
+// work tree — so it answers for the worktree being asked about rather than the
+// one the command was invoked from.
+//
+// Untracked handling is pinned to --untracked-files=normal rather than left to
+// git's default, which status.showUntrackedFiles overrides: a user who set it to
+// "no" would otherwise get a count of zero for a visibly dirty worktree. Normal
+// is the mode the count is defined against — it still collapses each untracked
+// directory into one entry, unlike -uall, which walks every one of them and is
+// pathological in exactly the worktree full of build output that makes the count
+// worth showing.
 //
 // Only stdout is parsed. CombinedOutput would fold a stray git warning into the
-// porcelain the dirty check reads, so a clean worktree could report changes; git's
+// porcelain the callers read, so a clean worktree could report changes; git's
 // stderr is instead recovered from the failure for the error message.
-func (r *Repo) WorktreeHasChanges(path string) (bool, error) {
-	output, err := gitCommand(path, "status", "--porcelain").Output()
+func worktreeStatusLines(path string) ([]string, error) {
+	output, err := gitCommand(path, "status", "--porcelain", "--untracked-files=normal").Output()
 	if err != nil {
 		if detail := stderrOf(err); detail != "" {
-			return false, fmt.Errorf("failed to check status of worktree at %s: %s: %w", path, detail, err)
+			return nil, fmt.Errorf("failed to check status of worktree at %s: %s: %w", path, detail, err)
 		}
-		return false, fmt.Errorf("failed to check status of worktree at %s: %w", path, err)
+		return nil, fmt.Errorf("failed to check status of worktree at %s: %w", path, err)
 	}
-	return strings.TrimSpace(string(output)) != "", nil
+
+	var lines []string
+	for _, line := range strings.Split(string(output), "\n") {
+		if strings.TrimSpace(line) != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines, nil
 }
 
 // stderrOf returns the trimmed stderr a failed command wrote, which Output()

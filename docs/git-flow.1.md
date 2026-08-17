@@ -59,7 +59,7 @@ Each topic branch type supports these subcommands:
 **finish** [*name*]
 : Complete and merge topic branch. See **git-flow-finish**(1).
 
-**list** [*pattern*]
+**list** [**--worktrees**]
 : List existing topic branches. See **git-flow-list**(1).
 
 **update** [*name*]

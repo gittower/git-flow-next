@@ -143,7 +143,7 @@ git config gitflow.worktreePath '~/worktrees/{{ topicType }}/{{ branchName }}'
 
 ## SEE ALSO
 
-**git-flow**(1), **git-flow-start**(1), **git-flow-checkout**(1), **git-flow-shell-init**(1), **gitflow-config**(5), **git-worktree**(1)
+**git-flow**(1), **git-flow-start**(1), **git-flow-checkout**(1), **git-flow-list**(1), **git-flow-shell-init**(1), **gitflow-config**(5), **git-worktree**(1)
 
 ## NOTES
 

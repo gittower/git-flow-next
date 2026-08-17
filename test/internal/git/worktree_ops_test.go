@@ -380,3 +380,79 @@ func TestMainWorkTreeFromLinkedWorktree(t *testing.T) {
 		t.Errorf("Expected MainWorkTree() %q, got %q", testutil.EvalPath(t, dir), got)
 	}
 }
+
+// TestWorktreeChangeCountCountsPorcelainEntries verifies the change count is the
+// number of 'git status --porcelain' entries in a worktree.
+// Steps:
+// 1. Creates a repository with feature/x and a linked worktree for it
+// 2. Modifies a tracked file and adds one untracked top-level file inside it
+// 3. Calls repo.WorktreeChangeCount on the worktree path
+// 4. Verifies it returns 2 without an error
+func TestWorktreeChangeCountCountsPorcelainEntries(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("modified"), 0644); err != nil {
+		t.Fatalf("Failed to modify tracked file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(wtPath, "scratch.txt"), []byte("scratch"), 0644); err != nil {
+		t.Fatalf("Failed to write untracked file: %v", err)
+	}
+
+	count, err := repo.WorktreeChangeCount(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeChangeCount failed: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("Expected 2 changed entries, got %d", count)
+	}
+}
+
+// TestWorktreeChangeCountIsZeroForCleanWorktree verifies a clean worktree counts
+// zero entries, and specifically not one from a trailing newline.
+// Steps:
+// 1. Creates a repository with feature/x and a linked worktree for it
+// 2. Writes nothing into the worktree
+// 3. Calls repo.WorktreeChangeCount on the worktree path
+// 4. Verifies it returns 0 without an error
+func TestWorktreeChangeCountIsZeroForCleanWorktree(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	count, err := repo.WorktreeChangeCount(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeChangeCount failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("Expected 0 changed entries, got %d", count)
+	}
+}
+
+// TestWorktreeChangeCountFailsForMissingDirectory verifies the count fails when
+// the worktree directory is gone, which is why callers stat the directory first
+// rather than reading a missing worktree as clean.
+// Steps:
+// 1. Creates a repository with feature/x and a linked worktree for it
+// 2. Removes the worktree directory
+// 3. Calls repo.WorktreeChangeCount on the vanished path
+// 4. Verifies it returns an error naming the path
+func TestWorktreeChangeCountFailsForMissingDirectory(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	if err := os.RemoveAll(wtPath); err != nil {
+		t.Fatalf("Failed to remove the worktree directory: %v", err)
+	}
+
+	if _, err := repo.WorktreeChangeCount(wtPath); err == nil {
+		t.Fatal("Expected WorktreeChangeCount to fail for a missing directory")
+	} else if !strings.Contains(err.Error(), wtPath) {
+		t.Errorf("Expected the error to name %q, got: %v", wtPath, err)
+	}
+}

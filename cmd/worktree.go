@@ -22,6 +22,11 @@ const unmanagedTag = "(unmanaged)"
 // not on a branch.
 const detachedBranchLabel = "(detached)"
 
+// missingTag marks a registered worktree whose directory is gone. The admin entry
+// survives until 'git flow worktree prune' drops it, so the row reports the
+// recorded path rather than pretending the branch never had a worktree.
+const missingTag = "(missing)"
+
 var worktreeCmd = &cobra.Command{
 	Use:   "worktree",
 	Short: "Manage worktrees for branches",
