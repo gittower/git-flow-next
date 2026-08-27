@@ -4,15 +4,23 @@ on:
   push:
     tags:
       - 'v*'
+  # Dry run: build, sign and verify without publishing, so the Azure signing
+  # setup can be exercised without cutting a release. The release job below is
+  # gated on the push event.
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build and Release
+    name: Build binaries
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Fetch all history for version info
 
@@ -21,20 +29,139 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Make build script executable
-        run: chmod +x scripts/build.sh
+      - name: Make scripts executable
+        run: chmod +x scripts/build.sh scripts/package.sh
+
+      # A workflow_dispatch run has no tag, and stripping refs/tags/ off a
+      # branch ref would leave slashes in every artifact name.
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=dryrun-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build binaries
+        run: SKIP_PACKAGE=1 ./scripts/build.sh "${{ steps.version.outputs.version }}"
+
+      - name: Upload unsigned build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
+
+  sign-windows:
+    name: Sign Windows binaries
+    runs-on: windows-2022
+    needs: build
+    environment: release-signing
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download unsigned build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: unsigned-dist
+          path: dist
+
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Separates "OIDC federation failed" from "authenticated but not
+      # authorized to sign" when the signing step below fails.
+      - name: Verify Azure authentication
+        run: az account show
+
+      - name: Sign Windows binaries with Azure Artifact Signing
+        uses: azure/artifact-signing-action@v1
+        with:
+          endpoint: ${{ vars.AZURE_CODESIGN_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_CODESIGN_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.AZURE_CODESIGN_CERTIFICATE_PROFILE }}
+          # Listed explicitly rather than filtered from a folder: a filter that
+          # matches nothing signs nothing and fails silently here.
+          files: |
+            ${{ github.workspace }}\dist\windows-amd64\git-flow.exe
+            ${{ github.workspace }}\dist\windows-386\git-flow.exe
+            ${{ github.workspace }}\dist\windows-arm64\git-flow.exe
+          file-digest: SHA256
+          # Must stay http: the service rejects https with
+          # "SignTool Error: Invalid Timestamp URL".
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify Windows signatures
+        shell: pwsh
+        run: |
+          $platforms = @('windows-amd64', 'windows-386', 'windows-arm64')
+
+          foreach ($platform in $platforms) {
+            $path = "$env:GITHUB_WORKSPACE\dist\$platform\git-flow.exe"
+            if (-not (Test-Path $path)) {
+              throw "Expected executable not found: $path"
+            }
+
+            $signature = Get-AuthenticodeSignature -FilePath $path
+            if ($signature.Status -ne "Valid") {
+              throw "Invalid signature for ${platform}: $($signature.Status) $($signature.StatusMessage)"
+            }
+            Write-Host "Verified signature for $platform"
+          }
+
+      - name: Upload signed build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: Package and release
+    runs-on: ubuntu-latest
+    needs: [build, sign-windows]
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download signed build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-dist
+          path: dist
+
+      - name: Make packaging script executable
+        run: chmod +x scripts/package.sh
+
+      # Artifact upload does not preserve the executable bit.
+      - name: Restore executable permissions
+        run: find dist -type f -exec chmod +x {} +
+
+      - name: Package signed artifacts
+        run: ./scripts/package.sh "${{ needs.build.outputs.version }}"
 
       - name: Check if preview release
         id: check_preview
         run: |
-          if [[ ${{ github.ref }} =~ ^refs/tags/v.*-(alpha|beta|rc)\. ]]; then
+          if [[ "${GITHUB_REF_NAME}" =~ ^v.*-(alpha|beta|rc)\. ]]; then
             echo "is_preview=true" >> $GITHUB_OUTPUT
           else
             echo "is_preview=false" >> $GITHUB_OUTPUT
           fi
-
-      - name: Build binaries
-        run: ./scripts/build.sh ${GITHUB_REF#refs/tags/}
 
       - name: Extract release notes from CHANGELOG
         id: changelog
@@ -79,4 +206,4 @@ jobs:
             ## Checksums
             SHA-256 checksums for the release artifacts are available in the checksums.txt file.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
