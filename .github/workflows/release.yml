@@ -60,7 +60,6 @@ jobs:
     needs: build
     environment: release-signing
     permissions:
-      contents: read
       id-token: write
 
     steps:
