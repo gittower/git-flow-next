@@ -81,6 +81,7 @@ func TestRenameFeature(t *testing.T) {
 // 2. Creates and checks out a feature branch
 // 3. Renames the current feature branch
 // 4. Verifies we're still on the renamed branch
+// 5. Verifies the recorded base branch moved to the new branch name
 func TestRenameCurrentFeature(t *testing.T) {
 	t.Parallel()
 	// Setup
@@ -110,6 +111,14 @@ func TestRenameCurrentFeature(t *testing.T) {
 	if currentBranch != "feature/renamed-feature" {
 		t.Errorf("Expected to be on feature/renamed-feature branch, got %s", currentBranch)
 	}
+
+	// Verify the recorded base branch followed the rename
+	if got := testutil.GitConfigValue(t, dir, baseKeyFor("feature/renamed-feature")); got != "develop" {
+		t.Errorf("Expected the base key for feature/renamed-feature to be 'develop', got %q", got)
+	}
+	if testutil.GitConfigExists(t, dir, baseKeyFor("feature/current-feature")) {
+		t.Error("Expected the base key for feature/current-feature to be removed")
+	}
 }
 
 // TestRenameNonExistentFeature tests the behavior when attempting to rename a non-existent feature branch.
@@ -117,6 +126,7 @@ func TestRenameCurrentFeature(t *testing.T) {
 // 1. Sets up a test repository and initializes git-flow
 // 2. Attempts to rename a non-existent feature branch
 // 3. Verifies the operation fails with appropriate error
+// 4. Verifies the refused rename created no branch state under the new name
 func TestRenameNonExistentFeature(t *testing.T) {
 	t.Parallel()
 	// Setup
@@ -134,14 +144,26 @@ func TestRenameNonExistentFeature(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected rename to fail for non-existent branch")
 	}
+
+	// Verify the refused rename wrote no branch state under the new name
+	if testutil.GitConfigExists(t, dir, baseKeyFor("feature/new-name")) {
+		t.Error("Expected no base key for feature/new-name after a refused rename")
+	}
+	if testutil.GitConfigHasPrefix(t, dir, "gitflow.worktree.") {
+		t.Error("Expected no worktree provenance marker after a refused rename")
+	}
 }
 
 // TestRenameToExistingFeature tests the behavior when attempting to rename a feature branch to a name that already exists.
 // Steps:
-// 1. Sets up a test repository and initializes git-flow
-// 2. Creates two feature branches
-// 3. Attempts to rename the first branch to the name of the second branch
-// 4. Verifies the operation fails with appropriate error
+//  1. Sets up a test repository and initializes git-flow
+//  2. Creates two feature branches
+//  3. Sets the second branch's recorded base to 'main', so the two branches carry
+//     distinguishable state
+//  4. Attempts to rename the first branch to the name of the second branch
+//  5. Verifies the operation fails with the git-error exit code
+//  6. Verifies the refusal happened before the rename: the first branch keeps its
+//     base 'develop' and the second keeps its base 'main'
 func TestRenameToExistingFeature(t *testing.T) {
 	t.Parallel()
 	// Setup
@@ -166,10 +188,28 @@ func TestRenameToExistingFeature(t *testing.T) {
 		t.Fatalf("Failed to create second feature branch: %v\nOutput: %s", err, output)
 	}
 
+	// Make the destination's recorded base distinguishable from the source's, so
+	// a migration running before the exists-check could not overwrite 'develop'
+	// with 'develop' and go unnoticed
+	if out, err := testutil.RunGit(t, dir, "config", "--local", baseKeyFor("feature/second-feature"), "main"); err != nil {
+		t.Fatalf("Failed to set the destination base key: %v\nOutput: %s", err, out)
+	}
+
 	// Try to rename first branch to second branch name
 	output, err = testutil.RunGitFlow(t, dir, "feature", "rename", "first-feature", "second-feature")
 	if err == nil {
 		t.Fatal("Expected rename to fail when target name already exists")
+	}
+	if got := worktreeExitCode(err); got != int(errors.ExitCodeGitError) {
+		t.Errorf("Expected exit code %d, got %d\nOutput: %s", errors.ExitCodeGitError, got, output)
+	}
+
+	// Verify no key moved: the refusal happens before the branch is renamed
+	if got := testutil.GitConfigValue(t, dir, baseKeyFor("feature/first-feature")); got != "develop" {
+		t.Errorf("Expected the base key for feature/first-feature to stay 'develop', got %q", got)
+	}
+	if got := testutil.GitConfigValue(t, dir, baseKeyFor("feature/second-feature")); got != "main" {
+		t.Errorf("Expected the base key for feature/second-feature to stay 'main', got %q", got)
 	}
 }
 
