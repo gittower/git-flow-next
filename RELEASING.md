@@ -277,8 +277,10 @@ in the job holding `contents: write`. Re-running the workflow on a tag
 whose release already exists updates that release in place — notes,
 prerelease flag and artifacts — instead of failing on the existing
 release, which is what keeps `gh run rerun` on an already-published tag
-safe. A missing artifact fails the step rather than publishing a release
-that looks complete.
+safe. An asset pattern matching nothing at all fails the step rather than
+publishing a release with a whole class of artifact missing; it is a
+pattern-level check, so it does not catch one absent archive among
+several the same pattern still matches.
 
 Verify the release after the run completes:
 

@@ -212,8 +212,10 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # An unmatched pattern means an artifact is missing. Fail on it rather
-          # than publishing a partial release that looks complete.
+          # A pattern matching nothing means a whole class of artifact is
+          # missing -- fail rather than publish without it. This is a
+          # pattern-level check only: one absent archive among several the
+          # same pattern still matches gets through.
           shopt -s failglob
           assets=(dist/*.tar.gz dist/*.zip dist/*-checksums.txt)
 
