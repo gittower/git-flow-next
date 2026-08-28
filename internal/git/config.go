@@ -428,14 +428,24 @@ func UnsetConfigWithScope(key string, scope ConfigScope, filePath string) error 
 	return nil
 }
 
-// GetBaseBranch returns the stored base branch for a topic branch
+// BaseBranchKey returns the git config key recording the start point a topic
+// branch was created from. It is the counterpart to worktree.MarkerKey: both name
+// a per-branch key that has to be spelled identically wherever it is read,
+// written, cleaned up or migrated.
+func BaseBranchKey(branch string) string {
+	return fmt.Sprintf("gitflow.branch.%s.base", branch)
+}
+
+// GetBaseBranch returns the stored base branch for a topic branch.
+//
+// It reads MERGED config, so it is not usable for migrating per-branch state:
+// a global or system value would be copied down into local config. Use
+// GetConfigLocalIfSet for that. See #237.
 func (r *Repo) GetBaseBranch(branchName string) (string, error) {
-	configKey := fmt.Sprintf("gitflow.branch.%s.base", branchName)
-	return r.GetConfig(configKey)
+	return r.GetConfig(BaseBranchKey(branchName))
 }
 
 // SetBaseBranch stores the base branch for a topic branch
 func (r *Repo) SetBaseBranch(branchName, baseBranch string) error {
-	configKey := fmt.Sprintf("gitflow.branch.%s.base", branchName)
-	return r.SetConfig(configKey, baseBranch)
+	return r.SetConfig(BaseBranchKey(branchName), baseBranch)
 }
