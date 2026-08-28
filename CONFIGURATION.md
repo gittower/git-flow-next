@@ -34,7 +34,9 @@ Many command options intentionally have no Layer 1 equivalent — they exist onl
 | `gitflow.remote` | Alias for `gitflow.origin` | `origin` | `upstream` |
 | `gitflow.worktreePath` | Path template for a branch's worktree. Supports `{{ repo }}`, `{{ branch }}`, `{{ branchName }}`, `{{ topicType }}` (spaced or unspaced), expands a leading `~`, resolves a relative template against the main worktree root, and always yields an absolute path | `../{{ repo }}-worktrees/{{ branch }}` | `~/worktrees/{{ topicType }}/{{ branchName }}` |
 
-`gitflow.worktree.<branch>.managed` is **not** a setting: it is repository-local state git-flow writes when it creates a worktree, so later commands can tell its own worktrees from the user's. It is excluded from the shared-config set and never reaches a committed `.gitflow`. See [git-flow-worktree(1)](docs/git-flow-worktree.1.md).
+`gitflow.worktree.<branch>.managed` is **not** a setting: it is repository-local state git-flow writes when it creates a worktree, so later commands can tell its own worktrees from the user's. It is carried to the new name when the branch is renamed, and cleared when git-flow removes the worktree. It is excluded from the shared-config set and never reaches a committed `.gitflow`. See [git-flow-worktree(1)](docs/git-flow-worktree.1.md).
+
+`gitflow.branch.<branch>.base` is likewise state rather than a setting: it records the start point a topic branch was created from. It is carried through a rename alongside the marker, and cleared when the branch is finished or deleted. See [git-flow-rename(1)](docs/git-flow-rename.1.md).
 
 ## Branch Type Configuration (Layer 1)
 
