@@ -11,7 +11,7 @@ Two skills automate this process:
   and creates the version bump commit (steps 1–4 below).
 - **`/full-release`** — runs the entire process end-to-end: `/release`
   prep, push + tag (after confirmation), CI verification, Homebrew tap
-  update, WinGet manifest submission, and website sync (all steps below).
+  update, WinGet verification, and website sync (all steps below).
 
 The manual steps are documented here as the source of truth; the skills
 follow this document.
@@ -60,6 +60,81 @@ A `workflow_dispatch` run builds, signs and verifies, then stops: the
 release job only runs on a tag push. A green run confirms the whole
 credential path at once. If it fails, the `Verify Azure authentication` step
 separates a federation problem from a missing role assignment.
+
+## WinGet Publishing
+
+Every stable tag opens a WinGet manifest PR automatically. The `winget`
+job in `.github/workflows/release.yml` runs after the GitHub release is
+published and submits the new version to `microsoft/winget-pkgs` using
+[winget-releaser](https://github.com/vedantmgoyal9/winget-releaser),
+which wraps [komac](https://github.com/russellbanks/Komac) — komac
+downloads the release archives, derives their SHA-256 hashes, and writes
+the manifest. Nothing is submitted by hand.
+
+Only stable tags submit. The job is gated on the `is_preview` output of
+the `release` job, so tags carrying a dotted preview suffix — `-alpha.`,
+`-beta.` or `-rc.`, the forms [Preview Releases](#preview-releases)
+prescribes — never reach WinGet; the community repo is for stable
+versions only. A `workflow_dispatch` dry run skips the `release` job,
+which propagates the skip here, so dispatch runs never submit either.
+
+The PR is pushed to a branch on the `gittower/winget-pkgs` fork and
+opened against `microsoft/winget-pkgs`. Microsoft's validation bots run
+automatically and normally auto-merge within a few hours, so no manual
+merge is needed. **The bot merge is not a release gate** — the release
+is already published and complete by the time the job runs.
+
+This pipeline depends on two things that cannot be verified from the
+repository contents, which is why they are recorded here:
+
+| Kind | Name | Purpose |
+| --- | --- | --- |
+| Secret | `WINGET_TOKEN` | Repository secret. Must be a **classic** PAT with the `public_repo` scope, authorized against the `gittower` org if the org requires it |
+| Fork | `gittower/winget-pkgs` | The `fork-user: gittower` target komac pushes its branch to |
+
+The token has to be a classic PAT specifically. Fine-grained PATs and
+GitHub App installation tokens cannot act outside their resource owner
+or installation, and komac needs to do both halves of the job: push to
+our fork *and* open a PR against Microsoft's repository. A fine-grained
+token looks correct in the secret list and fails only at PR time.
+
+The three Windows architectures are selected by the `installers-regex`
+input, `windows-(386|amd64|arm64)\.zip$`. komac infers each installer's
+architecture from its filename, so the manifest's `x86`, `x64` and
+`arm64` entries follow from the archive names `scripts/package.sh`
+produces. Read this before adding a fourth Windows target — a new
+architecture ships in the release but stays invisible to WinGet until
+the regex covers it.
+
+The action is pinned to a commit SHA rather than the floating `v2` tag,
+so a repointed tag cannot change what runs in a job that holds a
+write-capable token. The pin bounds that hop only — the pinned action
+installs `cargo-bins/cargo-binstall@main` and the latest komac release
+at runtime, neither of them pinned — so the real reduction in blast
+radius is moving `WINGET_TOKEN` to a dedicated machine account, which is
+tracked as future work. `max-versions-to-keep` is deliberately left at
+its default of `0`: a non-zero value makes komac submit **removal** PRs
+for older versions.
+
+When the job fails, fix the cause and re-run that job on its own. Do not
+use `gh run rerun --failed`: `continue-on-error` leaves the run's
+conclusion `success`, so from the run's point of view no job failed.
+Look the job id up on the run and re-run it directly:
+
+```bash
+gh run view <run-id> --json jobs --jq \
+  '.jobs[] | select(.name == "Submit WinGet manifest") | .databaseId'
+gh run rerun --job <job-id>
+```
+
+Do not run komac by hand. The job is terminal and `continue-on-error`,
+so a failed submission never breaks the release — the published release,
+its artifacts, checksums and tag are all intact, and the only casualty
+is the manifest PR. One failure mode leaves a green build with no WinGet
+PR: if `zip` were unavailable on the runner, `scripts/package.sh` falls
+back to `.tar.gz` archives, the regex matches nothing, and komac has no
+installers to hash. This is not reachable on `ubuntu-latest`, where
+`zip` is preinstalled, and is deliberately not guarded.
 
 ## Version Locations
 
@@ -166,6 +241,8 @@ The `.github/workflows/release.yml` workflow automatically:
 6. Extracts release notes for the tagged version from CHANGELOG.md
 7. Creates GitHub release with artifacts
 8. Marks as prerelease if tag contains `-alpha`, `-beta`, or `-rc`
+9. Submits the WinGet manifest on stable tags — see
+   [WinGet Publishing](#winget-publishing)
 
 Verify the release after the run completes:
 
@@ -224,45 +301,42 @@ manual `git add`/`git commit` needed, only the push.
 
 Repository: https://github.com/gittower/homebrew-tap
 
-### 9. Submit WinGet Manifest
+### 9. Verify the WinGet Submission
 
-**Skip for preview releases** — the WinGet community repo is for stable
-versions only.
+**Skipped automatically for preview releases** — the workflow gates the
+`winget` job on the tag being stable, so there is nothing to check after
+a preview.
 
-This is an **interim manual step** until manifest submission is automated in
-the release workflow. It publishes the new version to WinGet by opening a PR
-against `microsoft/winget-pkgs` with
-[komac](https://github.com/russellbanks/Komac), which derives the SHA-256
-hashes and release notes automatically.
-
-Prerequisites (one-time):
+The `winget` job in the release workflow already submitted the manifest
+(see [WinGet Publishing](#winget-publishing)). Confirm the PR was
+opened:
 
 ```bash
-brew install komac                                # cross-platform manifest tool
-gh repo fork microsoft/winget-pkgs --clone=false  # komac PRs from your fork
+gh pr list --repo microsoft/winget-pkgs --state all \
+  --search "in:title GitTower.GitFlowNext X.Y.Z"
 ```
 
-Submit (run only after the GitHub release from step 6 is live — komac
-downloads the release zips to hash them):
+One PR covering all three Windows architectures should be listed.
+Microsoft's validation bots normally auto-merge it within a few hours —
+**that merge is not a release gate**, so there is no need to wait for it
+here.
+
+If no PR was opened, check the `winget` job in the release run. The job
+is `continue-on-error`, so it can be marked failed while the run's
+conclusion stays green — which is why `gh run rerun --failed` does not
+help here. Fix the cause, then look the job id up and re-run that job
+alone:
 
 ```bash
-export GITHUB_TOKEN=$(gh auth token)   # needs public_repo scope; gh's repo scope covers it
-komac update GitTower.GitFlowNext \
-  --version X.Y.Z \
-  --urls \
-    "https://github.com/gittower/git-flow-next/releases/download/vX.Y.Z/git-flow-next-vX.Y.Z-windows-amd64.zip" \
-    "https://github.com/gittower/git-flow-next/releases/download/vX.Y.Z/git-flow-next-vX.Y.Z-windows-386.zip" \
-  --submit
+gh run view <run-id> --json jobs --jq \
+  '.jobs[] | select(.name == "Submit WinGet manifest") | .databaseId'
+gh run rerun --job <job-id>
 ```
 
-komac forks/updates `winget-pkgs`, pushes a branch, and opens the PR. Note
-the PR URL it prints — Microsoft's validation bots run automatically and
-normally auto-merge within a few hours, so no manual merge is needed. To
-preview the manifests first, swap `--submit` for `--dry-run --output <dir>`.
+Do not run komac by hand.
 
-The manifest covers x64 and x86; arm64 is shipped in the release but not yet
-in the WinGet manifest. **Scoop needs no action** — its Main-bucket manifest
-has `checkver`/`autoupdate`, so Scoop's excavator bot updates it
+**Scoop needs no action** — its Main-bucket manifest has
+`checkver`/`autoupdate`, so Scoop's excavator bot updates it
 automatically after each release.
 
 Repository: https://github.com/microsoft/winget-pkgs
@@ -296,8 +370,9 @@ For preview releases, use suffixes:
 - Beta: `v1.0.0-beta.1`
 - Release candidate: `v1.0.0-rc.1`
 
-These are automatically marked as prereleases on GitHub. Do **not** update
-the Homebrew tap, the WinGet manifest, or the website for preview releases.
+These are automatically marked as prereleases on GitHub, and the
+workflow skips the WinGet submission for them on its own. Do **not**
+update the Homebrew tap or the website for preview releases.
 
 ## Checklist
 
@@ -315,5 +390,5 @@ the Homebrew tap, the WinGet manifest, or the website for preview releases.
 - [ ] Verified GitHub release: artifacts, checksums, non-empty release notes
 - [ ] Stamped milestone: renamed `Next` → `vX.Y.Z`, closed it, opened new `Next` — skip for previews
 - [ ] Updated Homebrew tap (`ruby update_formula.rb` + `git push`) — skip for previews
-- [ ] Submitted WinGet manifest (`komac update ... --submit`) — skip for previews
+- [ ] Verified the WinGet PR was opened against `microsoft/winget-pkgs` — skip for previews
 - [ ] Updated website: version + changelog (every release), command/config docs (if changed) — skip for previews
