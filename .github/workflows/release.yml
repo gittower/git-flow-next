@@ -219,24 +219,104 @@ jobs:
     # A failed submission marks this job failed without failing the run: the
     # release is already published and must not be reported as broken.
     continue-on-error: true
-    # continue-on-error does not bound a hang, only a failure. The job installs
-    # its toolchain and calls the GitHub API, and the run stays in progress
-    # until it returns — which `gh run watch` in the release process waits on.
-    # Without this, a stall would block a release for GitHub's six-hour default
-    # instead of failing visibly like every other submission error.
+    # continue-on-error does not bound a hang, only a failure. The job downloads
+    # komac and calls the GitHub API, and the run stays in progress until it
+    # returns — which `gh run watch` in the release process waits on. Without
+    # this, a stall would block a release for GitHub's six-hour default instead
+    # of failing visibly like every other submission error.
     timeout-minutes: 15
     permissions:
       contents: read
 
+    # Bumping komac is a two-line edit: version and digest change together. The
+    # digest is of komac-<version>-x86_64-unknown-linux-gnu.tar.gz and is
+    # recorded here by us — reading the release's own SHA256SUMS at run time
+    # would verify the tarball against whoever could have replaced it.
+    env:
+      KOMAC_VERSION: '2.16.0'
+      KOMAC_SHA256: '7d2707fa6210f2789a3702de49fbd150b736dbf426ee0b9bc8e098736f9fd82d'
+      PACKAGE_IDENTIFIER: GitTower.GitFlowNext
+      INSTALLERS_REGEX: 'windows-(386|amd64|arm64)\.zip$'
+
     steps:
-      # Pinned to a commit, not the floating v2 tag, so a repointed tag cannot
-      # change what runs in a job that holds a write-capable token. The pin
-      # bounds this hop only: the action installs cargo-binstall and komac at
-      # runtime, neither of them pinned.
+      # Seeding a package into winget-pkgs is a one-off manual PR (RELEASING.md).
+      # komac can only update a package that already exists, so check first and
+      # say why, rather than letting komac fail obscurely later.
+      - name: Check package exists in winget-pkgs
+        run: |
+          set -euo pipefail
+          url="https://github.com/microsoft/winget-pkgs/tree/master/manifests/g/GitTower/GitFlowNext"
+          if ! curl -fsS -I --max-time 30 "$url" > /dev/null; then
+            echo "::error::Package ${PACKAGE_IDENTIFIER} is not present in winget-pkgs. It has to be seeded once by hand before the automation can update it — see RELEASING.md."
+            exit 1
+          fi
+
+      - name: Download komac
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/komac"
+          curl -fsSL --max-time 120 \
+            -o "${RUNNER_TEMP}/komac/komac.tar.gz" \
+            "https://github.com/russellbanks/Komac/releases/download/v${KOMAC_VERSION}/komac-${KOMAC_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+
+      # Runs before extraction, so a tampered archive is never unpacked. --strict
+      # so a malformed digest line fails instead of being skipped.
+      - name: Verify komac checksum
+        run: |
+          set -euo pipefail
+          echo "${KOMAC_SHA256}  ${RUNNER_TEMP}/komac/komac.tar.gz" | sha256sum --check --strict -
+
+      # The archive is flat: komac and LICENSE.md at the root, no version dir.
+      # $GITHUB_PATH only takes effect in later steps, so the version check runs
+      # by absolute path here — deliberately before any step carrying the token.
+      - name: Extract komac
+        run: |
+          set -euo pipefail
+          tar -xzf "${RUNNER_TEMP}/komac/komac.tar.gz" -C "${RUNNER_TEMP}/komac"
+          chmod +x "${RUNNER_TEMP}/komac/komac"
+          "${RUNNER_TEMP}/komac/komac" --version | grep -q "${KOMAC_VERSION}"
+          echo "${RUNNER_TEMP}/komac" >> "$GITHUB_PATH"
+
+      # The job checks nothing out, so gh has no remote to infer a repository
+      # from and must be told which one to look at. The regex reaches jq through
+      # env rather than interpolation: it contains \. , which would otherwise
+      # need escaping twice.
+      - name: Resolve version and installer URLs
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          urls=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '[.assets[] | select(.name | test(env.INSTALLERS_REGEX)) | .url] | join(" ")')
+          # gh exits 0 with an empty result, so set -e does not catch this.
+          if [ -z "$urls" ]; then
+            echo "::error::No asset on ${TAG} matches ${INSTALLERS_REGEX}; there is nothing to submit. Check that the release carries the three Windows .zip archives."
+            exit 1
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "urls=${urls}" >> "$GITHUB_OUTPUT"
+
       - name: Submit manifest to winget-pkgs
-        uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
-        with:
-          identifier: GitTower.GitFlowNext
-          installers-regex: 'windows-(386|amd64|arm64)\.zip$'
-          fork-user: gittower
-          token: ${{ secrets.WINGET_TOKEN }}
+        env:
+          KOMAC_FORK_OWNER: gittower
+          KOMAC_CREATED_WITH: git-flow-next
+          KOMAC_CREATED_WITH_URL: https://github.com/gittower/git-flow-next
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+          URLS: ${{ steps.release.outputs.urls }}
+        run: |
+          set -euo pipefail
+          # Unquoted on purpose: --urls takes one argument per URL.
+          # shellcheck disable=SC2086
+          komac update "$PACKAGE_IDENTIFIER" --version "$VERSION" --submit --urls $URLS
+
+      # Deletes fork branches whose PRs have already merged.
+      - name: Clean up merged fork branches
+        env:
+          KOMAC_FORK_OWNER: gittower
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -euo pipefail
+          komac cleanup --only-merged
