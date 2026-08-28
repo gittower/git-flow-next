@@ -272,6 +272,14 @@ The `.github/workflows/release.yml` workflow automatically:
 9. Submits the WinGet manifest on stable tags — see
    [WinGet Publishing](#winget-publishing)
 
+The release is published with the `gh` CLI, so no third-party action runs
+in the job holding `contents: write`. Re-running the workflow on a tag
+whose release already exists updates that release in place — notes,
+prerelease flag and artifacts — instead of failing on the existing
+release, which is what keeps `gh run rerun` on an already-published tag
+safe. A missing artifact fails the step rather than publishing a release
+that looks complete.
+
 Verify the release after the run completes:
 
 ```bash
