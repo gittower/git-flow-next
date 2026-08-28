@@ -16,6 +16,51 @@ Two skills automate this process:
 The manual steps are documented here as the source of truth; the skills
 follow this document.
 
+## Windows Code Signing
+
+Windows executables are Authenticode-signed with Azure Artifact Signing
+during the release run, before the archives are created. This is a one-time
+setup; it needs no attention during a normal release.
+
+Signing runs in the `release-signing` GitHub environment, which holds:
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| Secret | `AZURE_CLIENT_ID` | Entra app registration (client) ID |
+| Secret | `AZURE_TENANT_ID` | Entra tenant ID |
+| Secret | `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
+| Variable | `AZURE_CODESIGN_ENDPOINT` | `https://weu.codesigning.azure.net/` |
+| Variable | `AZURE_CODESIGN_ACCOUNT_NAME` | `Trusted` |
+| Variable | `AZURE_CODESIGN_CERTIFICATE_PROFILE` | `TowerCertificate` |
+
+Authentication uses GitHub Actions OIDC — there is no client secret to
+rotate. The Entra app needs a federated credential for this subject:
+
+```text
+repo:gittower/git-flow-next:environment:release-signing
+```
+
+and the `Artifact Signing Certificate Profile Signer` role on the
+certificate profile.
+
+> The RFC3161 timestamp URL in the workflow is intentionally `http`. The
+> service rejects `https` with `SignTool Error: Invalid Timestamp URL`.
+
+### Verifying the signing setup
+
+The Azure-side pieces — OIDC federation, the signer role, and the
+account/profile/endpoint values — cannot be checked from the repository. Run
+the workflow manually to exercise them without cutting a release:
+
+```bash
+gh workflow run release.yml --ref main
+```
+
+A `workflow_dispatch` run builds, signs and verifies, then stops: the
+release job only runs on a tag push. A green run confirms the whole
+credential path at once. If it fails, the `Verify Azure authentication` step
+separates a federation problem from a missing role assignment.
+
 ## Version Locations
 
 Update version in **both** files (must match):
@@ -113,16 +158,27 @@ git push origin vX.Y.Z
 The `.github/workflows/release.yml` workflow automatically:
 
 1. Builds binaries for all platforms (darwin, linux, windows)
-2. Extracts release notes for the tagged version from CHANGELOG.md
-3. Creates GitHub release with artifacts
-4. Generates checksums
-5. Marks as prerelease if tag contains `-alpha`, `-beta`, or `-rc`
+2. Signs the Windows executables with Azure Artifact Signing
+3. Verifies every Windows signature — a bad signature fails the run before
+   anything is published
+4. Creates the archives, so each one contains the signed executable
+5. Generates checksums from the final archives
+6. Extracts release notes for the tagged version from CHANGELOG.md
+7. Creates GitHub release with artifacts
+8. Marks as prerelease if tag contains `-alpha`, `-beta`, or `-rc`
 
 Verify the release after the run completes:
 
 ```bash
 gh run watch
 gh release view vX.Y.Z
+```
+
+Confirm a published Windows binary is signed by extracting one and checking
+it on Windows:
+
+```powershell
+Get-AuthenticodeSignature .\git-flow.exe
 ```
 
 ### 7. Stamp the Milestone
@@ -255,6 +311,7 @@ the Homebrew tap, the WinGet manifest, or the website for preview releases.
 - [ ] Committed: `chore: Bump version to X.Y.Z`
 - [ ] Pushed to main
 - [ ] Created and pushed tag
+- [ ] Verified the Windows signing job succeeded
 - [ ] Verified GitHub release: artifacts, checksums, non-empty release notes
 - [ ] Stamped milestone: renamed `Next` → `vX.Y.Z`, closed it, opened new `Next` — skip for previews
 - [ ] Updated Homebrew tap (`ruby update_formula.rb` + `git push`) — skip for previews
