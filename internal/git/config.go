@@ -63,6 +63,12 @@ func (r *Repo) GetConfigLocal(key string) (string, error) {
 // with one arbitrarily chosen value and only then fail on the source unset —
 // destroying data on the way to reporting a problem. --get-all makes the
 // ambiguity visible before anything is written.
+//
+// Caveat: git also exits 1 for a malformed key NAME, which this reports as
+// "absent" like any unset key. Every caller builds its key from constants and a
+// branch name, and a ref can contain neither a space nor a newline, so a
+// malformed key cannot arise here. UnsetConfigIfPresent and readConfigValue
+// already conflate the two the same way.
 func (r *Repo) GetConfigLocalIfSet(key string) (value string, found bool, err error) {
 	output, runErr := r.gitCmd("config", "--local", "--get-all", key).Output()
 	if runErr != nil {
@@ -78,7 +84,10 @@ func (r *Repo) GetConfigLocalIfSet(key string) (value string, found bool, err er
 	if len(lines) > 1 {
 		return "", false, fmt.Errorf("local git config %s has %d values; expected one", key, len(lines))
 	}
-	return strings.TrimSpace(lines[0]), true, nil
+	// Deliberately NOT trimmed: the caller mirrors this value onto another key,
+	// and a padded value must survive the move byte for byte. Trimming here would
+	// silently rewrite it. GetConfigLocal trims because it parses; this preserves.
+	return lines[0], true, nil
 }
 
 // MoveConfigLocal makes newKey mirror oldKey in LOCAL config, then drops oldKey.

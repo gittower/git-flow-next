@@ -156,10 +156,10 @@ Renaming preserves all Git history:
 git-flow records two pieces of per-branch state in the repository's local Git configuration, both keyed on the branch name. Renaming a branch carries them to the new name, so the renamed branch keeps everything git-flow knows about it and nothing is left behind under the old name:
 
 **gitflow.worktree.*branch*.managed**
-: Records that git-flow created the branch's worktree. Carrying it means a renamed branch's worktree is still reported as git-flow's rather than being demoted to `(unmanaged)`, and that `git flow worktree remove` still removes it instead of merely detaching it.
+: Records that git-flow created the branch's worktree. Carrying it means a renamed branch's worktree is still reported as git-flow's rather than being demoted to `(unmanaged)` in **git-flow-worktree**(1) and **git-flow-list**(1), and that **git flow worktree remove** clears the marker under the new name instead of stranding it under the old one.
 
 **gitflow.branch.*branch*.base**
-: Records the start point the branch was created from, used by **git-flow-finish**(1) and **git-flow-update**(1). Carrying it keeps the branch's base resolution working after a rename and keeps the key from outliving the branch.
+: Records the start point the branch was created from. Nothing reads it today; it is written by **git-flow-start**(1) and cleared by **git-flow-finish**(1) and **git-flow-delete**(1) under the branch's current name. Carrying it is therefore about cleanup rather than behavior: left under the old name it is never cleared, so it outlives the branch it describes.
 
 The worktree **directory** keeps its old-name path. Provenance is tracked by the marker, not by the shape of the path, so there is nothing to move on disk. Use **git-flow-worktree**(1) if you want the directory to match the new name.
 
