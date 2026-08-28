@@ -98,13 +98,25 @@ or installation, and komac needs to do both halves of the job: push to
 our fork *and* open a PR against Microsoft's repository. A fine-grained
 token looks correct in the secret list and fails only at PR time.
 
-The three Windows architectures are selected by the `installers-regex`
-input, `windows-(386|amd64|arm64)\.zip$`. komac infers each installer's
-architecture from its filename, so the manifest's `x86`, `x64` and
-`arm64` entries follow from the archive names `scripts/package.sh`
-produces. Read this before adding a fourth Windows target — a new
-architecture ships in the release but stays invisible to WinGet until
-the regex covers it.
+The Windows archives are selected by the `installers-regex` input,
+`windows-(386|amd64|arm64)\.zip$`, and komac infers each installer's
+architecture from its filename.
+
+Selecting an archive is not sufficient to publish its architecture.
+`komac update` reads the latest published manifest and maps the supplied
+URLs onto the installer entries that manifest already has, discarding
+any URL whose architecture is not among them — silently, exiting 0 with
+nothing in the log. An architecture that has never been published
+therefore cannot be introduced by the automation, no matter what the
+regex matches or what `--urls` is given.
+
+Read this before adding a fourth Windows target. Shipping the archive
+and widening the regex accomplishes nothing on its own; the installer
+also has to be added to the currently published manifest once, by hand,
+in a one-off PR against `microsoft/winget-pkgs`. Every later release
+then inherits it. This is how arm64 was added — see
+[#159](https://github.com/gittower/git-flow-next/issues/159), which the
+release automation could not deliver by itself.
 
 The action is pinned to a commit SHA rather than the floating `v2` tag,
 so a repointed tag cannot change what runs in a job that holds a
