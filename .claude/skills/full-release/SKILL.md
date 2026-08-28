@@ -1,13 +1,13 @@
 ---
 name: full-release
-description: Run the full release process end-to-end - prep, tag, CI verification, Homebrew tap, WinGet manifest, and website sync
+description: Run the full release process end-to-end - prep, tag, CI verification, Homebrew tap, WinGet verification, and website sync
 allowed-tools: Bash, Read, Edit, Grep, Glob
 ---
 
 # Full Release
 
 Orchestrate a complete release: version prep, push + tag, GitHub Actions
-verification, Homebrew tap update, WinGet manifest submission, and website
+verification, Homebrew tap update, WinGet verification, and website
 documentation sync. Follows the process defined in `RELEASING.md` — read it
 first; this skill sequences it, it does not replace it.
 
@@ -32,12 +32,10 @@ git status --porcelain             # must be clean
 git fetch origin && git status -sb # must not be behind origin/main
 gh auth status                     # gh must be authenticated
 ls ../homebrew-tap ../git-flow-next-website  # sibling repos must exist
-command -v komac                    # needed for the WinGet step (brew install komac)
 ```
 
 If a sibling repo is missing, continue but note that the corresponding step
-will be skipped and must be done manually later. If `komac` is missing, the
-WinGet step (9) will install it, so this is informational only.
+will be skipped and must be done manually later.
 
 ### 2. Prepare the Release
 
@@ -170,47 +168,43 @@ The script fetches the release checksums and creates the commit — do not
 add a manual commit on top. Verify afterwards that
 `Formula/git-flow-next.rb` contains the new version.
 
-### 9. Submit WinGet Manifest
+### 9. Verify the WinGet Submission
 
-**Skip for preview releases** — the WinGet community repo is for stable
-versions only.
+**Skipped automatically for preview releases** — the `winget` job is
+gated on the tag being stable, so nothing was submitted and there is
+nothing to verify.
 
-This is an **interim manual step** until manifest submission is automated in
-`release.yml`. It publishes the new version to WinGet by opening a PR against
-`microsoft/winget-pkgs` with [komac](https://github.com/russellbanks/Komac),
-which derives the SHA-256 hashes and release notes automatically.
-
-Prerequisites (one-time):
+The release workflow's `winget` job already opened the manifest PR (see
+the `WinGet Publishing` section of `RELEASING.md`). Do not submit
+anything by hand. Confirm the PR exists:
 
 ```bash
-brew install komac                              # cross-platform manifest tool
-gh repo fork microsoft/winget-pkgs --clone=false  # komac PRs from your fork
+gh pr list --repo microsoft/winget-pkgs --state all \
+  --search "in:title GitTower.GitFlowNext X.Y.Z"
 ```
 
-Submit (run only after the GitHub release from step 6 is live — komac
-downloads the release zips to hash them):
+Record the PR URL. One PR covers all three Windows architectures (x86,
+x64, arm64). Microsoft's validation bots normally auto-merge within a
+few hours — that merge is **not** a release gate, so do not wait for it.
+
+If no PR was opened, inspect the `winget` job in the release run. It is
+`continue-on-error`, so it can be marked failed while the run's
+conclusion stayed green in step 6 — that is by design, does not mean the
+release is broken, and is why `gh run rerun --failed` does not help. Fix
+the cause, then look up the job id and re-run that job alone:
 
 ```bash
-export GITHUB_TOKEN=$(gh auth token)   # needs public_repo scope; gh's repo scope covers it
-komac update GitTower.GitFlowNext \
-  --version X.Y.Z \
-  --urls \
-    "https://github.com/gittower/git-flow-next/releases/download/vX.Y.Z/git-flow-next-vX.Y.Z-windows-amd64.zip" \
-    "https://github.com/gittower/git-flow-next/releases/download/vX.Y.Z/git-flow-next-vX.Y.Z-windows-386.zip" \
-  --submit
+gh run view <run-id> --json jobs --jq \
+  '.jobs[] | select(.name == "Submit WinGet manifest") | .databaseId'
+gh run rerun --job <job-id>
 ```
 
-komac forks/updates `winget-pkgs`, pushes a branch, and opens the PR. Record
-the PR URL it prints. Microsoft's validation bots run automatically and
-normally auto-merge within a few hours — no manual merge needed. To preview
-the generated manifests before submitting, swap `--submit` for
-`--dry-run --output <dir>`.
+Do not fall back to running komac by hand; the workflow is the only
+submission path.
 
-Notes:
-- Covers x64 and x86 to match the existing manifests; arm64 is shipped in the
-  release but not yet in the WinGet manifest.
-- Scoop needs no action — the Main-bucket manifest has `checkver`/`autoupdate`
-  and Scoop's excavator bot updates it automatically after each release.
+Note: Scoop needs no action — the Main-bucket manifest has
+`checkver`/`autoupdate` and Scoop's excavator bot updates it
+automatically after each release.
 
 ### 10. Sync Website
 
@@ -236,7 +230,8 @@ Summarize:
 - Version released, link to the GitHub release
 - CI run status
 - Homebrew tap: pushed formula version (or skipped + why)
-- WinGet: PR URL opened against `microsoft/winget-pkgs` (or skipped + why)
+- WinGet: the verified PR URL against `microsoft/winget-pkgs`, or that
+  no PR was opened and why (job failed, preview release, etc.)
 - Website: files changed, build status, and the remaining manual action —
   review the diff in `../git-flow-next-website`, then commit and push to
   deploy

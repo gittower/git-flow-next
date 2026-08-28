@@ -132,6 +132,8 @@ jobs:
     if: github.event_name == 'push'
     permissions:
       contents: write
+    outputs:
+      is_preview: ${{ steps.check_preview.outputs.is_preview }}
 
     steps:
       - name: Checkout code
@@ -206,3 +208,35 @@ jobs:
             SHA-256 checksums for the release artifacts are available in the checksums.txt file.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  winget:
+    name: Submit WinGet manifest
+    runs-on: ubuntu-latest
+    needs: release
+    # A workflow_dispatch dry run skips `release`, which skips this job too, so
+    # the preview check is the only gate that needs stating.
+    if: needs.release.outputs.is_preview == 'false'
+    # A failed submission marks this job failed without failing the run: the
+    # release is already published and must not be reported as broken.
+    continue-on-error: true
+    # continue-on-error does not bound a hang, only a failure. The job installs
+    # its toolchain and calls the GitHub API, and the run stays in progress
+    # until it returns — which `gh run watch` in the release process waits on.
+    # Without this, a stall would block a release for GitHub's six-hour default
+    # instead of failing visibly like every other submission error.
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      # Pinned to a commit, not the floating v2 tag, so a repointed tag cannot
+      # change what runs in a job that holds a write-capable token. The pin
+      # bounds this hop only: the action installs cargo-binstall and komac at
+      # runtime, neither of them pinned.
+      - name: Submit manifest to winget-pkgs
+        uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
+        with:
+          identifier: GitTower.GitFlowNext
+          installers-regex: 'windows-(386|amd64|arm64)\.zip$'
+          fork-user: gittower
+          token: ${{ secrets.WINGET_TOKEN }}
