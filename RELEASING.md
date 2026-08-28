@@ -65,11 +65,11 @@ separates a federation problem from a missing role assignment.
 
 Every stable tag opens a WinGet manifest PR automatically. The `winget`
 job in `.github/workflows/release.yml` runs after the GitHub release is
-published and submits the new version to `microsoft/winget-pkgs` using
-[winget-releaser](https://github.com/vedantmgoyal9/winget-releaser),
-which wraps [komac](https://github.com/russellbanks/Komac) — komac
-downloads the release archives, derives their SHA-256 hashes, and writes
-the manifest. Nothing is submitted by hand.
+published and submits the new version to `microsoft/winget-pkgs`. The job
+downloads a pinned [komac](https://github.com/russellbanks/Komac)
+release, verifies its SHA-256, and runs it directly — komac downloads the
+release archives, derives their SHA-256 hashes, and writes the manifest.
+Nothing is submitted by hand.
 
 Only stable tags submit. The job is gated on the `is_preview` output of
 the `release` job, so tags carrying a dotted preview suffix — `-alpha.`,
@@ -89,8 +89,8 @@ repository contents, which is why they are recorded here:
 
 | Kind | Name | Purpose |
 | --- | --- | --- |
-| Secret | `WINGET_TOKEN` | Repository secret. Must be a **classic** PAT with the `public_repo` scope, authorized against the `gittower` org if the org requires it |
-| Fork | `gittower/winget-pkgs` | The `fork-user: gittower` target komac pushes its branch to |
+| Secret | `WINGET_TOKEN` | Repository secret. `gittower-bot`'s **classic** PAT with the `public_repo` scope. It belongs to that machine account rather than a maintainer so the scope, which grants write to every public repository its owner can push to, reaches only `gittower/winget-pkgs` |
+| Fork | `gittower/winget-pkgs` | The `KOMAC_FORK_OWNER: gittower` target komac pushes its branch to |
 
 The token has to be a classic PAT specifically. Fine-grained PATs and
 GitHub App installation tokens cannot act outside their resource owner
@@ -98,7 +98,7 @@ or installation, and komac needs to do both halves of the job: push to
 our fork *and* open a PR against Microsoft's repository. A fine-grained
 token looks correct in the secret list and fails only at PR time.
 
-The Windows archives are selected by the `installers-regex` input,
+The Windows archives are selected by the `INSTALLERS_REGEX` job variable,
 `windows-(386|amd64|arm64)\.zip$`, and komac infers each installer's
 architecture from its filename.
 
@@ -118,15 +118,24 @@ then inherits it. This is how arm64 was added — see
 [#159](https://github.com/gittower/git-flow-next/issues/159), which the
 release automation could not deliver by itself.
 
-The action is pinned to a commit SHA rather than the floating `v2` tag,
-so a repointed tag cannot change what runs in a job that holds a
-write-capable token. The pin bounds that hop only — the pinned action
-installs `cargo-bins/cargo-binstall@main` and the latest komac release
-at runtime, neither of them pinned — so the real reduction in blast
-radius is moving `WINGET_TOKEN` to a dedicated machine account, which is
-tracked as future work. `max-versions-to-keep` is deliberately left at
-its default of `0`: a non-zero value makes komac submit **removal** PRs
-for older versions.
+Nothing third-party is installed at run time. komac is pinned by version
+and SHA-256 in the job's `env` block, and the digest is verified before
+the archive is extracted, so a replaced tarball never reaches execution.
+The digest is recorded by us rather than read from the release's own
+`SHA256SUMS`, which would verify the tarball against whoever could have
+replaced it.
+
+To bump komac, edit `KOMAC_VERSION` and `KOMAC_SHA256` **together**. Take
+the digest from the release's `SHA256SUMS`, or by hashing the downloaded
+tarball, and review it in the PR diff. A version bump without a matching
+digest bump fails the verify step — that is the point of the pin, not an
+inconvenience.
+
+komac's version-deletion path is not implemented at all. The action this
+job replaced could submit **removal** PRs for older versions when
+`max-versions-to-keep` was non-zero; it was always left at `0`, so that
+path never ran. Reintroducing deletion in a job that holds a push
+credential is a deliberate non-goal.
 
 When the job fails, fix the cause and re-run that job on its own. Do not
 use `gh run rerun --failed`: `continue-on-error` leaves the run's
@@ -148,11 +157,12 @@ progress until the job returns, and step 6 of the release process waits
 on the run. The cap turns a stall into the same visible, non-blocking
 failure as any other submission error.
 
-One failure mode leaves a green build with no WinGet
-PR: if `zip` were unavailable on the runner, `scripts/package.sh` falls
-back to `.tar.gz` archives, the regex matches nothing, and komac has no
-installers to hash. This is not reachable on `ubuntu-latest`, where
-`zip` is preinstalled, and is deliberately not guarded.
+One failure mode used to leave a green build with no WinGet PR: if `zip`
+were unavailable on the runner, `scripts/package.sh` falls back to
+`.tar.gz` archives, the regex matches nothing, and komac has no
+installers to hash. It is not reachable on `ubuntu-latest`, where `zip`
+is preinstalled, but the job now fails with a message naming the regex
+and the tag rather than reaching komac with an empty installer list.
 
 ## Version Locations
 
