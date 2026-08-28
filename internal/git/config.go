@@ -75,6 +75,9 @@ func (r *Repo) GetConfigLocalIfSet(key string) (value string, found bool, err er
 		if exitErr, ok := runErr.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			return "", false, nil
 		}
+		if detail := stderrOf(runErr); detail != "" {
+			return "", false, fmt.Errorf("failed to get local git config %s: %s: %w", key, detail, runErr)
+		}
 		return "", false, fmt.Errorf("failed to get local git config %s: %w", key, runErr)
 	}
 	// One value per line, with a trailing newline. A single empty value is one
@@ -184,6 +187,9 @@ func (r *Repo) GetConfigAllValues(key string) ([]string, error) {
 // SetConfig sets a Git config value (local scope by git's default write behavior).
 func (r *Repo) SetConfig(key string, value string) error {
 	if _, err := r.gitCmd("config", key, value).Output(); err != nil {
+		if detail := stderrOf(err); detail != "" {
+			return fmt.Errorf("failed to set git config %s: %s: %w", key, detail, err)
+		}
 		return fmt.Errorf("failed to set git config %s: %w", key, err)
 	}
 	return nil
@@ -363,6 +369,9 @@ func (r *Repo) UnsetConfigIfPresent(key string) error {
 	// Present, multi-value, or read error: attempt the unset in the same local
 	// scope we probed so real failures (multi-value, read-only) still surface.
 	if _, err := r.gitCmd("config", "--local", "--unset", key).Output(); err != nil {
+		if detail := stderrOf(err); detail != "" {
+			return fmt.Errorf("failed to unset git config %s: %s: %w", key, detail, err)
+		}
 		return fmt.Errorf("failed to unset git config %s: %w", key, err)
 	}
 	return nil
