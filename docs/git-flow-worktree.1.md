@@ -22,7 +22,7 @@ Manage Git worktrees by branch name, independently of the branch lifecycle.
 
 Subcommands address worktrees by **full branch name** (e.g. `feature/user-auth`), not by topic type plus short name. Paths are computed from the **gitflow.worktreePath** template unless **--path** overrides them, and the computed path is always absolute.
 
-git-flow records the worktrees it creates by writing a provenance marker in Git config, so **list** can tell them apart from worktrees created with plain **git worktree add**. Provenance is never inferred by comparing a worktree's path against the template: **--path** and any later change to the template both break that correspondence.
+git-flow records the worktrees it creates by writing a provenance marker in Git config, so **list** can tell them apart from worktrees created with plain **git worktree add**. Provenance is never inferred by comparing a worktree's path against the template: **--path** and any later change to the template both break that correspondence. The marker is keyed on the branch and follows it through **git-flow-rename**(1), so a renamed branch keeps its worktree's provenance even though the directory keeps its old-name path.
 
 ## SUBCOMMANDS
 
@@ -143,7 +143,7 @@ git config gitflow.worktreePath '~/worktrees/{{ topicType }}/{{ branchName }}'
 
 ## SEE ALSO
 
-**git-flow**(1), **git-flow-start**(1), **git-flow-checkout**(1), **git-flow-list**(1), **git-flow-shell-init**(1), **gitflow-config**(5), **git-worktree**(1)
+**git-flow**(1), **git-flow-start**(1), **git-flow-checkout**(1), **git-flow-list**(1), **git-flow-rename**(1), **git-flow-shell-init**(1), **gitflow-config**(5), **git-worktree**(1)
 
 ## NOTES
 

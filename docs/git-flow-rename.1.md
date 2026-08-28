@@ -151,6 +151,20 @@ Renaming preserves all Git history:
 - **Merge history**: References to the branch in merge commits remain
 - **Reflog**: Git reflog tracks the rename operation
 
+## BRANCH STATE
+
+git-flow records two pieces of per-branch state in the repository's local Git configuration, both keyed on the branch name. Renaming a branch carries them to the new name, so the renamed branch keeps everything git-flow knows about it and nothing is left behind under the old name:
+
+**gitflow.worktree.*branch*.managed**
+: Records that git-flow created the branch's worktree. Carrying it means a renamed branch's worktree is still reported as git-flow's rather than being demoted to `(unmanaged)`, and that `git flow worktree remove` still removes it instead of merely detaching it.
+
+**gitflow.branch.*branch*.base**
+: Records the start point the branch was created from, used by **git-flow-finish**(1) and **git-flow-update**(1). Carrying it keeps the branch's base resolution working after a rename and keeps the key from outliving the branch.
+
+The worktree **directory** keeps its old-name path. Provenance is tracked by the marker, not by the shape of the path, so there is nothing to move on disk. Use **git-flow-worktree**(1) if you want the directory to match the new name.
+
+If a key cannot be moved, git-flow prints a warning to standard error naming the key and continues. The branch rename is not undone: the ref has already moved and there is nothing to roll back to. The remaining keys are still migrated.
+
 ## CONFIGURATION
 
 Rename behavior respects branch type configuration:
@@ -207,7 +221,7 @@ Error: Invalid branch name 'invalid name with spaces'
 
 ## SEE ALSO
 
-**git-flow**(1), **git-flow-list**(1), **git-flow-delete**(1), **git-branch**(1), **git-push**(1)
+**git-flow**(1), **git-flow-list**(1), **git-flow-delete**(1), **git-flow-worktree**(1), **gitflow-config**(5), **git-branch**(1), **git-push**(1)
 
 ## NOTES
 
@@ -215,5 +229,5 @@ Error: Invalid branch name 'invalid name with spaces'
 - Remote branches must be updated manually after local rename
 - Cannot rename to a name that already exists
 - Branch prefixes are automatically handled
-- Rename operation is atomic - either succeeds completely or fails safely
+- The branch rename itself is atomic - it either succeeds completely or leaves the branch untouched. Per-branch configuration is migrated afterwards; a migration that fails is reported on standard error and left for you to fix, not rolled back
 - Consider team communication when renaming shared branches
