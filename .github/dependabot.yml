@@ -1,0 +1,20 @@
+version: 2
+
+updates:
+  # Actions are referenced by floating major tag (see
+  # .github/instructions/ci-workflows.instructions.md), which never crosses a
+  # major boundary on its own — v4 follows v4.x forever and never becomes v5.
+  # This is what surfaces those bumps as reviewable PRs instead of leaving the
+  # workflows quietly a major behind.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+    # One PR per sweep rather than one per action: the workflows reference a
+    # handful of actions and they are reviewed as a set.
+    groups:
+      actions:
+        patterns:
+          - "*"

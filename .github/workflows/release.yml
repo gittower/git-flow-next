@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 0  # Fetch all history for version info
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
 
@@ -164,50 +164,77 @@ jobs:
             echo "is_preview=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Extract release notes from CHANGELOG
-        id: changelog
+      # Assembled into a file rather than $GITHUB_OUTPUT. The multi-line output
+      # form needs a delimiter, and a changelog entry containing a line that
+      # happens to read EOF would truncate the body and corrupt the output.
+      - name: Build release notes
+        env:
+          IS_PREVIEW: ${{ steps.check_preview.outputs.is_preview }}
+          NOTES_FILE: ${{ runner.temp }}/release-notes.md
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
           echo "Extracting release notes for version $VERSION"
 
-          # Extract content between this version and the next version header
-          NOTES=$(awk -v ver="$VERSION" '
+          : > "$NOTES_FILE"
+
+          if [ "$IS_PREVIEW" = "true" ]; then
+            printf '⚠️ This is a preview release and may not be stable.\n\n' >> "$NOTES_FILE"
+          fi
+
+          # Content between this version's header and the next version header.
+          awk -v ver="$VERSION" '
             /^## \[/ {
               if (found) exit
               if ($0 ~ "\\[" ver "\\]") found=1
               next
             }
             found { print }
-          ' CHANGELOG.md)
+          ' CHANGELOG.md >> "$NOTES_FILE"
 
-          # Handle multi-line output for GitHub Actions
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          echo "$NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          cat >> "$NOTES_FILE" <<'NOTES'
 
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            dist/*.tar.gz
-            dist/*.zip
-            dist/*-checksums.txt
-          draft: false
-          prerelease: ${{ steps.check_preview.outputs.is_preview == 'true' }}
-          generate_release_notes: false
-          body: |
-            ${{ steps.check_preview.outputs.is_preview == 'true' && '⚠️ This is a preview release and may not be stable.' || '' }}
+          ## Installation
+          See the [installation instructions](https://github.com/gittower/git-flow-next#installation) in the README.
 
-            ${{ steps.changelog.outputs.notes }}
+          ## Checksums
+          SHA-256 checksums for the release artifacts are available in the checksums.txt file.
+          NOTES
 
-            ## Installation
-            See the [installation instructions](https://github.com/gittower/git-flow-next#installation) in the README.
-
-            ## Checksums
-            SHA-256 checksums for the release artifacts are available in the checksums.txt file.
+      # gh rather than a third-party action: the CLI is preinstalled on the
+      # runner and this job already holds contents: write, so publishing needs
+      # nothing from outside GitHub. See #241 for the per-action decision.
+      - name: Publish release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IS_PREVIEW: ${{ steps.check_preview.outputs.is_preview }}
+          NOTES_FILE: ${{ runner.temp }}/release-notes.md
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # A pattern matching nothing means a whole class of artifact is
+          # missing -- fail rather than publish without it. This is a
+          # pattern-level check only: one absent archive among several the
+          # same pattern still matches gets through.
+          shopt -s failglob
+          assets=(dist/*.tar.gz dist/*.zip dist/*-checksums.txt)
+
+          # Re-running the workflow on an already-published tag is the
+          # documented recovery path (RELEASING.md), and `gh release create`
+          # refuses an existing release. Update it in place instead, which is
+          # what the action this replaced did.
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --notes-file "$NOTES_FILE" \
+              --prerelease="$IS_PREVIEW"
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" \
+              --notes-file "$NOTES_FILE" \
+              --prerelease="$IS_PREVIEW" \
+              "${assets[@]}"
+          fi
 
   winget:
     name: Submit WinGet manifest
