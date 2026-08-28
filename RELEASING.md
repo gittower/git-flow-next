@@ -130,7 +130,13 @@ gh run rerun --job <job-id>
 Do not run komac by hand. The job is terminal and `continue-on-error`,
 so a failed submission never breaks the release — the published release,
 its artifacts, checksums and tag are all intact, and the only casualty
-is the manifest PR. One failure mode leaves a green build with no WinGet
+is the manifest PR. It is also capped at 15 minutes, because
+`continue-on-error` bounds a failure but not a hang: the run stays in
+progress until the job returns, and step 6 of the release process waits
+on the run. The cap turns a stall into the same visible, non-blocking
+failure as any other submission error.
+
+One failure mode leaves a green build with no WinGet
 PR: if `zip` were unavailable on the runner, `scripts/package.sh` falls
 back to `.tar.gz` archives, the regex matches nothing, and komac has no
 installers to hash. This is not reachable on `ubuntu-latest`, where

@@ -219,6 +219,12 @@ jobs:
     # A failed submission marks this job failed without failing the run: the
     # release is already published and must not be reported as broken.
     continue-on-error: true
+    # continue-on-error does not bound a hang, only a failure. The job installs
+    # its toolchain and calls the GitHub API, and the run stays in progress
+    # until it returns — which `gh run watch` in the release process waits on.
+    # Without this, a stall would block a release for GitHub's six-hour default
+    # instead of failing visibly like every other submission error.
+    timeout-minutes: 15
     permissions:
       contents: read
 
