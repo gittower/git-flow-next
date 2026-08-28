@@ -940,7 +940,7 @@ func handleDeleteBranchStep(repo *git.Repo, cfg *config.Config, state *mergestat
 
 	// Clean up base branch configuration if branch was deleted
 	if !keepLocal {
-		configKey := fmt.Sprintf("gitflow.branch.%s.base", state.FullBranchName)
+		configKey := git.BaseBranchKey(state.FullBranchName)
 		if err := repo.UnsetConfigIfPresent(configKey); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Failed to clean up base config: %v\n", err)
 		}

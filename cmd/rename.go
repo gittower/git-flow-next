@@ -7,6 +7,7 @@ import (
 	"github.com/gittower/git-flow-next/internal/config"
 	"github.com/gittower/git-flow-next/internal/errors"
 	"github.com/gittower/git-flow-next/internal/git"
+	"github.com/gittower/git-flow-next/internal/worktree"
 )
 
 // RenameCommand handles renaming a topic branch
@@ -69,24 +70,43 @@ func executeRename(repo *git.Repo, branchType string, oldName string, newName st
 		return &errors.GitError{Operation: "rename branch", Err: fmt.Errorf("branch '%s' already exists", newFullBranchName)}
 	}
 
-	// Check if we're currently on the branch to be renamed
-	currentBranch, err := repo.GetCurrentBranch()
-	if err != nil {
-		return &errors.GitError{Operation: "get current branch", Err: err}
-	}
-
-	// If we're on the branch to be renamed, we need to rename it while on it
-	if currentBranch == oldFullBranchName {
-		err = repo.RenameBranch(oldFullBranchName, newFullBranchName)
-	} else {
-		// Otherwise, rename it while staying on the current branch
-		err = repo.RenameBranch(oldFullBranchName, newFullBranchName)
-	}
-
-	if err != nil {
+	// git branch -m handles every checkout state itself, including a branch
+	// checked out in the current worktree or in a linked one, which follows the
+	// rename.
+	if err := repo.RenameBranch(oldFullBranchName, newFullBranchName); err != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("rename branch '%s' to '%s'", oldFullBranchName, newFullBranchName), Err: err}
 	}
 
+	// The ref has moved, so git-flow's per-branch state has to follow it. This
+	// runs only after RenameBranch succeeds: a refused or failed rename must
+	// leave config untouched.
+	migrateBranchState(repo, oldFullBranchName, newFullBranchName)
+
 	fmt.Printf("Renamed branch '%s' to '%s'\n", oldFullBranchName, newFullBranchName)
 	return nil
+}
+
+// migrateBranchState moves the config keys that git-flow keys by BRANCH NAME onto
+// the branch's new name: the worktree provenance marker and the recorded start
+// point. Both are repository-local runtime state, never user settings, and both
+// are already excluded from the shared-config set.
+//
+// A failure is a warning naming the key, not an error: the branch has already
+// been renamed and there is nothing to roll back to. delete and finish treat a
+// failed .base cleanup the same way. One key failing must not stop the others
+// from migrating.
+//
+// worktree.MarkManaged cannot perform the marker move — it always writes "true",
+// which would turn a hand-written "false" into a claim that git-flow created the
+// worktree. The value is copied raw.
+func migrateBranchState(repo *git.Repo, oldBranch string, newBranch string) {
+	moves := []struct{ from, to string }{
+		{worktree.MarkerKey(oldBranch), worktree.MarkerKey(newBranch)},
+		{git.BaseBranchKey(oldBranch), git.BaseBranchKey(newBranch)},
+	}
+	for _, move := range moves {
+		if err := repo.MoveConfigLocal(move.from, move.to); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to move config %s to %s: %v\n", move.from, move.to, err)
+		}
+	}
 }

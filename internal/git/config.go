@@ -47,6 +47,89 @@ func (r *Repo) GetConfigLocal(key string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// GetConfigLocalIfSet reads a SINGLE-VALUED key from LOCAL config only,
+// distinguishing an unset key from a failed read: `git config --local --get-all`
+// exits 1 when the key is absent, and any other status (128 for unreadable
+// config) is a real failure.
+//
+// GetConfigLocal cannot stand in for this, because it collapses both into an
+// error. A caller that mirrors one key onto another (MoveConfigLocal) would then
+// read a failed read as "source absent" and REMOVE the destination, turning a
+// transient failure into data loss. readConfigValue makes the same distinction
+// for MERGED scope; this is its local-scoped counterpart.
+//
+// A multi-value key is an ERROR, not a silent pick. `--get` would exit 0 and
+// return the LAST value, so a mirroring caller would overwrite the destination
+// with one arbitrarily chosen value and only then fail on the source unset —
+// destroying data on the way to reporting a problem. --get-all makes the
+// ambiguity visible before anything is written.
+//
+// Caveat: git also exits 1 for a malformed key NAME, which this reports as
+// "absent" like any unset key. Every caller builds its key from constants and a
+// branch name, and a ref can contain neither a space nor a newline, so a
+// malformed key cannot arise here. UnsetConfigIfPresent and readConfigValue
+// already conflate the two the same way.
+func (r *Repo) GetConfigLocalIfSet(key string) (value string, found bool, err error) {
+	output, runErr := r.gitCmd("config", "--local", "--get-all", key).Output()
+	if runErr != nil {
+		if exitErr, ok := runErr.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return "", false, nil
+		}
+		if detail := stderrOf(runErr); detail != "" {
+			return "", false, fmt.Errorf("failed to get local git config %s: %s: %w", key, detail, runErr)
+		}
+		return "", false, fmt.Errorf("failed to get local git config %s: %w", key, runErr)
+	}
+	// One value per line, with a trailing newline. A single empty value is one
+	// empty line, which is why the trailing newline is stripped rather than the
+	// whole string trimmed.
+	lines := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
+	if len(lines) > 1 {
+		return "", false, fmt.Errorf("local git config %s has %d values; expected one", key, len(lines))
+	}
+	// Deliberately NOT trimmed: the caller mirrors this value onto another key,
+	// and a padded value must survive the move byte for byte. Trimming here would
+	// silently rewrite it. GetConfigLocal trims because it parses; this preserves.
+	return lines[0], true, nil
+}
+
+// MoveConfigLocal makes newKey mirror oldKey in LOCAL config, then drops oldKey.
+//
+// Mirroring, not copying: when oldKey is absent, newKey is REMOVED rather than
+// left in place, so a stale value under the destination name can never be
+// silently inherited by whatever the caller is renaming.
+//
+// Both the read and the writes are local-scoped. A global or system value must
+// never be read as the source and copied down into the repository's config.
+//
+// A multi-value source is refused rather than migrated: GetConfigLocalIfSet
+// returns an error for one, so this returns BEFORE writing and both names are
+// left exactly as they were. git-flow writes no key this primitive serves as
+// multi-value, and UnsetConfigIfPresent already refuses multi-value keys for the
+// same reason — refusing destroys nothing, while guessing at a merge order might.
+func (r *Repo) MoveConfigLocal(oldKey string, newKey string) error {
+	// Moving a key onto itself would otherwise write the value and then unset the
+	// key it was just written to.
+	if oldKey == newKey {
+		return nil
+	}
+
+	value, found, err := r.GetConfigLocalIfSet(oldKey)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return r.UnsetConfigIfPresent(newKey)
+	}
+
+	// Destination first: a failure between the two writes leaves the value
+	// readable under both names rather than under neither.
+	if err := r.SetConfig(newKey, value); err != nil {
+		return err
+	}
+	return r.UnsetConfigIfPresent(oldKey)
+}
+
 // HasUserIdentity reports whether both user.name and user.email are configured
 // and non-empty in git's merged/effective config (local > global > system),
 // matching what `git commit` would see. It returns false without error when a
@@ -104,6 +187,9 @@ func (r *Repo) GetConfigAllValues(key string) ([]string, error) {
 // SetConfig sets a Git config value (local scope by git's default write behavior).
 func (r *Repo) SetConfig(key string, value string) error {
 	if _, err := r.gitCmd("config", key, value).Output(); err != nil {
+		if detail := stderrOf(err); detail != "" {
+			return fmt.Errorf("failed to set git config %s: %s: %w", key, detail, err)
+		}
 		return fmt.Errorf("failed to set git config %s: %w", key, err)
 	}
 	return nil
@@ -283,6 +369,9 @@ func (r *Repo) UnsetConfigIfPresent(key string) error {
 	// Present, multi-value, or read error: attempt the unset in the same local
 	// scope we probed so real failures (multi-value, read-only) still surface.
 	if _, err := r.gitCmd("config", "--local", "--unset", key).Output(); err != nil {
+		if detail := stderrOf(err); detail != "" {
+			return fmt.Errorf("failed to unset git config %s: %s: %w", key, detail, err)
+		}
 		return fmt.Errorf("failed to unset git config %s: %w", key, err)
 	}
 	return nil
@@ -357,14 +446,24 @@ func UnsetConfigWithScope(key string, scope ConfigScope, filePath string) error 
 	return nil
 }
 
-// GetBaseBranch returns the stored base branch for a topic branch
+// BaseBranchKey returns the git config key recording the start point a topic
+// branch was created from. It is the counterpart to worktree.MarkerKey: both name
+// a per-branch key that has to be spelled identically wherever it is read,
+// written, cleaned up or migrated.
+func BaseBranchKey(branch string) string {
+	return fmt.Sprintf("gitflow.branch.%s.base", branch)
+}
+
+// GetBaseBranch returns the stored base branch for a topic branch.
+//
+// It reads MERGED config, so it is not usable for migrating per-branch state:
+// a global or system value would be copied down into local config. Use
+// GetConfigLocalIfSet for that. See #237.
 func (r *Repo) GetBaseBranch(branchName string) (string, error) {
-	configKey := fmt.Sprintf("gitflow.branch.%s.base", branchName)
-	return r.GetConfig(configKey)
+	return r.GetConfig(BaseBranchKey(branchName))
 }
 
 // SetBaseBranch stores the base branch for a topic branch
 func (r *Repo) SetBaseBranch(branchName, baseBranch string) error {
-	configKey := fmt.Sprintf("gitflow.branch.%s.base", branchName)
-	return r.SetConfig(configKey, baseBranch)
+	return r.SetConfig(BaseBranchKey(branchName), baseBranch)
 }

@@ -149,7 +149,7 @@ git config --global gitflow.worktreePath '~/worktrees/{{ repo }}/{{ branch }}'
 ### Worktree provenance: state, not settings
 
 **gitflow.worktree.*branch*.managed**
-: Set to `true` when git-flow creates a worktree for *branch*, and cleared when git-flow removes it. This is **repository-local state written by git-flow, not a setting users configure**: it records which worktrees git-flow created so later commands can clean up their own and leave the user's alone. It is excluded from the shared-config set, so it is never copied into a committed `.gitflow`, never reported as configuration drift, and never removed by `git flow config sync`. `gitflow.worktreePath`, being a genuine setting, is unaffected by that exclusion and can be shared with the team.
+: Set to `true` when git-flow creates a worktree for *branch*, carried to the new name when the branch is renamed, and cleared when git-flow removes the worktree. This is **repository-local state written by git-flow, not a setting users configure**: it records which worktrees git-flow created so later commands can clean up their own and leave the user's alone. It is excluded from the shared-config set, so it is never copied into a committed `.gitflow`, never reported as configuration drift, and never removed by `git flow config sync`. `gitflow.worktreePath`, being a genuine setting, is unaffected by that exclusion and can be shared with the team.
 
 ## BRANCH CONFIGURATION
 
