@@ -20,12 +20,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0  # Fetch all history for version info
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.21'
 
@@ -47,7 +47,7 @@ jobs:
         run: SKIP_PACKAGE=1 ./scripts/build.sh "${{ steps.version.outputs.version }}"
 
       - name: Upload unsigned build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-dist
           path: dist
@@ -64,7 +64,7 @@ jobs:
 
     steps:
       - name: Download unsigned build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: unsigned-dist
           path: dist
@@ -82,7 +82,7 @@ jobs:
         run: az account show
 
       - name: Sign Windows binaries with Azure Artifact Signing
-        uses: azure/artifact-signing-action@v1
+        uses: azure/artifact-signing-action@v2
         with:
           endpoint: ${{ vars.AZURE_CODESIGN_ENDPOINT }}
           signing-account-name: ${{ vars.AZURE_CODESIGN_ACCOUNT_NAME }}
@@ -118,7 +118,7 @@ jobs:
           }
 
       - name: Upload signed build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: signed-dist
           path: dist
@@ -137,10 +137,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download signed build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: signed-dist
           path: dist
