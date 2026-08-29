@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/gittower/git-flow-next/internal/config"
@@ -1094,6 +1095,12 @@ func executeConfigList(repo *git.Repo) error {
 			topicBranches = append(topicBranches, name)
 		}
 	}
+
+	// Ranging a map yields nondeterministic order; sort so identical runs on an
+	// unchanged repository list the branches in the same order, matching overview.
+	sort.Strings(trunkBranches)
+	sort.Strings(baseBranches)
+	sort.Strings(topicBranches)
 
 	// Display base branches
 	fmt.Println("Base branches:")
