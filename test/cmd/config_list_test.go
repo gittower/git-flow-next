@@ -71,9 +71,10 @@ func configListBaseBranchLines(output string, trunk bool) []string {
 	return lines
 }
 
-// setConfigListKey sets a git config key, failing the test if it does not take.
-// A silently dropped key would change the configured branch set the assertions
-// are written against.
+// setConfigListKey sets a git config key, failing the test if the git config
+// command fails. The assertions are written against a specific configured
+// branch set, so a failed write has to surface here rather than as a confusing
+// assertion mismatch later.
 func setConfigListKey(t *testing.T, dir string, key string, value string) {
 	t.Helper()
 
