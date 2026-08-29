@@ -1308,7 +1308,7 @@ func TestWorktreeListWithNoLinkedWorktrees(t *testing.T) {
 
 // TestWorktreeListUsesBulkMarkerRead pins the cost of the listing: provenance is
 // resolved from ONE bulk marker read for the whole table, never one
-// worktree.IsManaged lookup per row, so the git invocation count is independent
+// marker lookup per row, so the git invocation count is independent
 // of how many worktrees are listed.
 //
 // GIT_TRACE is pointed at a FILE, never set to 1: the value 1 writes to stderr,

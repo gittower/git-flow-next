@@ -39,22 +39,6 @@ func MarkManaged(repo *git.Repo, branch string) error {
 	return nil
 }
 
-// IsManaged reports whether git-flow created the worktree for branch.
-//
-// Provenance is never inferred by comparing a worktree's path against the
-// template: --path and any later change to gitflow.worktreePath both break that
-// correspondence.
-//
-// The read is LOCAL-scoped, matching MarkManaged, ClearMarker and ListMarkers.
-// Reading merged config would let a stray global or system
-// gitflow.worktree.<branch>.managed make a hand-made worktree report as
-// git-flow's — and since clearing only touches local scope, that marker could
-// never be cleared, so the cleanup commands would delete the user's own worktree.
-func IsManaged(repo *git.Repo, branch string) bool {
-	value, err := repo.GetConfigLocal(MarkerKey(branch))
-	return err == nil && config.ParseBool(value)
-}
-
 // ClearMarker drops branch's provenance marker, tolerating an absent key.
 func ClearMarker(repo *git.Repo, branch string) error {
 	if err := repo.UnsetConfigIfPresent(MarkerKey(branch)); err != nil {
@@ -64,14 +48,23 @@ func ClearMarker(repo *git.Repo, branch string) error {
 }
 
 // ListMarkers returns the branch names whose provenance marker says git-flow
-// created the worktree, read from local config only — the scope markers are
-// written to.
+// created the worktree. It is the one place provenance is decided, so every
+// command reporting it agrees by construction.
 //
-// The VALUE decides, not the key's presence, so every consumer agrees with
-// IsManaged. MarkManaged only ever writes "true", but a hand-written
-// gitflow.worktree.<branch>.managed=false must read unmanaged wherever it is
-// read: over-claiming managed-ness is the direction that misleads about whether
-// the cleanup commands remove a worktree or merely detach it.
+// Provenance is never inferred by comparing a worktree's path against the
+// template: --path and any later change to gitflow.worktreePath both break that
+// correspondence.
+//
+// The read is LOCAL-scoped, matching MarkManaged and ClearMarker. Reading merged
+// config would let a stray global or system gitflow.worktree.<branch>.managed
+// make a hand-made worktree report as git-flow's — and since clearing only
+// touches local scope, that marker could never be cleared, so the cleanup
+// commands would delete the user's own worktree.
+//
+// The VALUE decides, not the key's presence. MarkManaged only ever writes
+// "true", but a hand-written gitflow.worktree.<branch>.managed=false must read
+// unmanaged: over-claiming managed-ness is the direction that misleads about
+// whether the cleanup commands remove a worktree or merely detach it.
 func ListMarkers(repo *git.Repo) ([]string, error) {
 	order, values, err := listMarkers(repo)
 	if err != nil {
@@ -91,14 +84,13 @@ func ListMarkers(repo *git.Repo) ([]string, error) {
 // branch's raw marker value.
 //
 // A branch is listed once however many values its key carries, and the LAST value
-// wins, which is what `git config --get` returns and therefore what IsManaged
-// sees.
+// wins, matching what `git config --get` on that key returns.
 func listMarkers(repo *git.Repo) ([]string, map[string]string, error) {
 	// NUL-delimited, not line-oriented: a marker value containing an embedded
 	// newline (however it got there — no code path writes one, but nothing
 	// stops a hand-edited config from holding one) would otherwise be
-	// truncated at its first line, disagreeing with IsManaged's single-key
-	// read of the same value.
+	// truncated at its first line and read as a different value than a
+	// single-key `git config --get` on the same marker.
 	entries, err := repo.GetConfigLocalRegexpNUL(`^gitflow\.worktree\..*\.managed$`)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list worktree provenance markers: %w", err)
@@ -117,8 +109,8 @@ func listMarkers(repo *git.Repo) ([]string, map[string]string, error) {
 		}
 		// The raw value follows the key/value newline as-is, so a value stored
 		// with surrounding whitespace arrives with it attached. Trim it, or
-		// " true " would parse false here while IsManaged — reading through
-		// GetConfigLocal, which trims — parses the same marker true.
+		// " true " would parse false here while `git config --get` — which
+		// trims — reports the same marker as true.
 		values[branch] = strings.TrimSpace(entry.Value)
 	}
 	return order, values, nil

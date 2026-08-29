@@ -360,8 +360,6 @@ func executeWorktreeList(repo *git.Repo) error {
 			// only be reported as unmanaged.
 			r.branch = detachedBranchLabel
 			r.tag = unmanagedTag
-		} else if !worktree.IsManaged(repo, entry.Branch) {
-			r.tag = unmanagedTag
 		}
 		if len(r.branch) > width {
 			width = len(r.branch)
@@ -372,6 +370,31 @@ func executeWorktreeList(repo *git.Repo) error {
 	if len(rows) == 0 {
 		fmt.Println("No linked worktrees found")
 		return nil
+	}
+
+	// Provenance comes from ONE bulk marker read for the whole listing, never a
+	// per-row lookup: that would cost a git process per worktree listed. It also
+	// keeps ListMarkers the single place a marker VALUE is interpreted, so this
+	// command and '<type> list --worktrees' cannot drift apart on what counts as
+	// managed.
+	//
+	// A failed read aborts rather than degrading, matching worktreeCells in
+	// cmd/list.go: tagging every row "(unmanaged)" would misreport git-flow's own
+	// worktrees in the direction that decides what the cleanup commands may
+	// remove.
+	markers, err := worktree.ListMarkers(repo)
+	if err != nil {
+		return &errors.GitError{Operation: "list worktree provenance markers", Err: err}
+	}
+	managed := make(map[string]bool, len(markers))
+	for _, branch := range markers {
+		managed[branch] = true
+	}
+	for i, r := range rows {
+		// A detached row is already tagged and has no branch to look up.
+		if r.tag == "" && !managed[r.branch] {
+			rows[i].tag = unmanagedTag
+		}
 	}
 
 	for _, r := range rows {

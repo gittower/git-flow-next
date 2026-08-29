@@ -1057,7 +1057,7 @@ func TestListRejectsPatternArgument(t *testing.T) {
 // TestListWorktreesUsesBulkReads pins the performance requirement: every row is
 // resolved from bulk reads, so the column costs one 'worktree list', one marker
 // read and one 'git status' per LIVE linked worktree — never a per-row
-// WorktreeForBranch or IsManaged.
+// WorktreeForBranch or marker lookup.
 //
 // GIT_TRACE is pointed at a FILE, never set to 1: the value 1 writes to stderr,
 // which would fold trace lines into the output of git-flow's CombinedOutput call
