@@ -153,3 +153,57 @@ func TestConfigListBaseBranchOrderIsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+// TestConfigListOmitsActiveTopicBranches tests that a started topic branch is
+// not listed as a branch type. Its runtime gitflow.branch.<branch>.base key
+// parses into a branch entry with no type, which is state rather than
+// configuration.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Runs 'git flow feature start plain', which writes the runtime base key
+// 3. Runs 'config list'
+// 4. Verifies feature/plain is not listed as a topic branch type
+// 5. Verifies the five configured topic types are still listed
+func TestConfigListOmitsActiveTopicBranches(t *testing.T) {
+	t.Parallel()
+	// Setup
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	// Initialize git-flow with defaults
+	output, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	if err != nil {
+		t.Fatalf("Failed to initialize git-flow: %v\nOutput: %s", err, output)
+	}
+
+	// Start a topic branch, which records gitflow.branch.feature/plain.base
+	output, err = testutil.RunGitFlow(t, dir, "feature", "start", "plain")
+	if err != nil {
+		t.Fatalf("Failed to start feature branch: %v\nOutput: %s", err, output)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "config", "list")
+	if err != nil {
+		t.Fatalf("Failed to run git-flow config list: %v\nOutput: %s", err, output)
+	}
+
+	headers := configListTopicTypeHeaders(output)
+	for _, header := range headers {
+		if header == "feature/plain:" {
+			t.Errorf("Expected the active branch feature/plain not to be listed as a topic type, got %v\nOutput: %s", headers, output)
+		}
+	}
+
+	for _, expected := range []string{"bugfix:", "feature:", "hotfix:", "release:", "support:"} {
+		found := false
+		for _, header := range headers {
+			if header == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected topic type %q to be listed, got %v\nOutput: %s", expected, headers, output)
+		}
+	}
+}
