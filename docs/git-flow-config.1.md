@@ -256,6 +256,18 @@ git config --add gitflow.release.publish.push-option "merge_request.target=main"
 **gitflow.*type*.finish.keeplocal**
 : Keep local branch after finishing
 
+**gitflow.*type*.finish.remove-worktree**
+: Remove a linked worktree holding the branch before deleting it on finish
+
+**gitflow.*type*.finish.force-remove-worktree**
+: Force-remove a dirty linked worktree (uncommitted/untracked changes are lost)
+
+**gitflow.*type*.delete.remove-worktree**
+: Remove a linked worktree holding the branch before deleting it
+
+**gitflow.*type*.delete.force-remove-worktree**
+: Force-remove a dirty linked worktree (uncommitted/untracked changes are lost)
+
 **gitflow.*type*.finish.rebase**
 : Use rebase strategy when finishing
 

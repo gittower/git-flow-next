@@ -174,3 +174,183 @@ func TestMergeStateNotSharedBetweenWorktrees(t *testing.T) {
 		t.Error("Worktree1 should still have merge state")
 	}
 }
+
+func TestWorktreeForBranchNoWorktree(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	if _, err := testutil.RunGit(t, dir, "checkout", "-b", "feature/alone"); err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+	// Switch back to main so the branch isn't checked out in the current worktree.
+	if _, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+
+	repo := openRepo(t, dir)
+	path, err := repo.WorktreeForBranch("feature/alone")
+	if err != nil {
+		t.Fatalf("WorktreeForBranch returned error: %v", err)
+	}
+	if path != "" {
+		t.Errorf("Expected no worktree for branch, got %q", path)
+	}
+}
+
+func TestWorktreeForBranchExistingWorktree(t *testing.T) {
+	t.Parallel()
+	mainRepo := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, mainRepo)
+
+	if _, err := testutil.RunGit(t, mainRepo, "checkout", "-b", "feature/wt"); err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+	if _, err := testutil.RunGit(t, mainRepo, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to checkout main: %v", err)
+	}
+
+	worktreePath, err := os.MkdirTemp("", "git-flow-wt-find-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory for worktree: %v", err)
+	}
+	defer os.RemoveAll(worktreePath)
+	os.RemoveAll(worktreePath)
+
+	if _, err = testutil.RunGit(t, mainRepo, "worktree", "add", worktreePath, "feature/wt"); err != nil {
+		t.Fatalf("Failed to add worktree: %v", err)
+	}
+
+	repo := openRepo(t, mainRepo)
+	path, err := repo.WorktreeForBranch("feature/wt")
+	if err != nil {
+		t.Fatalf("WorktreeForBranch returned error: %v", err)
+	}
+	if filepath.Clean(path) != filepath.Clean(worktreePath) {
+		t.Errorf("Expected worktree path %q, got %q", worktreePath, path)
+	}
+}
+
+func TestWorktreeForBranchIgnoresCurrentWorktree(t *testing.T) {
+	t.Parallel()
+	mainRepo := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, mainRepo)
+
+	// A branch checked out in the *current* worktree is never reported, since
+	// callers switch off the branch before looking it up.
+	if _, err := testutil.RunGit(t, mainRepo, "checkout", "-b", "feature/current"); err != nil {
+		t.Fatalf("Failed to create feature branch: %v", err)
+	}
+
+	repo := openRepo(t, mainRepo)
+	path, err := repo.WorktreeForBranch("feature/current")
+	if err != nil {
+		t.Fatalf("WorktreeForBranch returned error: %v", err)
+	}
+	if path != "" {
+		t.Errorf("Expected no worktree for branch checked out in current worktree, got %q", path)
+	}
+}
+
+func TestRemoveWorktree(t *testing.T) {
+	t.Parallel()
+	mainRepo := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, mainRepo)
+
+	worktreePath, err := os.MkdirTemp("", "git-flow-wt-remove-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory for worktree: %v", err)
+	}
+	// Directory is removed by `git worktree remove` itself.
+	os.RemoveAll(worktreePath)
+
+	if _, err = testutil.RunGit(t, mainRepo, "worktree", "add", worktreePath, "-b", "feature/wt-remove"); err != nil {
+		t.Fatalf("Failed to add worktree: %v", err)
+	}
+
+	repo := openRepo(t, mainRepo)
+	if err := repo.RemoveWorktree(worktreePath, false); err != nil {
+		t.Fatalf("RemoveWorktree failed: %v", err)
+	}
+
+	if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+		t.Errorf("Expected worktree directory to be removed, stat error: %v", err)
+	}
+
+	// The branch should now be deletable since no worktree holds it.
+	if _, err := testutil.RunGit(t, mainRepo, "branch", "-D", "feature/wt-remove"); err != nil {
+		t.Errorf("Failed to delete branch after removing worktree: %v", err)
+	}
+}
+
+func TestRemoveWorktreeRefusesDirtyWithoutForce(t *testing.T) {
+	t.Parallel()
+	mainRepo := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, mainRepo)
+
+	worktreePath, err := os.MkdirTemp("", "git-flow-wt-dirty-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory for worktree: %v", err)
+	}
+	defer os.RemoveAll(worktreePath)
+	os.RemoveAll(worktreePath)
+
+	if _, err = testutil.RunGit(t, mainRepo, "worktree", "add", worktreePath, "-b", "feature/wt-dirty"); err != nil {
+		t.Fatalf("Failed to add worktree: %v", err)
+	}
+
+	// Make the worktree dirty with an untracked file.
+	if err := testutil.WriteFile(t, worktreePath, "untracked.txt", "dirty"); err != nil {
+		t.Fatalf("Failed to write untracked file: %v", err)
+	}
+
+	repo := openRepo(t, mainRepo)
+	if err := repo.RemoveWorktree(worktreePath, false); err == nil {
+		t.Fatal("Expected RemoveWorktree to fail on a dirty worktree without force")
+	}
+	if _, err := os.Stat(worktreePath); err != nil {
+		t.Errorf("Expected dirty worktree to remain, stat error: %v", err)
+	}
+
+	if err := repo.RemoveWorktree(worktreePath, true); err != nil {
+		t.Fatalf("RemoveWorktree with force failed: %v", err)
+	}
+}
+
+func TestWorktreeHasChanges(t *testing.T) {
+	t.Parallel()
+	mainRepo := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, mainRepo)
+
+	worktreePath, err := os.MkdirTemp("", "git-flow-wt-status-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory for worktree: %v", err)
+	}
+	defer os.RemoveAll(worktreePath)
+	os.RemoveAll(worktreePath)
+
+	if _, err = testutil.RunGit(t, mainRepo, "worktree", "add", worktreePath, "-b", "feature/wt-status"); err != nil {
+		t.Fatalf("Failed to add worktree: %v", err)
+	}
+
+	repo := openRepo(t, mainRepo)
+	dirty, err := repo.WorktreeHasChanges(worktreePath)
+	if err != nil {
+		t.Fatalf("WorktreeHasChanges returned error: %v", err)
+	}
+	if dirty {
+		t.Error("Expected clean worktree to have no changes")
+	}
+
+	if err := testutil.WriteFile(t, worktreePath, "untracked.txt", "dirty"); err != nil {
+		t.Fatalf("Failed to write untracked file: %v", err)
+	}
+
+	dirty, err = repo.WorktreeHasChanges(worktreePath)
+	if err != nil {
+		t.Fatalf("WorktreeHasChanges returned error: %v", err)
+	}
+	if !dirty {
+		t.Error("Expected worktree with an untracked file to have changes")
+	}
+}

@@ -11,9 +11,9 @@ import (
 )
 
 // DeleteCommand handles the deletion of a topic branch
-func DeleteCommand(branchType string, name string, force *bool, remote *bool, fetch *bool) {
+func DeleteCommand(branchType string, name string, force *bool, remote *bool, fetch *bool, removeWorktree *bool, forceRemoveWorktree *bool) {
 	repo := mustOpenRepo()
-	if err := executeDelete(repo, branchType, name, force, remote, fetch); err != nil {
+	if err := executeDelete(repo, branchType, name, force, remote, fetch, removeWorktree, forceRemoveWorktree); err != nil {
 		var exitCode errors.ExitCode
 		if flowErr, ok := err.(errors.Error); ok {
 			exitCode = flowErr.ExitCode()
@@ -26,7 +26,7 @@ func DeleteCommand(branchType string, name string, force *bool, remote *bool, fe
 }
 
 // executeDelete performs the actual branch deletion logic and returns any errors
-func executeDelete(repo *git.Repo, branchType string, name string, force *bool, remote *bool, fetch *bool) error {
+func executeDelete(repo *git.Repo, branchType string, name string, force *bool, remote *bool, fetch *bool, removeWorktree *bool, forceRemoveWorktree *bool) error {
 	// Validate that git-flow is initialized before resolving branch types.
 	// LoadConfig falls back to DefaultConfig when uninitialized, so this gate
 	// must run first or the default branch types mask the uninitialized state.
@@ -79,12 +79,12 @@ func executeDelete(repo *git.Repo, branchType string, name string, force *bool, 
 
 	// Run delete operation wrapped with hooks
 	return hooks.WithHooks(repo, branchType, hooks.HookActionDelete, hookCtx, func() error {
-		return performDelete(repo, branchType, name, fullBranchName, branchConfig, force, remote, fetch, cfg)
+		return performDelete(repo, branchType, name, fullBranchName, branchConfig, force, remote, fetch, cfg, removeWorktree, forceRemoveWorktree)
 	})
 }
 
 // performDelete performs the actual delete operation (called within hooks wrapper)
-func performDelete(repo *git.Repo, branchType, name, fullBranchName string, branchConfig config.BranchConfig, force *bool, remote *bool, fetch *bool, cfg *config.Config) error {
+func performDelete(repo *git.Repo, branchType, name, fullBranchName string, branchConfig config.BranchConfig, force *bool, remote *bool, fetch *bool, cfg *config.Config, removeWorktree *bool, forceRemoveWorktree *bool) error {
 	// Determine if we should fetch before deleting (flag > config, default false).
 	shouldFetch := false
 	if fetch != nil {
@@ -122,6 +122,32 @@ func performDelete(repo *git.Repo, branchType, name, fullBranchName string, bran
 		remoteConfig, err := repo.GetConfig(configKey)
 		if err == nil && config.ParseBool(remoteConfig) {
 			deleteRemote = true
+		}
+	}
+
+	// Determine if we should remove a linked worktree holding the branch before
+	// deleting it (flag > config, default false).
+	removeWorktreeResolved := false
+	if removeWorktree != nil {
+		removeWorktreeResolved = *removeWorktree
+	} else {
+		configKey := fmt.Sprintf("gitflow.%s.delete.remove-worktree", branchType)
+		rwConfig, err := repo.GetConfig(configKey)
+		if err == nil && rwConfig == "true" {
+			removeWorktreeResolved = true
+		}
+	}
+
+	// Determine if we should force-remove a dirty linked worktree
+	// (flag > config, default false).
+	forceRemoveWorktreeResolved := false
+	if forceRemoveWorktree != nil {
+		forceRemoveWorktreeResolved = *forceRemoveWorktree
+	} else {
+		configKey := fmt.Sprintf("gitflow.%s.delete.force-remove-worktree", branchType)
+		frwConfig, err := repo.GetConfig(configKey)
+		if err == nil && frwConfig == "true" {
+			forceRemoveWorktreeResolved = true
 		}
 	}
 
@@ -163,7 +189,15 @@ func performDelete(repo *git.Repo, branchType, name, fullBranchName string, bran
 		return err
 	}
 
-	// Delete the branch with appropriate flag
+	// Delete the branch with appropriate flag. If the branch is checked out in a
+	// linked worktree, git refuses to delete it; when enabled, remove that
+	// worktree first (refusing to force-remove a dirty one unless requested).
+	if removeWorktreeResolved {
+		if err := removeWorktreeForBranch(repo, fullBranchName, forceRemoveWorktreeResolved); err != nil {
+			return err
+		}
+	}
+
 	deleteErr := repo.DeleteBranch(fullBranchName, forceDelete)
 	if deleteErr != nil {
 		return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", fullBranchName), Err: deleteErr}

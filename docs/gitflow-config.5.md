@@ -489,6 +489,16 @@ The finish command supports extensive merge strategy configuration through comma
 : *Type*: boolean
 : *Default*: false
 
+**gitflow.*type*.finish.remove-worktree**
+: Remove a linked worktree holding the branch before the branch is deleted on finish. Git refuses to delete a branch checked out in a linked worktree; enabling this removes that worktree first so the finish can complete. Corresponds to `--remove-worktree`/`--no-remove-worktree`.
+: *Type*: boolean
+: *Default*: false
+
+**gitflow.*type*.finish.force-remove-worktree**
+: Force-remove a linked worktree that has uncommitted or untracked changes (those changes are lost) instead of failing. Only meaningful when `gitflow.*type*.finish.remove-worktree` is enabled. Corresponds to `--force-remove-worktree`/`--no-force-remove-worktree`.
+: *Type*: boolean
+: *Default*: false
+
 ### Merge Strategy Options
 
 **gitflow.*type*.finish.rebase**
@@ -551,6 +561,16 @@ The finish command supports extensive merge strategy configuration through comma
 
 **gitflow.*type*.delete.fetch**
 : Fetch from remote before deleting a topic branch. When enabled, updates local refs so that Git can correctly detect whether the branch has been merged remotely (e.g., via a GitHub PR merge), avoiding the need for `--force`. The parent is fast-forwarded from its remote only when it is the branch currently checked out (`git merge --ff-only` acts on HEAD); delete auto-checks-out the parent when you delete the branch you are on, which is the common case. When no remote is configured, the fetch is skipped silently. A fetch failure against an unreachable remote is a non-fatal note — deletion is not blocked by the fetch itself, but the topic sync check still runs against existing local tracking data and can still abort (behind/diverged) unless `--force` is given. `--no-fetch` skips only the fetch; it does not skip the sync check.
+: *Type*: boolean
+: *Default*: false
+
+**gitflow.*type*.delete.remove-worktree**
+: Remove a linked worktree holding the branch before the branch is deleted. Git refuses to delete a branch checked out in a linked worktree; enabling this removes that worktree first so deletion can proceed. Corresponds to `--remove-worktree`/`--no-remove-worktree`.
+: *Type*: boolean
+: *Default*: false
+
+**gitflow.*type*.delete.force-remove-worktree**
+: Force-remove a linked worktree that has uncommitted or untracked changes (those changes are lost) instead of failing. Only meaningful when `gitflow.*type*.delete.remove-worktree` is enabled. Corresponds to `--force-remove-worktree`/`--no-force-remove-worktree`.
 : *Type*: boolean
 : *Default*: false
 

@@ -95,6 +95,18 @@ The operation maintains a persistent state file that allows it to resume after c
 **--no-force-delete**
 : Don't force delete the branch (default)
 
+**--remove-worktree**
+: Remove a linked worktree holding the branch before deleting it (overrides `gitflow.<type>.finish.remove-worktree`). Git refuses to delete a branch checked out in a linked worktree; this option removes that worktree first so the finish can proceed.
+
+**--no-remove-worktree**
+: Don't remove a linked worktree holding the branch (default)
+
+**--force-remove-worktree**
+: Force-remove a linked worktree that has uncommitted or untracked changes (those changes are lost). Overrides `gitflow.<type>.finish.force-remove-worktree`.
+
+**--no-force-remove-worktree**
+: Don't force-remove a dirty linked worktree (default); error instead of discarding changes
+
 ### Merge Strategy Control
 
 **--rebase**
@@ -409,6 +421,11 @@ git flow hotfix finish 1.1.1 --keep
 Clean up both local and remote:
 ```bash
 git flow feature finish my-feature --no-keeplocal --no-keepremote
+```
+
+Finish a feature whose branch lives in a linked worktree (removes the worktree first):
+```bash
+git flow feature finish my-feature --remove-worktree
 ```
 
 ### Bypassing Hooks

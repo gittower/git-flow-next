@@ -186,6 +186,10 @@ func registerBranchCommand(branchType string) {
 			noKeepLocal, _ := cmd.Flags().GetBool("no-keeplocal")
 			forceDelete, _ := cmd.Flags().GetBool("force-delete")
 			noForceDelete, _ := cmd.Flags().GetBool("no-force-delete")
+			removeWorktree, _ := cmd.Flags().GetBool("remove-worktree")
+			noRemoveWorktree, _ := cmd.Flags().GetBool("no-remove-worktree")
+			forceRemoveWorktree, _ := cmd.Flags().GetBool("force-remove-worktree")
+			noForceRemoveWorktree, _ := cmd.Flags().GetBool("no-force-remove-worktree")
 
 			// Get merge strategy flags
 			rebase, _ := cmd.Flags().GetBool("rebase")
@@ -260,10 +264,12 @@ func registerBranchCommand(branchType string) {
 
 			// Create branch retention options
 			retentionOptions := &config.BranchRetentionOptions{
-				Keep:        getBoolFlag(keep, noKeep),
-				KeepRemote:  getBoolFlag(keepRemote, noKeepRemote),
-				KeepLocal:   getBoolFlag(keepLocal, noKeepLocal),
-				ForceDelete: getBoolFlag(forceDelete, noForceDelete),
+				Keep:                getBoolFlag(keep, noKeep),
+				KeepRemote:          getBoolFlag(keepRemote, noKeepRemote),
+				KeepLocal:           getBoolFlag(keepLocal, noKeepLocal),
+				ForceDelete:         getBoolFlag(forceDelete, noForceDelete),
+				RemoveWorktree:      getBoolFlag(removeWorktree, noRemoveWorktree),
+				ForceRemoveWorktree: getBoolFlag(forceRemoveWorktree, noForceRemoveWorktree),
 			}
 
 			// Get merge message flags
@@ -349,8 +355,12 @@ func registerBranchCommand(branchType string) {
 			noRemote, _ := cmd.Flags().GetBool("no-remote")
 			fetch, _ := cmd.Flags().GetBool("fetch")
 			noFetch, _ := cmd.Flags().GetBool("no-fetch")
+			removeWorktree, _ := cmd.Flags().GetBool("remove-worktree")
+			noRemoveWorktree, _ := cmd.Flags().GetBool("no-remove-worktree")
+			forceRemoveWorktree, _ := cmd.Flags().GetBool("force-remove-worktree")
+			noForceRemoveWorktree, _ := cmd.Flags().GetBool("no-force-remove-worktree")
 
-			DeleteCommand(branchType, args[0], getBoolFlag(force, noForce), getBoolFlag(remote, noRemote), getBoolFlag(fetch, noFetch))
+			DeleteCommand(branchType, args[0], getBoolFlag(force, noForce), getBoolFlag(remote, noRemote), getBoolFlag(fetch, noFetch), getBoolFlag(removeWorktree, noRemoveWorktree), getBoolFlag(forceRemoveWorktree, noForceRemoveWorktree))
 			return nil
 		},
 	}
@@ -362,6 +372,10 @@ func registerBranchCommand(branchType string) {
 	deleteCmd.Flags().Bool("no-remote", false, "Don't delete the remote tracking branch")
 	deleteCmd.Flags().Bool("fetch", false, "Fetch from remote before deleting")
 	deleteCmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before deleting")
+	deleteCmd.Flags().Bool("remove-worktree", false, "Remove a linked worktree holding the branch before deleting it (overrides config)")
+	deleteCmd.Flags().Bool("no-remove-worktree", false, "Don't remove a linked worktree holding the branch")
+	deleteCmd.Flags().Bool("force-remove-worktree", false, "Force-remove a dirty linked worktree (uncommitted/untracked changes are lost)")
+	deleteCmd.Flags().Bool("no-force-remove-worktree", false, "Don't force-remove a dirty linked worktree")
 
 	branchCmd.AddCommand(deleteCmd)
 
@@ -522,6 +536,12 @@ func addFinishFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("no-keeplocal", false, "Delete the local branch after finishing")
 	cmd.Flags().BoolP("force-delete", "D", false, "Force delete the branch")
 	cmd.Flags().Bool("no-force-delete", false, "Don't force delete the branch")
+
+	// Worktree Removal Flags
+	cmd.Flags().Bool("remove-worktree", false, "Remove a linked worktree holding the branch before deleting it (overrides config)")
+	cmd.Flags().Bool("no-remove-worktree", false, "Don't remove a linked worktree holding the branch")
+	cmd.Flags().Bool("force-remove-worktree", false, "Force-remove a dirty linked worktree (uncommitted/untracked changes are lost)")
+	cmd.Flags().Bool("no-force-remove-worktree", false, "Don't force-remove a dirty linked worktree")
 
 	// Merge Strategy Flags
 	cmd.Flags().BoolP("rebase", "r", false, "Rebase topic branch before merging")
