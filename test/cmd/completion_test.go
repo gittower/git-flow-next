@@ -43,8 +43,18 @@ func TestCompletionZsh(t *testing.T) {
 		t.Fatalf("completion zsh failed: %v\nOutput: %s", err, output)
 	}
 
-	if !strings.Contains(output, "_git-flow") {
+	if !strings.Contains(output, "_git-flow()") {
 		t.Error("expected zsh completion to contain _git-flow function")
+	}
+	// Bridge: rewrite words[1] so Cobra invokes the correct binary
+	if !strings.Contains(output, "words[1]=git-flow") {
+		t.Error("expected zsh completion to contain git-subcommand bridge rewrite")
+	}
+
+	// Verify the generated script is syntactically valid zsh
+	stderr, ok := testutil.CheckShellSyntax(t, "zsh", output)
+	if !ok || stderr != "" {
+		t.Errorf("expected zsh to accept the completion script, got %q", stderr)
 	}
 }
 
