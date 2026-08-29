@@ -1,6 +1,7 @@
 package cmd_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1302,6 +1303,102 @@ func TestWorktreeListWithNoLinkedWorktrees(t *testing.T) {
 	}
 	if strings.TrimSpace(output) != "No linked worktrees found" {
 		t.Errorf("Expected 'No linked worktrees found', got: %s", output)
+	}
+}
+
+// TestWorktreeListUsesBulkMarkerRead pins the cost of the listing: provenance is
+// resolved from ONE bulk marker read for the whole table, never one
+// worktree.IsManaged lookup per row, so the git invocation count is independent
+// of how many worktrees are listed.
+//
+// GIT_TRACE is pointed at a FILE, never set to 1: the value 1 writes to stderr,
+// which would fold trace lines into the output of git-flow's CombinedOutput call
+// sites.
+//
+// The per-row check counts traced lines containing the literal "gitflow.worktree."
+// — the bulk read passes the key pattern with the dots escaped
+// (gitflow\.worktree\.), so only a per-branch 'git config --get' can match.
+// Steps:
+// 1. Creates five worktrees through git-flow and one by hand, so both tagged and untagged rows exist
+// 2. Runs 'git flow worktree list' with GIT_TRACE pointed at a file
+// 3. Counts the traced git invocations by kind
+// 4. Verifies one worktree listing, one bulk marker read and no per-branch marker read
+func TestWorktreeListUsesBulkMarkerRead(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	for i := 1; i <= 5; i++ {
+		branch := fmt.Sprintf("feature/b%02d", i)
+		createFreeBranch(t, dir, branch)
+		addWorktree(t, dir, branch)
+	}
+	createFreeBranch(t, dir, "feature/by-hand")
+	handMadeWorktree(t, dir, "feature/by-hand")
+
+	tracePath := filepath.Join(t.TempDir(), "git-trace.log")
+	output, err := testutil.RunGitFlowWithEnv(t, dir, []string{"GIT_TRACE=" + tracePath}, "worktree", "list")
+	if err != nil {
+		t.Fatalf("worktree list failed: %v\nOutput: %s", err, output)
+	}
+	if rows := worktreeRows(output); len(rows) != 6 {
+		t.Fatalf("Expected exactly six rows, got %d: %s", len(rows), output)
+	}
+
+	data, err := os.ReadFile(tracePath)
+	if err != nil {
+		t.Fatalf("Failed to read the trace file: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {
+		t.Fatal("GIT_TRACE produced no output")
+	}
+
+	checks := []struct {
+		what       string
+		substrings []string
+		want       int
+	}{
+		{"worktree listings", []string{"git worktree list"}, 1},
+		{"bulk marker reads", []string{"--get-regexp", "managed"}, 1},
+		{"per-branch marker reads", []string{"gitflow.worktree."}, 0},
+	}
+	for _, check := range checks {
+		if got := countTraceLines(lines, check.substrings...); got != check.want {
+			t.Errorf("Expected %d %s, got %d\nTrace:\n%s", check.want, check.what, got, string(data))
+		}
+	}
+}
+
+// TestWorktreeListAbortsWhenMarkerListFails verifies a failed bulk marker read
+// aborts instead of degrading. Degrading would tag every row "(unmanaged)",
+// including git-flow's own worktrees — a lie in the direction that decides what
+// the cleanup commands may delete.
+// Steps:
+// 1. Adds a worktree for feature/x through git-flow, so a provenance marker genuinely exists
+// 2. Puts a git shim on PATH that fails the bulk marker read with exit 128
+// 3. Runs 'git flow worktree list'
+// 4. Verifies exit 3, an error on stderr, and no '(unmanaged)' tag on stdout
+func TestWorktreeListAbortsWhenMarkerListFails(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	addWorktree(t, dir, "feature/x")
+
+	env := failingGitShim(t, `config --local --null --get-regexp ^gitflow\.worktree\..*\.managed$`)
+
+	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, env, "worktree", "list")
+	if code := worktreeExitCode(err); code != 3 {
+		t.Fatalf("Expected exit code 3, got %d\nStdout: %s\nStderr: %s", code, stdout, stderr)
+	}
+	if !strings.HasPrefix(stderr, "Error:") {
+		t.Errorf("Expected stderr to start with 'Error:', got: %s", stderr)
+	}
+	if strings.Contains(stdout, "(unmanaged)") {
+		t.Errorf("Expected no '(unmanaged)' tag on stdout, got:\n%s", stdout)
 	}
 }
 
