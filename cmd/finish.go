@@ -233,6 +233,14 @@ func executeFinish(repo *git.Repo, branchType string, name string, continueOp bo
 		shortName = parts[len(parts)-1]
 	}
 
+	// If a different parent branch was used to create the branch, use this instead of the configured one
+	if startPoint, err := git.GetBaseBranch(name); err == nil {
+		if startPoint != branchConfig.StartPoint {
+			fmt.Printf("Using base branch '%s'\n", startPoint)
+			branchConfig.Parent = startPoint
+		}
+	}
+
 	// Resolve all options once before starting operations
 	resolvedOptions := config.ResolveFinishOptions(cfg, branchType, shortName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
 
