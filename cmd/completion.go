@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -26,7 +28,7 @@ var completionCmd = &cobra.Command{
 		case "bash":
 			return genBashCompletion(os.Stdout)
 		case "zsh":
-			return rootCmd.GenZshCompletion(os.Stdout)
+			return genZshCompletion(os.Stdout)
 		case "fish":
 			return genFishCompletion(os.Stdout)
 		case "powershell":
@@ -41,6 +43,9 @@ const completionLong = `Generate shell completion scripts for git-flow.
 For bash, zsh, and fish the generated scripts provide tab completion for
 both "git-flow" (direct) and "git flow" (git subcommand) invocation styles.
 PowerShell completion supports "git-flow" only.
+
+For zsh, the "git flow" form works because zsh's built-in _git completion
+dispatches to any _git-<name> function it finds in fpath.
 
 Bash:
 
@@ -112,6 +117,36 @@ _git_flow()
     __start_git-flow
 }
 `
+
+// genZshCompletion generates zsh completion with a bridge for "git flow" usage.
+// Zsh's _git dispatcher calls _git-flow() to complete "git flow <...>" and
+// shifts words so words[1] is "flow" (not "git-flow"). Cobra's generated body
+// uses "${words[1]} __complete ..." to invoke the binary, so without the
+// rewrite it would try to run a nonexistent command called "flow".
+func genZshCompletion(w io.Writer) error {
+	var buf bytes.Buffer
+	if err := rootCmd.GenZshCompletion(&buf); err != nil {
+		return err
+	}
+	const anchor = "_git-flow()\n{\n"
+	const replacement = `_git-flow()
+{
+    # Bridge for "git flow" subcommand: zsh's _git dispatcher shifts words so
+    # words[1] is "flow" when this function is invoked via "git flow ...".
+    # Rewrite it back to "git-flow" so the Cobra logic below invokes the
+    # correct binary via __complete.
+    if [[ ${words[1]} == flow ]]; then
+        words[1]=git-flow
+    fi
+
+`
+	output := strings.Replace(buf.String(), anchor, replacement, 1)
+	if !strings.Contains(output, "words[1]=git-flow") {
+		return fmt.Errorf("zsh completion: failed to inject git-subcommand bridge (Cobra output format may have changed)")
+	}
+	_, err := fmt.Fprint(w, output)
+	return err
+}
 
 // genFishCompletion generates fish completion with support for "git flow" usage.
 // Fish has no automatic git-subcommand discovery, so we append registrations
