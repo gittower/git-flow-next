@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -407,6 +408,64 @@ func TestWorktreeOperationInProgressDetectsRebase(t *testing.T) {
 	}
 	if label != "rebase" {
 		t.Errorf("Expected label 'rebase', got %q", label)
+	}
+}
+
+// TestWorktreeOperationInProgressDetectsBisect covers the bisect marker,
+// which the merge/rebase tests above don't exercise. Four commits are used
+// (not two) so bisect has a midpoint left to test after 'good'/'bad' are
+// given, rather than immediately concluding and cleaning up BISECT_LOG on its
+// own.
+// Steps:
+// 1. Creates a worktree with four commits
+// 2. Starts a bisect there, marking the tip bad and the oldest commit good
+// 3. Verifies WorktreeOperationInProgress reports ("bisect", true, nil)
+func TestWorktreeOperationInProgressDetectsBisect(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("commit 1"), 0644); err != nil {
+		t.Fatalf("Failed to write commit 1 content: %v", err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-am", "commit 1"); err != nil {
+		t.Fatalf("Failed to create commit 1: %v\nOutput: %s", err, out)
+	}
+	goodRev, err := testutil.RunGit(t, wtPath, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to resolve commit 1: %v", err)
+	}
+	goodRev = strings.TrimSpace(goodRev)
+	for i := 2; i <= 4; i++ {
+		content := fmt.Sprintf("commit %d", i)
+		if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write %s content: %v", content, err)
+		}
+		if out, err := testutil.RunGit(t, wtPath, "commit", "-am", content); err != nil {
+			t.Fatalf("Failed to create %s: %v\nOutput: %s", content, err, out)
+		}
+	}
+
+	if out, err := testutil.RunGit(t, wtPath, "bisect", "start"); err != nil {
+		t.Fatalf("Failed to start bisect: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "bisect", "bad", "HEAD"); err != nil {
+		t.Fatalf("Failed to mark HEAD bad: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "bisect", "good", goodRev); err != nil {
+		t.Fatalf("Failed to mark commit 1 good: %v\nOutput: %s", err, out)
+	}
+
+	label, inProgress, err := repo.WorktreeOperationInProgress(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeOperationInProgress failed: %v", err)
+	}
+	if !inProgress {
+		t.Fatal("Expected an operation to be reported in progress")
+	}
+	if label != "bisect" {
+		t.Errorf("Expected label 'bisect', got %q", label)
 	}
 }
 

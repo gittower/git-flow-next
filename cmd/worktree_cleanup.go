@@ -40,65 +40,66 @@ func addWorktreeCleanupFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolP("force-worktree", "W", false, "Remove a git-flow-created worktree even with uncommitted or untracked changes")
 }
 
-// redirectAwayFromOwnWorktree returns the repo handle finish/delete should run
-// the rest of their operation against, redirecting to the main worktree when
-// repo is bound to the very worktree that holds branch.
+// redirectPreferringParentWorktree returns the repo handle finish/delete
+// should run the rest of their operation against, redirecting away from repo
+// when it is bound to the very worktree that holds branch, and reports
+// whether a redirect happened.
 //
 // Both commands eventually free that worktree, but everything before the free
-// step — finish's merge and child-branch checkouts, delete's own "switch away
-// if currently on the branch" step — checks out OTHER branches first. Run from
-// inside the worktree being freed, those checkouts would either fail outright
-// (the parent branch is commonly checked out elsewhere already) or silently
-// repurpose the worktree onto the parent before the free step ever sees it,
-// leaving nothing there to remove or detach. Redirecting once, up front,
-// leaves the worktree untouched so the free step can act on it correctly —
-// the same "operate from the main worktree once the current one may be
-// affected" pattern executeWorktreeRemove already uses for its own destructive
-// call.
+// step — finish's merge and child-branch checkouts, delete's own "switch to
+// the parent if currently on the branch" step — checks another branch out
+// first. Run from inside the worktree being freed, that checkout would either
+// fail outright (the parent is commonly checked out elsewhere already) or
+// silently repurpose the worktree onto the parent before the free step ever
+// sees it, leaving nothing there to remove or detach. Redirecting once, up
+// front, leaves the worktree untouched so the free step can act on it
+// correctly — the same "operate from the main worktree once the current one
+// may be affected" pattern executeWorktreeRemove already uses for its own
+// destructive call.
+//
+// The destination, when a redirect is needed, is the PARENT branch's own
+// worktree if it has one, else the main worktree — the same preference
+// decision 7 of the #175 design uses for the navigation destination, and for
+// the same reason: the checkout that follows targets the parent, and doing
+// that in the main worktree would itself fail if the parent already has a
+// dedicated worktree elsewhere (the parent would then be checked out in two
+// places at once, which Git refuses). Both callers share this preference —
+// delete has no merge target of its own to weigh against it — even though
+// delete's NAVIGATION destination (see freeWorktreeForBranch's parentWorktree
+// parameter) stays the main worktree regardless; the two are independent.
 //
 // It is a no-op whenever repo is not bound to that exact worktree: the branch
 // has no worktree, its worktree is the main one, or the invocation is already
-// running from somewhere else.
-func redirectAwayFromOwnWorktree(repo *git.Repo, branch string) (*git.Repo, error) {
+// running from somewhere else. A failure to look up the parent's own worktree
+// is returned rather than silently treated as "no parent worktree" — that
+// would risk landing the operation in the main worktree while the parent is
+// actually checked out elsewhere, reproducing the exact failure this function
+// exists to avoid.
+func redirectPreferringParentWorktree(repo *git.Repo, branch string, parentBranch string) (*git.Repo, bool, error) {
 	entry, err := repo.WorktreeForBranch(branch)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if entry == nil || entry.Main || !git.SamePath(repo.WorkTree(), entry.Path) {
-		return repo, nil
-	}
-	mainWorkTree, err := repo.MainWorkTree()
-	if err != nil {
-		return nil, err
-	}
-	return git.Open(mainWorkTree)
-}
-
-// redirectForFinish is redirectAwayFromOwnWorktree specialized for finish. The
-// destination it picks, when a redirect is needed, is the PARENT branch's own
-// worktree if it has one, else the main worktree — the same preference
-// decision 7 of the #175 design uses for the navigation destination, and for
-// the same reason: finish's merge step checks the parent branch out, and doing
-// that in the main worktree would itself fail if the parent already has a
-// dedicated worktree elsewhere (the parent would then be checked out in two
-// places at once, which Git refuses).
-func redirectForFinish(repo *git.Repo, branch string, parentBranch string) (*git.Repo, error) {
-	entry, err := repo.WorktreeForBranch(branch)
-	if err != nil {
-		return nil, err
-	}
-	if entry == nil || entry.Main || !git.SamePath(repo.WorkTree(), entry.Path) {
-		return repo, nil
+		return repo, false, nil
 	}
 
 	target, err := repo.MainWorkTree()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	if parentEntry, parentErr := repo.WorktreeForBranch(parentBranch); parentErr == nil && parentEntry != nil && !parentEntry.Main {
+	parentEntry, err := repo.WorktreeForBranch(parentBranch)
+	if err != nil {
+		return nil, false, err
+	}
+	if parentEntry != nil && !parentEntry.Main {
 		target = parentEntry.Path
 	}
-	return git.Open(target)
+	redirected, err := git.Open(target)
+	if err != nil {
+		return nil, false, err
+	}
+	return redirected, true, nil
 }
 
 // preflightWorktreeCleanup checks, without changing anything, whether branch's
@@ -110,10 +111,11 @@ func redirectForFinish(repo *git.Repo, branch string, parentBranch string) (*git
 //
 // A branch with no worktree, or one checked out in the main worktree, passes
 // trivially — the cleanup flags are no-ops in both cases. Otherwise:
-//   - a worktree with a merge, rebase, or bisect in progress always refuses,
-//     regardless of opts: it can never be removed (force overrides dirty
-//     content, not an in-progress operation) and never be detached (detaching
-//     would abandon the operation with no way back to it).
+//   - a worktree with a merge, rebase, bisect, cherry-pick, or revert in
+//     progress always refuses, regardless of opts: it can never be removed
+//     (force overrides dirty content, not an in-progress operation) and never
+//     be detached (detaching would abandon the operation with no way back to
+//     it).
 //   - a git-flow-created worktree that will be REMOVED (managed, and
 //     opts.Keep is not set) refuses if it has uncommitted or untracked
 //     changes, unless opts.Force is given.
@@ -170,15 +172,15 @@ func preflightWorktreeCleanup(repo *git.Repo, branch string, opts WorktreeCleanu
 // removal actually happens AND the caller is standing inside the worktree
 // being removed (decided from the real process cwd, not from repo's own
 // binding, which may already be redirected away from that worktree by
-// redirectAwayFromOwnWorktree). Detaching never writes a destination: the
-// directory stays exactly where it is, so nobody needs to move.
+// redirectPreferringParentWorktree). Detaching never writes a destination:
+// the directory stays exactly where it is, so nobody needs to move.
 //
 // It returns the repo the caller should keep using afterward: repo itself in
 // the ordinary case, or a fresh handle on the main worktree in the one case
 // repo's own binding cannot survive the removal — repo bound to the exact
 // worktree being removed. Callers are expected to have already redirected
-// away from that worktree (see redirectAwayFromOwnWorktree /
-// redirectForFinish), so this is defensive rather than the common path; it
+// away from that worktree (see redirectPreferringParentWorktree), so this is
+// defensive rather than the common path; it
 // must never swap merely because repo is bound to somewhere OTHER than main
 // (e.g. finish redirected to the parent branch's own worktree), which would
 // hand the caller a repo bound to the wrong place for its next checkout.

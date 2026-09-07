@@ -77,24 +77,36 @@ func executeDelete(repo *git.Repo, branchType string, name string, force *bool, 
 		hookCtx.Version = name
 	}
 
-	// Run delete operation wrapped with hooks
-	return hooks.WithHooks(repo, branchType, hooks.HookActionDelete, hookCtx, func() error {
-		return performDelete(repo, branchType, name, fullBranchName, branchConfig, force, remote, fetch, cfg, worktreeOpts)
-	})
-}
-
-// performDelete performs the actual delete operation (called within hooks wrapper)
-func performDelete(repo *git.Repo, branchType, name, fullBranchName string, branchConfig config.BranchConfig, force *bool, remote *bool, fetch *bool, cfg *config.Config, worktreeOpts WorktreeCleanupOptions) error {
-	// Redirect away from the branch's own worktree (#175) before the existing
-	// "switch to parent if currently on the branch" step below: run from inside
-	// that worktree, this step's own checkout would either fail (the parent is
-	// commonly checked out elsewhere) or silently repurpose the worktree onto
-	// the parent, leaving nothing there for the free step to act on.
-	redirectedRepo, err := redirectAwayFromOwnWorktree(repo, fullBranchName)
+	// Redirect away from the branch's own worktree (#175) before anything else
+	// below, including the hooks: run from inside that worktree, the "switch
+	// to parent if currently on the branch" step further down would either
+	// fail outright (the parent is commonly checked out elsewhere) or silently
+	// repurpose the worktree onto the parent, leaving nothing there for the
+	// free step to act on. Doing the redirect here, rather than inside
+	// performDelete as originally written, matters for the hooks: WithHooks
+	// captures repo once, up front, and runs the post-delete hook against that
+	// SAME handle after the operation completes — an internal redirect inside
+	// performDelete would leave WithHooks still holding the pre-redirect repo,
+	// so a delete that just removed the worktree the user was standing in
+	// would then run its post-hook with a working directory that no longer
+	// exists. Redirecting before WithHooks is called means every stage — pre-
+	// hook, the delete itself, post-hook — agrees on the same surviving repo.
+	redirectedRepo, redirected, err := redirectPreferringParentWorktree(repo, fullBranchName, branchConfig.Parent)
 	if err != nil {
 		return &errors.GitError{Operation: "resolve worktree for branch", Err: err}
 	}
 	repo = redirectedRepo
+
+	// Run delete operation wrapped with hooks
+	return hooks.WithHooks(repo, branchType, hooks.HookActionDelete, hookCtx, func() error {
+		return performDelete(repo, branchType, name, fullBranchName, branchConfig, force, remote, fetch, cfg, worktreeOpts, redirected)
+	})
+}
+
+// performDelete performs the actual delete operation (called within hooks
+// wrapper). redirected reports whether executeDelete already redirected repo
+// away from fullBranchName's own worktree (#175) before calling in.
+func performDelete(repo *git.Repo, branchType, name, fullBranchName string, branchConfig config.BranchConfig, force *bool, remote *bool, fetch *bool, cfg *config.Config, worktreeOpts WorktreeCleanupOptions, redirected bool) error {
 	// Determine if we should fetch before deleting (flag > config, default false).
 	shouldFetch := false
 	if fetch != nil {
@@ -144,11 +156,20 @@ func performDelete(repo *git.Repo, branchType, name, fullBranchName string, bran
 	// If we're on the branch to be deleted, switch to its parent first. This happens before the
 	// fetch/sync preflight so that fast-forwarding the parent (see below) operates on HEAD, which
 	// is what `git branch -d` checks a topic against when it has no upstream.
+	//
+	// currentBranch == fullBranchName is the ordinary case: deleting your current branch in a
+	// single-worktree repo. It can never be true anymore, though, after a #175 redirect — the
+	// redirect exists precisely because we WERE on fullBranchName, in its own linked worktree, and
+	// redirecting moved repo somewhere else. That somewhere is either the parent's own worktree
+	// (HEAD is already the parent — nothing to do) or the main worktree (HEAD is whatever was last
+	// checked out there — not necessarily the parent). The second clause below catches that case:
+	// without it, the mergedness check and the ffParent fast-forward further down would silently
+	// run against an unrelated branch, and a genuinely merged branch could be refused as unmerged.
 	currentBranch, err := repo.GetCurrentBranch()
 	if err != nil {
 		return &errors.GitError{Operation: "get current branch", Err: err}
 	}
-	if currentBranch == fullBranchName {
+	if currentBranch == fullBranchName || (redirected && currentBranch != branchConfig.Parent) {
 		parentBranch := branchConfig.Parent
 		if parentBranch != "" {
 			if err := repo.Checkout(parentBranch); err != nil {

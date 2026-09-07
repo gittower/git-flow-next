@@ -239,6 +239,93 @@ func TestDeleteForceAndForceWorktreeOnUnmergedDirtyBranch(t *testing.T) {
 	}
 }
 
+// TestDeleteFromInsideOwnWorktreeChecksMergednessAgainstParent guards against a
+// regression the #175 redirect could otherwise introduce: when the parent has
+// no dedicated worktree of its own, delete's redirect lands on the main
+// worktree, which may be checked out on some OTHER branch entirely — not the
+// parent. Without an explicit checkout of the parent there, a non-force
+// 'git branch -d' checks mergedness against whatever the main worktree
+// happens to have checked out, which can wrongly refuse a branch that is
+// genuinely merged into its real parent.
+// Steps:
+// 1. Initializes git-flow, commits a change on develop so it diverges from main, then checks main out in the main worktree (so the two are no longer the same commit, and the main worktree sits on a branch other than the parent)
+// 2. Creates feature/x from develop (inheriting the divergent commit) and a managed worktree for it
+// 3. Runs 'git flow feature delete x' (no --force) with cwd inside that worktree
+// 4. Verifies exit 0 and the branch is gone — proving mergedness was checked against develop, not against whatever the main worktree had checked out
+func TestDeleteFromInsideOwnWorktreeChecksMergednessAgainstParent(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	if err := testutil.WriteFile(t, dir, "develop-only.txt", "diverges from main"); err != nil {
+		t.Fatalf("Failed to write divergent file: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "add", "develop-only.txt"); err != nil {
+		t.Fatalf("Failed to stage divergent file: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, dir, "commit", "-m", "develop-only commit"); err != nil {
+		t.Fatalf("Failed to commit on develop: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to checkout main in the main worktree: %v\nOutput: %s", err, out)
+	}
+
+	if out, err := testutil.RunGit(t, dir, "branch", "feature/x", "develop"); err != nil {
+		t.Fatalf("Failed to create feature/x from develop: %v\nOutput: %s", err, out)
+	}
+	wtPath := addWorktree(t, dir, "feature/x")
+
+	output, err := testutil.RunGitFlow(t, wtPath, "feature", "delete", "x")
+	if err != nil {
+		t.Fatalf("feature delete from inside the worktree failed (mergedness likely checked against the wrong branch): %v\nOutput: %s", err, output)
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+}
+
+// TestDeletePostHookRunsInSurvivingWorktree guards against a regression the
+// #175 redirect could otherwise introduce: if the redirect happened only
+// inside performDelete, WithHooks (which wraps the whole operation, including
+// the post-delete hook) would still hold the ORIGINAL, pre-redirect repo
+// handle — so a delete that just removed the worktree the user was standing
+// in would run its post-hook with a working directory that no longer exists,
+// and the hook process would fail to even start.
+// Steps:
+// 1. Initializes git-flow, creates feature/x with a managed worktree
+// 2. Installs a post-flow-feature-delete hook that writes a marker file at a fixed path outside any worktree
+// 3. Runs 'git flow feature delete x' with cwd inside feature/x's own worktree
+// 4. Verifies exit 0, the worktree is gone, and the marker file was written — proving the post-hook actually ran (a stale cmd.Dir would have prevented it from starting at all)
+func TestDeletePostHookRunsInSurvivingWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+
+	markerFile := filepath.Join(t.TempDir(), "post-delete-hook-ran.txt")
+	postScript := "#!/bin/sh\npwd > \"" + markerFile + "\"\n"
+	createHookScript(t, dir, "post-flow-feature-delete", postScript)
+
+	output, err := testutil.RunGitFlow(t, wtPath, "feature", "delete", "x")
+	if err != nil {
+		t.Fatalf("feature delete from inside the worktree failed: %v\nOutput: %s", err, output)
+	}
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Errorf("Expected worktree directory %q to be gone", wtPath)
+	}
+
+	hookCwd, readErr := os.ReadFile(markerFile)
+	if readErr != nil {
+		t.Fatalf("Expected the post-delete hook to have run and written %s, got: %v", markerFile, readErr)
+	}
+	if strings.Contains(strings.TrimSpace(string(hookCwd)), wtPath) {
+		t.Errorf("Expected the post-delete hook to run outside the removed worktree, got cwd %q", strings.TrimSpace(string(hookCwd)))
+	}
+}
+
 // TestDeleteNoWorktreeFlagsAreNoOps covers spec scenario 15 for delete: with no
 // worktree for the branch, the new flags change nothing.
 // Steps:

@@ -582,6 +582,73 @@ func TestFinishContinuePreflightRefusesDirtyManagedWorktree(t *testing.T) {
 	}
 }
 
+// TestFinishContinueForceWorktreeOverridesPersistedChoice guards against a
+// regression: --continue re-resolves several finish options from freshly
+// parsed CLI flags (see resolvedOptions in handleContinue's caller), but the
+// worktree cleanup flags are persisted-only unless explicitly OR'd in. Without
+// that, a refusal naming --force-worktree (exactly the one
+// TestFinishContinuePreflightRefusesDirtyManagedWorktree provokes) would be
+// unescapable: re-running '--continue --force-worktree' would parse the flag
+// and then silently discard it, refusing identically forever.
+// Steps:
+// 1. Reproduces the same conflict-then-dirty-worktree setup as TestFinishContinuePreflightRefusesDirtyManagedWorktree
+// 2. Runs 'git flow feature finish x --continue' and confirms the same refusal (exit 6)
+// 3. Runs 'git flow feature finish x --continue --force-worktree'
+// 4. Verifies exit 0, the merge completed, the worktree was removed despite the untracked file, and the branch is gone
+func TestFinishContinueForceWorktreeOverridesPersistedChoice(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "conflict.txt", "from feature", "feature change")
+	if out, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop: %v\nOutput: %s", err, out)
+	}
+	if err := testutil.WriteFile(t, dir, "conflict.txt", "from develop"); err != nil {
+		t.Fatalf("Failed to write conflicting content on develop: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage conflicting content: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, dir, "commit", "-m", "develop change"); err != nil {
+		t.Fatalf("Failed to commit conflicting content: %v\nOutput: %s", err, out)
+	}
+
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x"); err == nil {
+		t.Fatalf("Expected the finish to conflict, got success")
+	}
+	if err := testutil.WriteFile(t, dir, "conflict.txt", "resolved"); err != nil {
+		t.Fatalf("Failed to resolve conflict: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage resolution: %v\nOutput: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(wtPath, "scratch.txt"), []byte("scratch"), 0644); err != nil {
+		t.Fatalf("Failed to dirty the worktree: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x", "--continue")
+	if got := worktreeExitCode(err); got != 6 {
+		t.Fatalf("Expected the first --continue to be refused with exit code 6, got %d\nOutput: %s", got, output)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "x", "--continue", "--force-worktree")
+	if err != nil {
+		t.Fatalf("Expected '--continue --force-worktree' to override the earlier refusal and succeed: %v\nOutput: %s", err, output)
+	}
+	if _, statErr := os.Stat(wtPath); !os.IsNotExist(statErr) {
+		t.Errorf("Expected the worktree directory to be removed, got: %v", statErr)
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected the merge state to be cleared after the successful continue")
+	}
+}
+
 // TestFinishWorktreeFlagsHaveNoConfigEquivalent pins the "Layer 3 only, no
 // config key" scoping decision for #175: unlike finish's other options
 // (--keep, --rebase, --tag, ...), --keep-worktree and --force-worktree have

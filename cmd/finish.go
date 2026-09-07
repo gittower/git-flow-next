@@ -166,7 +166,7 @@ func executeFinish(repo *git.Repo, branchType string, name string, continueOp bo
 		if continueOp {
 			// Resolve options for continue operation
 			resolvedOptions := config.ResolveFinishOptions(cfg, state.BranchType, state.BranchName, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag)
-			return handleContinue(repo, cfg, state, stateBranchConfig, resolvedOptions, mergeOptions)
+			return handleContinue(repo, cfg, state, stateBranchConfig, resolvedOptions, mergeOptions, worktreeOpts)
 		}
 
 		return &errors.MergeInProgressError{Action: "finish", BranchName: state.FullBranchName, BranchType: state.BranchType}
@@ -279,7 +279,7 @@ func executeFinish(repo *git.Repo, branchType string, name string, continueOp bo
 	// the merge's checkouts do not repurpose it (or fail outright against a
 	// parent checked out elsewhere) before the free-worktree step at the end
 	// of the state machine gets a chance to remove or detach it properly.
-	redirectedRepo, err := redirectForFinish(repo, name, branchConfig.Parent)
+	redirectedRepo, _, err := redirectPreferringParentWorktree(repo, name, branchConfig.Parent)
 	if err != nil {
 		return &errors.GitError{Operation: "resolve worktree for branch", Err: err}
 	}
@@ -456,18 +456,57 @@ func executeSteps(repo *git.Repo, cfg *config.Config, state *mergestate.MergeSta
 	}
 }
 
-func handleContinue(repo *git.Repo, cfg *config.Config, state *mergestate.MergeState, branchConfig config.BranchConfig, resolvedOptions *config.ResolvedFinishOptions, mergeOptions *config.MergeStrategyOptions) error {
-	// Worktree pre-flight (#175), repeated here: --continue bypasses
-	// executeFinish's own check entirely, so a finish that reaches branch
-	// deletion via --continue must not arrive there with an unfreeable
-	// worktree either. The persisted choice from the initial invocation is
-	// used, not re-read flags — --continue never re-passes them. Skipped on
-	// the same terms as the initial check: a kept branch keeps its worktree
-	// untouched.
-	if !finishKeepsLocalBranch(resolvedOptions) {
-		if err := preflightWorktreeCleanup(repo, state.FullBranchName, WorktreeCleanupOptions{Keep: state.KeepWorktree, Force: state.ForceWorktree}); err != nil {
-			return err
+func handleContinue(repo *git.Repo, cfg *config.Config, state *mergestate.MergeState, branchConfig config.BranchConfig, resolvedOptions *config.ResolvedFinishOptions, mergeOptions *config.MergeStrategyOptions, worktreeOpts WorktreeCleanupOptions) error {
+	// Worktree handling (#175) applies only to finish, which is the only
+	// action that reaches handleDeleteBranchStep — integrate shares this state
+	// machine but never deletes the integrated branch (it terminates at
+	// stepIntegrateDone instead), so it has no worktree to free and no
+	// business being redirected to another one either.
+	if state.Action != "integrate" {
+		// The persisted choice from the initial invocation is the default, but
+		// a flag passed directly on THIS --continue invocation can still
+		// enable what the initial run did not: both flags only ever make
+		// cleanup MORE permissive (detach instead of remove, or remove despite
+		// dirt), so OR-ing them in has no unsafe direction to guard against.
+		// Without this, a user refused here for a worktree that got dirtied
+		// during conflict resolution (the refusal names --force-worktree)
+		// would find that re-running '--continue --force-worktree' has no
+		// effect — the flag would be parsed and then silently discarded. The
+		// merged choice is written back onto the state so it also governs
+		// handleDeleteBranchStep later in this same run, and survives being
+		// persisted again if a further conflict stops here.
+		state.KeepWorktree = state.KeepWorktree || worktreeOpts.Keep
+		state.ForceWorktree = state.ForceWorktree || worktreeOpts.Force
+
+		// Worktree pre-flight (#175), repeated here: --continue bypasses
+		// executeFinish's own check entirely, so a finish that reaches branch
+		// deletion via --continue must not arrive there with an unfreeable
+		// worktree either. Skipped on the same terms as the initial check: a
+		// kept branch keeps its worktree untouched.
+		if !finishKeepsLocalBranch(resolvedOptions) {
+			if err := preflightWorktreeCleanup(repo, state.FullBranchName, WorktreeCleanupOptions{Keep: state.KeepWorktree, Force: state.ForceWorktree}); err != nil {
+				return err
+			}
 		}
+
+		// Redirect away from the branch's own worktree (#175), mirroring
+		// executeFinish's own redirect — unconditional, like that one, since
+		// it serves the merge-completion steps below (rebase/merge-continue,
+		// commit) regardless of whether cleanup itself is skipped for a kept
+		// branch. A finish invoked from inside that worktree was already
+		// redirected for its initial run, but --continue is a fresh process
+		// invocation, and the user may still be sitting in the original
+		// worktree when they run it — the conflict they are resolving
+		// actually lives in the redirected location (the parent's own
+		// worktree, or the main worktree), not necessarily where THIS process
+		// starts. This picks the same destination the initial run did,
+		// deterministically, so the calls below run against the worktree that
+		// actually holds the conflict.
+		redirectedRepo, _, err := redirectPreferringParentWorktree(repo, state.FullBranchName, state.ParentBranch)
+		if err != nil {
+			return &errors.GitError{Operation: "resolve worktree for branch", Err: err}
+		}
+		repo = redirectedRepo
 	}
 
 	// Handle continuation based on current step
@@ -964,8 +1003,12 @@ func handleDeleteBranchStep(repo *git.Repo, cfg *config.Config, state *mergestat
 	// to staleness across a --continue). Skipped when the branch is being kept:
 	// nothing is forcing the worktree to go anywhere in that case.
 	if !keepLocal {
+		parentEntry, err := repo.WorktreeForBranch(state.ParentBranch)
+		if err != nil {
+			return &errors.GitError{Operation: "look up worktree for the parent branch", Err: err}
+		}
 		parentWorktree := ""
-		if parentEntry, err := repo.WorktreeForBranch(state.ParentBranch); err == nil && parentEntry != nil && !parentEntry.Main {
+		if parentEntry != nil && !parentEntry.Main {
 			parentWorktree = parentEntry.Path
 		}
 		freedRepo, err := freeWorktreeForBranch(repo, state.FullBranchName, WorktreeCleanupOptions{Keep: state.KeepWorktree, Force: state.ForceWorktree}, parentWorktree)

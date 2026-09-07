@@ -96,7 +96,9 @@ func executeIntegrate(repo *git.Repo, name string, continueOp bool, abortOp bool
 			resolved.ShouldSign = state.ShouldSign
 			resolved.SigningKey = state.SigningKey
 			branchConfig := cfg.Branches[state.BranchType]
-			return handleContinue(repo, cfg, state, branchConfig, resolved, mergeOptions)
+			// Integrate never reaches worktree handling (#175) — see
+			// handleContinue's own guard — so the zero value is inert here.
+			return handleContinue(repo, cfg, state, branchConfig, resolved, mergeOptions, WorktreeCleanupOptions{})
 		}
 		return &errors.MergeInProgressError{Action: "integrate", BranchName: state.FullBranchName}
 	}

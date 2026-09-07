@@ -219,12 +219,13 @@ func worktreeStatusLines(path string) ([]string, error) {
 	return lines, nil
 }
 
-// WorktreeOperationInProgress reports whether the worktree at path has a merge,
-// rebase, or bisect underway, and a short label naming which one for use in an
-// error message. It checks the worktree's OWN git-dir directly — the files a
-// git subcommand run there would itself be racing to finish or abort — rather
-// than shelling out for a status a caller only needs to decide whether it is
-// safe to detach or remove the worktree at all.
+// WorktreeOperationInProgress reports whether the worktree at path has a
+// merge, rebase, bisect, cherry-pick, or revert underway, and a short label
+// naming which one for use in an error message. It checks the worktree's OWN
+// git-dir directly — the files a git subcommand run there would itself be
+// racing to finish or abort — rather than shelling out for a status a caller
+// only needs to decide whether it is safe to detach or remove the worktree at
+// all.
 func (r *Repo) WorktreeOperationInProgress(path string) (string, bool, error) {
 	gitDir, err := worktreeGitDir(path)
 	if err != nil {
@@ -243,6 +244,8 @@ func (r *Repo) WorktreeOperationInProgress(path string) (string, bool, error) {
 		{"rebase", "rebase-apply"},
 		{"merge", "MERGE_HEAD"},
 		{"bisect", "BISECT_LOG"},
+		{"cherry-pick", "CHERRY_PICK_HEAD"},
+		{"revert", "REVERT_HEAD"},
 	}
 	for _, m := range markers {
 		switch _, statErr := os.Stat(filepath.Join(gitDir, m.entry)); {

@@ -725,7 +725,7 @@ func (e *WorktreeDirtyError) ExitCode() ExitCode {
 }
 
 // WorktreeOperationInProgressError indicates a worktree cannot be freed because
-// it has a merge, rebase, or bisect underway. Removing it would discard that
+// it has a merge, rebase, bisect, cherry-pick, or revert underway. Removing it would discard that
 // operation's state along with everything else --force already covers, and
 // detaching is refused unconditionally: it would abandon the operation with no
 // way back to it, and detaching is supposed to need no force at all since it
