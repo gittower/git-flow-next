@@ -315,17 +315,12 @@ func executeFinish(repo *git.Repo, branchType string, name string, continueOp bo
 		}
 	}
 
-	// Redirect away from the branch's own worktree before the merge starts, so
-	// the merge's checkouts do not repurpose it (or fail outright against a
-	// parent checked out elsewhere) before the free-worktree step at the end
-	// of the state machine gets a chance to remove or detach it properly.
-	redirectedRepo, _, err := redirectPreferringParentWorktree(repo, name, branchConfig.Parent)
-	if err != nil {
-		return &errors.GitError{Operation: "resolve worktree for branch", Err: err}
-	}
-
-	// Regular finish command flow
-	return finishBranch(redirectedRepo, cfg, branchType, name, branchConfig, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag, worktreeOpts)
+	// Regular finish command flow. repo is passed UNREDIRECTED: finishBranch
+	// runs the pre-finish hook before redirecting (see its own comment) — a
+	// version-bump hook is documented and tested (TestFinishFFOnlyAcceptsTopic
+	// MovedByPreFinishHook) to run with the topic branch checked out, which is
+	// only still true here, before any redirect has moved repo elsewhere.
+	return finishBranch(repo, cfg, branchType, name, branchConfig, tagOptions, retentionOptions, mergeOptions, fetch, noVerify, push, pushTag, worktreeOpts)
 }
 
 // finishKeepsLocalBranch reports whether the resolved options will keep the
@@ -440,6 +435,21 @@ func finishBranch(repo *git.Repo, cfg *config.Config, branchType string, name st
 	if err := hooks.RunPreHook(repo, branchType, hooks.HookActionFinish, hookCtx); err != nil {
 		return err
 	}
+
+	// Redirect away from the branch's own worktree (#175), now that the
+	// pre-finish hook has run — a version-bump hook is expected and tested
+	// (TestFinishFFOnlyAcceptsTopicMovedByPreFinishHook) to commit on the
+	// topic branch, which requires repo to still be bound there when
+	// RunPreHook above ran. Everything from here on is the merge/state-
+	// machine work the redirect exists for: it must not repurpose the
+	// topic's worktree (or fail outright against a parent checked out
+	// elsewhere) before the free-worktree step at the end gets a chance to
+	// remove or detach it properly.
+	redirectedRepo, _, err := redirectPreferringParentWorktree(repo, name, branchConfig.Parent)
+	if err != nil {
+		return &errors.GitError{Operation: "resolve worktree for branch", Err: err}
+	}
+	repo = redirectedRepo
 
 	// Save merge state before starting
 	state := &mergestate.MergeState{
@@ -1044,6 +1054,34 @@ func handleDeleteBranchStep(repo *git.Repo, cfg *config.Config, state *mergestat
 		keepLocal = true
 	}
 
+	// Clear the merge state first, before anything below. By this point all
+	// merges, tags, and child updates are complete — the state is only needed
+	// for conflict recovery, which is no longer possible — so it is cleared
+	// unconditionally rather than contingent on what follows succeeding.
+	// state itself (the in-memory struct) stays valid for the rest of this
+	// function; only its on-disk copy goes away.
+	if err := mergestate.ClearMergeState(repo); err != nil {
+		return &errors.GitError{Operation: "clear merge state", Err: err}
+	}
+
+	// Delete the remote branch (if any) BEFORE freeing the worktree (#175):
+	// freeing is a one-way trip (a git-flow-created worktree is removed
+	// outright; a hand-made one, detached, does not un-detach itself), and a
+	// remote that rejects the deletion — a protected branch, a permission
+	// error — must leave the worktree, and the local branch below it, exactly
+	// as they were rather than losing the worktree for a finish that then
+	// doesn't complete.
+	// Delete the remote branch (if any) BEFORE freeing the worktree (#175):
+	// freeing is a one-way trip (a git-flow-created worktree is removed
+	// outright; a hand-made one, detached, does not un-detach itself), and a
+	// remote that rejects the deletion — a protected branch, a permission
+	// error — must leave the worktree, and the local branch below it, exactly
+	// as they were rather than losing the worktree for a finish that then
+	// doesn't complete.
+	if err := deleteRemoteBranchIfNeeded(repo, state, cfg.Remote, keepRemote); err != nil {
+		return err
+	}
+
 	// Free the topic branch's worktree (#175) before the branch is checked away
 	// from and deleted below — a branch checked out in a linked worktree cannot
 	// be deleted while it is checked out there. Re-derives WorktreeForBranch and
@@ -1076,18 +1114,10 @@ func handleDeleteBranchStep(repo *git.Repo, cfg *config.Config, state *mergestat
 		return &errors.GitError{Operation: fmt.Sprintf("checkout branch '%s'", landing), Err: err}
 	}
 
-	// Clear the merge state before branch deletion. By this point all merges,
-	// tags, and child updates are complete — the state is only needed for conflict
-	// recovery which is no longer possible. Clearing early ensures a failed branch
-	// deletion (e.g. remote permission error) doesn't leave stale merge state.
-	if err := mergestate.ClearMergeState(repo); err != nil {
-		return &errors.GitError{Operation: "clear merge state", Err: err}
-	}
-
-	// Delete branches based on settings
+	// Delete the local branch now that its worktree, if any, is free.
 	// Use force delete since we've already merged the branch
 	forceDelete := true
-	if err := deleteBranchesIfNeeded(repo, state, cfg.Remote, keepRemote, keepLocal, forceDelete); err != nil {
+	if err := deleteLocalBranchIfNeeded(repo, state, keepLocal, forceDelete); err != nil {
 		return err
 	}
 
@@ -1334,26 +1364,38 @@ func updateChildBranch(repo *git.Repo, cfg *config.Config, branchName string, st
 	return nil
 }
 
-// deleteBranchesIfNeeded deletes branches based on retention settings
-func deleteBranchesIfNeeded(repo *git.Repo, state *mergestate.MergeState, remote string, keepRemote, keepLocal, forceDelete bool) error {
-	// Delete remote branch if not keeping it and if remote branch exists
-	if !keepRemote {
-		// Only attempt to delete if the remote branch actually exists
-		if repo.RemoteBranchExists(remote, state.FullBranchName) {
-			remoteBranch := fmt.Sprintf("%s/%s", remote, state.FullBranchName)
-			if err := repo.DeleteRemoteBranch(remote, state.FullBranchName); err != nil {
-				return &errors.GitError{Operation: fmt.Sprintf("delete remote branch '%s'", remoteBranch), Err: err}
-			}
-		}
+// deleteRemoteBranchIfNeeded deletes state's remote tracking branch unless
+// keepRemote is set or no such branch exists.
+//
+// Split from local deletion (#175 follow-up) so handleDeleteBranchStep can
+// run this BEFORE freeing the topic's worktree: freeing is a one-way trip (a
+// git-flow-created worktree is removed outright; a hand-made one, detached,
+// does not un-detach itself), and a remote that rejects the deletion — a
+// protected branch, a permission error — must leave the worktree exactly as
+// it was, not just the local branch. See deleteLocalBranchIfNeeded, which the
+// worktree free step sits between this and.
+func deleteRemoteBranchIfNeeded(repo *git.Repo, state *mergestate.MergeState, remote string, keepRemote bool) error {
+	if keepRemote || !repo.RemoteBranchExists(remote, state.FullBranchName) {
+		return nil
 	}
-
-	// Delete local branch if not keeping it
-	if !keepLocal {
-		if err := repo.DeleteBranch(state.FullBranchName, forceDelete); err != nil {
-			return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", state.FullBranchName), Err: err}
-		}
+	remoteBranch := fmt.Sprintf("%s/%s", remote, state.FullBranchName)
+	if err := repo.DeleteRemoteBranch(remote, state.FullBranchName); err != nil {
+		return &errors.GitError{Operation: fmt.Sprintf("delete remote branch '%s'", remoteBranch), Err: err}
 	}
+	return nil
+}
 
+// deleteLocalBranchIfNeeded deletes state's local branch unless keepLocal is
+// set. Runs after the worktree holding it (if any) has already been freed —
+// see deleteRemoteBranchIfNeeded's comment for why the two are split and
+// ordered around that step rather than run back to back.
+func deleteLocalBranchIfNeeded(repo *git.Repo, state *mergestate.MergeState, keepLocal, forceDelete bool) error {
+	if keepLocal {
+		return nil
+	}
+	if err := repo.DeleteBranch(state.FullBranchName, forceDelete); err != nil {
+		return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", state.FullBranchName), Err: err}
+	}
 	return nil
 }
 

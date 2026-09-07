@@ -802,3 +802,100 @@ func TestFinishWorktreeFlagsHaveNoConfigEquivalent(t *testing.T) {
 		t.Error("Expected feature/x to be deleted")
 	}
 }
+
+// TestFinishPreservesWorktreeWhenRemoteDeletionFails guards against a
+// regression: freeing the topic's worktree used to happen before remote
+// branch deletion was attempted, so a remote that rejects the deletion (a
+// protected branch, a permission error) left the worktree gone even though
+// the branch itself correctly survived. deleteRemoteBranchIfNeeded now runs,
+// and can fail, before the worktree is freed at all — matching
+// TestFinishClearsMergeStateWhenBranchDeletionFails's existing pinned
+// behavior for the no-worktree case (merge state is still cleared regardless;
+// this test adds the worktree that one doesn't have).
+// Steps:
+// 1. Initializes git-flow with a remote, creates feature/x with a managed worktree, pushes it
+// 2. Configures the remote to reject branch deletions (receive.denyDeletes)
+// 3. Runs 'git flow feature finish x'
+// 4. Verifies a non-zero exit, the remote branch survives, and BOTH the local branch and its worktree survive
+func TestFinishPreservesWorktreeWhenRemoteDeletionFails(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	remoteDir, err := testutil.AddRemote(t, dir, "origin", true)
+	if err != nil {
+		t.Fatalf("Failed to add remote: %v", err)
+	}
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "feature-x.txt", "hello", "add feature-x.txt")
+	if out, err := testutil.RunGit(t, dir, "push", "origin", "feature/x"); err != nil {
+		t.Fatalf("Failed to push feature/x: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, remoteDir, "config", "receive.denyDeletes", "true"); err != nil {
+		t.Fatalf("Failed to configure receive.denyDeletes: %v\nOutput: %s", err, out)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x")
+	if err == nil {
+		t.Fatalf("Expected finish to fail when remote deletion is rejected, got success: %s", output)
+	}
+	remoteRefs, lsErr := testutil.RunGit(t, dir, "ls-remote", "--heads", "origin", "feature/x")
+	if lsErr != nil {
+		t.Fatalf("Failed to list remote refs: %v", lsErr)
+	}
+	if remoteRefs == "" {
+		t.Fatal("Expected the remote branch to survive the rejected deletion")
+	}
+	if !testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to survive the rejected remote deletion")
+	}
+	if _, statErr := os.Stat(wtPath); statErr != nil {
+		t.Errorf("Expected the worktree directory to survive the rejected remote deletion, got: %v", statErr)
+	}
+}
+
+// TestFinishPreHookRunsOnTopicWorktreeWhenRedirected guards against a
+// regression: passing the redirected repo into finishBranch also changed the
+// pre-finish hook's working directory, since hooks run with
+// cmd.Dir = repo.WorkTree(). A version-bump hook — the documented,
+// tested (TestFinishFFOnlyAcceptsTopicMovedByPreFinishHook) use case — is
+// expected to commit ON THE TOPIC BRANCH; redirected too early, it would
+// instead commit on the parent's own worktree (or main), landing the bump in
+// the wrong place and, under --ff-only, risking advancing the parent itself.
+// Steps:
+// 1. Initializes git-flow, moves the main worktree onto 'main', creates feature/x with a managed worktree
+// 2. Installs a pre-flow-feature-finish hook that commits a version bump
+// 3. Runs 'git flow feature finish x' with cwd inside the feature worktree
+// 4. Verifies exit 0 and that develop carries BOTH the feature content and the hook's version bump
+func TestFinishPreHookRunsOnTopicWorktreeWhenRedirected(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	if out, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to move the main worktree onto main: %v\nOutput: %s", err, out)
+	}
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "feature-x.txt", "hello", "add feature-x.txt")
+
+	createHookScript(t, dir, "pre-flow-feature-finish", `#!/bin/sh
+set -e
+echo 1.2.3 > version.txt
+git add version.txt
+git commit -q -m "Hook bumped the version"
+`)
+
+	output, err := testutil.RunGitFlow(t, wtPath, "feature", "finish", "x")
+	if err != nil {
+		t.Fatalf("feature finish from inside the worktree failed: %v\nOutput: %s", err, output)
+	}
+	assertFileOnBranch(t, dir, "develop", "feature-x.txt")
+	assertFileOnBranch(t, dir, "develop", "version.txt")
+	if _, statErr := os.Stat(wtPath); !os.IsNotExist(statErr) {
+		t.Errorf("Expected the worktree directory to be removed, got: %v", statErr)
+	}
+}
