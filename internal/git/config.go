@@ -266,6 +266,44 @@ func (r *Repo) GetConfigLocalRegexpLines(pattern string) ([]string, error) {
 	return strings.Split(string(output), "\n"), nil
 }
 
+// ConfigEntry is one key/value pair from a NUL-delimited config read.
+type ConfigEntry struct {
+	Key   string
+	Value string
+}
+
+// GetConfigLocalRegexpNUL returns every local key/value pair matching pattern,
+// read with `git config --local --null --get-regexp`, in file order — or an
+// empty slice when nothing matches. A multi-value key yields one entry per
+// value, in file order, so "last one wins" falls out of iterating the result
+// in order.
+//
+// Unlike GetConfigLocalRegexpLines, which splits `\n`-delimited output and so
+// truncates a value at its first embedded newline, `--null` terminates each
+// record with NUL and separates a record's key from its value with the first
+// `\n`, leaving the value's own newlines (if any) intact. Use this whenever a
+// value must round-trip exactly regardless of what it contains; use the
+// line-oriented variant only where callers already assume single-line values.
+func (r *Repo) GetConfigLocalRegexpNUL(pattern string) ([]ConfigEntry, error) {
+	output, err := r.gitCmd("config", "--local", "--null", "--get-regexp", pattern).Output()
+	if err != nil {
+		// exit 1 = no matching keys (a valid, possibly empty result).
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return []ConfigEntry{}, nil
+		}
+		return nil, fmt.Errorf("failed to get local git config matching %s: %w", pattern, err)
+	}
+	var entries []ConfigEntry
+	for _, record := range strings.Split(string(output), "\x00") {
+		if record == "" {
+			continue
+		}
+		key, value, _ := strings.Cut(record, "\n")
+		entries = append(entries, ConfigEntry{Key: key, Value: value})
+	}
+	return entries, nil
+}
+
 // AddConfig adds a value to a (possibly multi-value) Git config key in local
 // scope with `git config --add`. Unlike SetConfig it never replaces existing
 // values, so callers can reproduce an ordered multi-value list by unsetting then

@@ -66,7 +66,7 @@ func handMadeWorktree(t *testing.T, dir string, branch string) string {
 // of the real one on PATH. The fake execs the real git for every invocation
 // except the one whose full argument string equals argv, for which it exits 128.
 //
-// The exit code is 128 and not 1 on purpose: GetConfigLocalRegexpLines treats
+// The exit code is 128 and not 1 on purpose: GetConfigLocalRegexpNUL treats
 // exit 1 as "no matching keys" and returns success, so a shim failing with 1
 // would make the marker-read test assert nothing.
 //
@@ -1015,7 +1015,7 @@ func TestListWorktreesAbortsWhenMarkerListFails(t *testing.T) {
 
 	createFreeBranch(t, dir, "feature/user-auth")
 	addWorktree(t, dir, "feature/user-auth")
-	env := failingGitShim(t, `config --local --get-regexp ^gitflow\.worktree\..*\.managed$`)
+	env := failingGitShim(t, `config --local --null --get-regexp ^gitflow\.worktree\..*\.managed$`)
 
 	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, env, "feature", "list", "--worktrees")
 	if code := worktreeExitCode(err); code != 3 {
