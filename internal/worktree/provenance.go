@@ -94,16 +94,20 @@ func ListMarkers(repo *git.Repo) ([]string, error) {
 // wins, which is what `git config --get` returns and therefore what IsManaged
 // sees.
 func listMarkers(repo *git.Repo) ([]string, map[string]string, error) {
-	lines, err := repo.GetConfigLocalRegexpLines(`^gitflow\.worktree\..*\.managed$`)
+	// NUL-delimited, not line-oriented: a marker value containing an embedded
+	// newline (however it got there — no code path writes one, but nothing
+	// stops a hand-edited config from holding one) would otherwise be
+	// truncated at its first line, disagreeing with IsManaged's single-key
+	// read of the same value.
+	entries, err := repo.GetConfigLocalRegexpNUL(`^gitflow\.worktree\..*\.managed$`)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list worktree provenance markers: %w", err)
 	}
 
 	var order []string
 	values := map[string]string{}
-	for _, line := range lines {
-		fields := strings.SplitN(strings.TrimSpace(line), " ", 2)
-		match := markerKeyPattern.FindStringSubmatch(fields[0])
+	for _, entry := range entries {
+		match := markerKeyPattern.FindStringSubmatch(entry.Key)
 		if match == nil {
 			continue
 		}
@@ -111,14 +115,11 @@ func listMarkers(repo *git.Repo) ([]string, map[string]string, error) {
 		if _, seen := values[branch]; !seen {
 			order = append(order, branch)
 		}
-		values[branch] = ""
-		if len(fields) > 1 {
-			// The separator sits before the raw value, so a value stored with
-			// surrounding whitespace arrives with it attached. Trim it, or
-			// " true " would parse false here while IsManaged — reading through
-			// GetConfigLocal, which trims — parses the same marker true.
-			values[branch] = strings.TrimSpace(fields[1])
-		}
+		// The raw value follows the key/value newline as-is, so a value stored
+		// with surrounding whitespace arrives with it attached. Trim it, or
+		// " true " would parse false here while IsManaged — reading through
+		// GetConfigLocal, which trims — parses the same marker true.
+		values[branch] = strings.TrimSpace(entry.Value)
 	}
 	return order, values, nil
 }
