@@ -66,7 +66,7 @@ func handMadeWorktree(t *testing.T, dir string, branch string) string {
 // of the real one on PATH. The fake execs the real git for every invocation
 // except the one whose full argument string equals argv, for which it exits 128.
 //
-// The exit code is 128 and not 1 on purpose: GetConfigLocalRegexpLines treats
+// The exit code is 128 and not 1 on purpose: GetConfigLocalRegexpNUL treats
 // exit 1 as "no matching keys" and returns success, so a shim failing with 1
 // would make the marker-read test assert nothing.
 //
@@ -733,6 +733,50 @@ func TestListWorktreesPaddedMarkerReadsManagedEverywhere(t *testing.T) {
 	}
 }
 
+// TestListWorktreesNewlineMarkerReadsUnmanagedEverywhere pins that an embedded
+// newline in a marker's value cannot make the two readers disagree. 'worktree
+// list' reads the value through IsManaged, a single-key '--get' that returns
+// the whole value, where "true\nfalse" matches neither ParseBool's true nor
+// false cases and so parses false (unmanaged). This column instead reads
+// markers in bulk via '--get-regexp' and previously split that output on '\n',
+// truncating the value to its first line "true" and reporting managed instead
+// — the same over-claiming direction '(unsafe)' as the false-marker case above.
+// Steps:
+// 1. Creates feature/by-flow with 'git flow worktree add', which writes the marker as true
+// 2. Rewrites the marker by hand to the two-line value "true\nfalse"
+// 3. Runs 'feature list --worktrees' and verifies the cell carries "(unmanaged)"
+// 4. Runs 'worktree list' and verifies its row for the same worktree carries the same tag
+func TestListWorktreesNewlineMarkerReadsUnmanagedEverywhere(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	createFreeBranch(t, dir, "feature/by-flow")
+	flowPath := addWorktree(t, dir, "feature/by-flow")
+	if out, err := testutil.RunGit(t, dir, "config", "gitflow.worktree.feature/by-flow.managed", "true\nfalse"); err != nil {
+		t.Fatalf("Failed to rewrite the provenance marker: %v\nOutput: %s", err, out)
+	}
+
+	stdout, stderr, err := testutil.RunGitFlowStreams(t, dir, "feature", "list", "--worktrees")
+	if err != nil {
+		t.Fatalf("Failed to list feature branches: %v\nStderr: %s", err, stderr)
+	}
+	want := relCell(t, dir, flowPath) + " (unmanaged)"
+	if cell := listCell(t, stdout, "by-flow"); cell != want {
+		t.Errorf("Expected cell %q, got %q\nOutput:\n%s", want, cell, stdout)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "worktree", "list")
+	if err != nil {
+		t.Fatalf("Failed to list worktrees: %v\nOutput: %s", err, output)
+	}
+	wantRow := fmt.Sprintf("feature/by-flow  %s  (unmanaged)", flowPath)
+	if !strings.Contains(output, wantRow) {
+		t.Errorf("Expected row %q in 'worktree list' output:\n%s", wantRow, output)
+	}
+}
+
 // TestListWorktreesMarksUnusableWorktreeMissing pins that "(missing)" means the
 // worktree is not present as a worktree, not merely that os.Stat failed: a
 // regular file at the recorded path raises ENOTDIR rather than ENOENT, which
@@ -971,7 +1015,7 @@ func TestListWorktreesAbortsWhenMarkerListFails(t *testing.T) {
 
 	createFreeBranch(t, dir, "feature/user-auth")
 	addWorktree(t, dir, "feature/user-auth")
-	env := failingGitShim(t, `config --local --get-regexp ^gitflow\.worktree\..*\.managed$`)
+	env := failingGitShim(t, `config --local --null --get-regexp ^gitflow\.worktree\..*\.managed$`)
 
 	stdout, stderr, err := testutil.RunGitFlowStreamsWithEnv(t, dir, env, "feature", "list", "--worktrees")
 	if code := worktreeExitCode(err); code != 3 {
@@ -1013,7 +1057,7 @@ func TestListRejectsPatternArgument(t *testing.T) {
 // TestListWorktreesUsesBulkReads pins the performance requirement: every row is
 // resolved from bulk reads, so the column costs one 'worktree list', one marker
 // read and one 'git status' per LIVE linked worktree — never a per-row
-// WorktreeForBranch or IsManaged.
+// WorktreeForBranch or marker lookup.
 //
 // GIT_TRACE is pointed at a FILE, never set to 1: the value 1 writes to stderr,
 // which would fold trace lines into the output of git-flow's CombinedOutput call

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/gittower/git-flow-next/internal/config"
@@ -1083,17 +1084,29 @@ func executeConfigList(repo *git.Repo) error {
 	var baseBranches []string
 	var topicBranches []string
 
+	// Both types are matched explicitly rather than one of them catching
+	// whatever is left: every start records a runtime gitflow.branch.<branch>.base
+	// key, which the config parser turns into an entry with no type at all. Those
+	// entries describe an active branch, not a configured branch type, and a
+	// catch-all would print them as types with every field empty.
 	for name, branch := range cfg.Branches {
-		if branch.Type == string(config.BranchTypeBase) {
+		switch branch.Type {
+		case string(config.BranchTypeBase):
 			if branch.Parent == "" {
 				trunkBranches = append(trunkBranches, name)
 			} else {
 				baseBranches = append(baseBranches, name)
 			}
-		} else {
+		case string(config.BranchTypeTopic):
 			topicBranches = append(topicBranches, name)
 		}
 	}
+
+	// Ranging a map yields nondeterministic order; sort so identical runs on an
+	// unchanged repository list the branches in the same order, matching overview.
+	sort.Strings(trunkBranches)
+	sort.Strings(baseBranches)
+	sort.Strings(topicBranches)
 
 	// Display base branches
 	fmt.Println("Base branches:")

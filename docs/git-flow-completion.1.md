@@ -22,7 +22,7 @@ The generated script includes Cobra's standard completion for the **git-flow** b
 
 ### Zsh
 
-No bridge is needed. Cobra's output defines a `_git-flow` function, and zsh's built-in **_git** completion auto-discovers `_git-<subcommand>` functions. Both **git-flow** and **git flow** completion work once the script is sourced or placed in **fpath**.
+Zsh's built-in **_git** completion auto-discovers `_git-<subcommand>` functions in **fpath**, so both **git-flow** and **git flow** invocations reach the generated `_git-flow` function. When **_git** dispatches for **git flow**, it shifts the command words so that `words[1]` is `flow` rather than `git-flow`. Cobra's generated body uses `words[1]` to invoke the binary, which would fail. The generated script includes a bridge that rewrites `words[1]` back to `git-flow` before Cobra's logic runs.
 
 ### Fish
 

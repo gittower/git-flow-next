@@ -115,7 +115,7 @@ func list(repo *git.Repo, branchType string, showWorktrees bool) error {
 //
 // It resolves every row from BULK reads — one `git worktree list`, one marker
 // read, and one `git status` per LIVE linked worktree of a listed branch. Neither
-// repo.WorktreeForBranch nor worktree.IsManaged may be called here: each
+// repo.WorktreeForBranch nor a per-branch marker read may be used here: each
 // re-queries git, which would make listing cost one git process per branch.
 //
 // A failed bulk read aborts (SC-13). Degrading would render an active lie —
