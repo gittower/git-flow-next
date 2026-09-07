@@ -163,6 +163,20 @@ If no remote is configured, the push stage is skipped with a note and finish sti
 
 CLI push flags are not persisted across `--continue`. Options are re-resolved on continue, so to enable a push that must survive a conflict-and-continue, set the `gitflow.<type>.finish.push` config key rather than relying on the flag.
 
+### Worktree Cleanup
+
+A branch checked out in a linked worktree cannot be deleted while it is checked out there, so once the merge (and any child-branch updates) complete, finish frees the topic branch's worktree before deleting the branch. What "freeing" means depends on who created it: git-flow removes the ones it created; a worktree created by hand (`git worktree add`) is kept, with its HEAD detached from the branch instead — the directory and every file in it, including uncommitted work, stay exactly as they were. Neither flag has a git config equivalent; both are CLI-only, like **git-flow-checkout**(1)'s **--worktree**.
+
+**--keep-worktree**
+: Keep the branch's worktree instead of removing it, even when git-flow created it. The directory survives on a detached HEAD, and the branch is still deleted. Has no additional effect on a worktree git-flow did not create, which is always detached rather than removed. Persisted across **--continue**, so a conflict resolved after finishing with this flag still detaches rather than removes.
+
+**--force-worktree**, **-W**
+: Remove a git-flow-created worktree even if it has uncommitted or untracked changes, discarding them. Only applies to the removal path — detaching never needs it, since detaching changes no files. If the worktree has a merge, rebase, or bisect in progress, finish is refused before the merge starts, regardless of **--force-worktree**: an in-progress operation cannot be abandoned by either freeing path. Persisted across **--continue** like **--keep-worktree**.
+
+The worktree pre-flight (the dirty/in-progress check above) runs before the merge starts, and again, identically, at the top of a resumed **--continue** — a finish that reaches branch deletion by either path never arrives there with an unfreeable worktree. **--keep**/**--keeplocal** (which retain the branch itself) skip worktree handling entirely: freeing a worktree is only ever done because the branch is about to disappear.
+
+If you are standing inside the worktree being removed, the destination written to **GIT_FLOW_CD_FILE** (see **git-flow-worktree**(1)) is the parent branch's own worktree if it has one, otherwise the main worktree. Detaching never navigates: the directory stays exactly where it is. A branch with no worktree, or one checked out in the main worktree, is unaffected by either flag.
+
 ### Hook Control
 
 **--no-verify**
@@ -423,6 +437,23 @@ Useful in CI/CD environments where hooks might interfere:
 git flow release finish 1.2.0 --no-verify --tag
 ```
 
+### Worktree Cleanup
+
+Finish a branch with a git-flow-created worktree (the worktree is removed automatically):
+```bash
+git flow feature finish my-feature
+```
+
+Finish the branch but keep its worktree, detached:
+```bash
+git flow feature finish my-feature --keep-worktree
+```
+
+Finish a branch whose git-flow-created worktree has uncommitted changes:
+```bash
+git flow feature finish my-feature --force-worktree
+```
+
 ### Pushing After Finish
 
 Push the target branch (and any auto-updated child branches) plus the created tag after finishing:
@@ -529,11 +560,11 @@ git config gitflow.<type>.finish.noverify true
 : A required branch (the topic branch or its parent) does not exist.
 
 **6**
-: A validation error (the topic or parent branch is not in sync with its remote, or the `--ff-only` precondition failed because the parent carries commits the topic branch does not).
+: A validation error (the topic or parent branch is not in sync with its remote, the `--ff-only` precondition failed because the parent carries commits the topic branch does not, the branch's git-flow-created worktree has uncommitted or untracked changes and `--force-worktree` was not given, or its worktree has a merge, rebase, or bisect in progress).
 
 ## SEE ALSO
 
-**git-flow**(1), **git-flow-start**(1), **git-flow-config**(1), **git-flow-update**(1), **gitflow-config**(5)
+**git-flow**(1), **git-flow-start**(1), **git-flow-config**(1), **git-flow-update**(1), **git-flow-delete**(1), **git-flow-worktree**(1), **gitflow-config**(5)
 
 ## NOTES
 

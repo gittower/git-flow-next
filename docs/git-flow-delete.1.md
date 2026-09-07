@@ -44,6 +44,20 @@ The delete operation removes the specified topic branch from the local repositor
 **--no-fetch**
 : Don't fetch from remote before deleting (overrides config). This skips only the fetch; the topic sync check still runs against existing local tracking data.
 
+### Worktree Cleanup
+
+A branch checked out in a linked worktree cannot be deleted while it is checked out there, so delete frees the worktree first. What "freeing" means depends on who created it: git-flow removes the ones it created; a worktree created by hand (`git worktree add`) is kept, with its HEAD detached from the branch instead — the directory and every file in it, including uncommitted work, stay exactly as they were. Neither flag has a git config equivalent; both are CLI-only, like **git-flow-checkout**(1)'s **--worktree**.
+
+**--keep-worktree**
+: Keep the branch's worktree instead of removing it, even when git-flow created it. The directory survives on a detached HEAD, and the branch is still deleted. Has no additional effect on a worktree git-flow did not create, which is always detached rather than removed.
+
+**--force-worktree**, **-W**
+: Remove a git-flow-created worktree even if it has uncommitted or untracked changes, discarding them. Only applies to the removal path — detaching never needs it, since detaching changes no files. If the worktree has a merge, rebase, or bisect in progress, deletion is refused regardless of **--force-worktree**: an in-progress operation cannot be abandoned by either freeing path.
+
+If you are standing inside the worktree being removed, its path is written to **GIT_FLOW_CD_FILE** (see **git-flow-worktree**(1)) as the destination, and delete always offers the main worktree — unlike **finish**, delete has no merge target of its own to prefer instead. Detaching never navigates: the directory stays exactly where it is.
+
+A branch with no worktree, or one checked out in the main worktree, is unaffected by either flag.
+
 ## SAFETY CHECKS
 
 By default, Git prevents deletion of branches with unmerged changes. The delete command:
@@ -97,6 +111,23 @@ git flow delete --force
 Delete a branch and its remote tracking branch:
 ```bash
 git flow feature delete completed-feature --remote
+```
+
+### Worktree Cleanup
+
+Delete a branch with a git-flow-created worktree (the worktree is removed automatically):
+```bash
+git flow feature delete my-feature
+```
+
+Delete the branch but keep its worktree, detached:
+```bash
+git flow feature delete my-feature --keep-worktree
+```
+
+Delete a branch whose git-flow-created worktree has uncommitted changes:
+```bash
+git flow feature delete my-feature --force-worktree
 ```
 
 ## BRANCH NAME RESOLUTION
@@ -206,7 +237,7 @@ git checkout -b recovered-branch <commit-hash>
 
 ## SEE ALSO
 
-**git-flow**(1), **git-flow-finish**(1), **git-flow-list**(1), **git-branch**(1), **git-push**(1)
+**git-flow**(1), **git-flow-finish**(1), **git-flow-list**(1), **git-flow-worktree**(1), **git-branch**(1), **git-push**(1)
 
 ## NOTES
 
