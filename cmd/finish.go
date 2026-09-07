@@ -150,14 +150,13 @@ func executeFinish(repo *git.Repo, branchType string, name string, continueOp bo
 	// process reopens from the same location — so the state this process
 	// needs to find may not be in ITS OWN git-dir even though the user is
 	// standing exactly where the initial run started. When nothing is found
-	// locally, try the same redirect the initial run would have taken, and
-	// use whichever repo actually has it. A failure to resolve the branch
-	// name or redirect here is not fatal — it just falls through to the
-	// existing "no merge in progress" handling below, unchanged.
+	// locally, search every worktree for it. A failure to resolve the branch
+	// name here is not fatal — it just falls through to the existing "no
+	// merge in progress" handling below, unchanged.
 	if !mergestate.IsMergeInProgress(repo) && (continueOp || abortOp) {
 		if resolvedName, resolveErr := resolveBranchName(repo, name, branchConfig); resolveErr == nil {
-			if redirected, _, redirectErr := redirectPreferringParentWorktree(repo, resolvedName, branchConfig.Parent); redirectErr == nil && mergestate.IsMergeInProgress(redirected) {
-				repo = redirected
+			if found := findFinishStateAcrossWorktrees(repo, resolvedName); found != nil {
+				repo = found
 			}
 		}
 	}
@@ -463,6 +462,20 @@ func finishBranch(repo *git.Repo, cfg *config.Config, branchType string, name st
 		return &errors.GitError{Operation: "resolve worktree for branch", Err: err}
 	}
 	repo = redirectedRepo
+
+	// Refuse before the merge starts (#175 follow-up) if a child base branch
+	// due for auto-update has its own separate worktree: handleUpdateChildren
+	// Step will check it out on repo further into the state machine, after
+	// the merge (and any tag) are already done, and that checkout would fail
+	// outright exactly like the topic-worktree checks above — just too late
+	// to refuse cleanly by then. redirectPreferringParentWorktree already
+	// guarantees the PARENT is safe (it is the redirect target's own
+	// preference), but nothing steers the redirect toward a child's worktree,
+	// since a topic can have several children and the redirect is decided
+	// before any of them are even known to be in play.
+	if err := refuseIfChildWorktreeConflicts(repo, childBranches); err != nil {
+		return err
+	}
 
 	// Refuse to overwrite an operation already in progress at the redirected
 	// destination (#175 follow-up): merge state is per-worktree by design
@@ -1106,31 +1119,33 @@ func handleDeleteBranchStep(repo *git.Repo, cfg *config.Config, state *mergestat
 	// error — must leave the worktree, and the local branch below it, exactly
 	// as they were rather than losing the worktree for a finish that then
 	// doesn't complete.
-	// Delete the remote branch (if any) BEFORE freeing the worktree (#175):
-	// freeing is a one-way trip (a git-flow-created worktree is removed
-	// outright; a hand-made one, detached, does not un-detach itself), and a
-	// remote that rejects the deletion — a protected branch, a permission
-	// error — must leave the worktree, and the local branch below it, exactly
-	// as they were rather than losing the worktree for a finish that then
-	// doesn't complete.
 	if err := deleteRemoteBranchIfNeeded(repo, state, cfg.Remote, keepRemote); err != nil {
 		return err
 	}
 
 	// Free the topic branch's worktree (#175) before the branch is checked away
 	// from and deleted below — a branch checked out in a linked worktree cannot
-	// be deleted while it is checked out there. Re-derives WorktreeForBranch and
-	// provenance fresh rather than trusting an earlier lookup (cheap, and immune
-	// to staleness across a --continue). Skipped when the branch is being kept:
-	// nothing is forcing the worktree to go anywhere in that case.
+	// be deleted while it is checked out there. Re-derives provenance fresh
+	// rather than trusting an earlier lookup (cheap, and immune to staleness
+	// across a --continue). Skipped when the branch is being kept: nothing is
+	// forcing the worktree to go anywhere in that case.
 	if !keepLocal {
-		parentEntry, err := repo.WorktreeForBranch(state.ParentBranch)
+		// The navigation destination is repo's OWN current worktree — not a
+		// fresh WorktreeForBranch(state.ParentBranch) lookup. repo has been
+		// bound to the redirect target since finishBranch and never moves
+		// again, so it already IS wherever landing is about to be checked
+		// out; re-deriving the parent's worktree instead used to go stale
+		// once an auto-update child was checked out there ahead of the
+		// parent, at which point WorktreeForBranch(parent) finds nothing and
+		// a stranded user was sent to main instead of where finish actually
+		// landed.
+		mainWorkTree, err := repo.MainWorkTree()
 		if err != nil {
-			return &errors.GitError{Operation: "look up worktree for the parent branch", Err: err}
+			return &errors.GitError{Operation: "resolve the main worktree", Err: err}
 		}
 		parentWorktree := ""
-		if parentEntry != nil && !parentEntry.Main {
-			parentWorktree = parentEntry.Path
+		if !git.SamePath(repo.WorkTree(), mainWorkTree) {
+			parentWorktree = repo.WorkTree()
 		}
 		freedRepo, err := freeWorktreeForBranch(repo, state.FullBranchName, WorktreeCleanupOptions{Keep: state.KeepWorktree, Force: state.ForceWorktree}, parentWorktree)
 		if err != nil {
@@ -1275,6 +1290,69 @@ func handleIntegrateDoneStep(repo *git.Repo, state *mergestate.MergeState) error
 // =============================================================================
 // HELPER FUNCTIONS (Called by step handlers and main flow)
 // =============================================================================
+
+// findFinishStateAcrossWorktrees searches every worktree of the repository
+// for an in-progress finish operation on fullBranchName, returning a repo
+// handle bound to whichever one has it, or nil if none do.
+//
+// Replaces an earlier approach that RECOMPUTED where the initial run's
+// redirect would have landed (the parent's own worktree, or main) and
+// checked only there. That works for a merge-step conflict, where the parent
+// is still checked out at the redirect target — but not once
+// handleUpdateChildrenStep has moved on to a child, which checks the CHILD
+// out at that same location instead, making WorktreeForBranch(parent) return
+// nil and the recompute miss the state entirely (a real gap: found by an
+// audit after the fifth review round, since no round or test ever combined
+// worktrees with auto-update children). A direct search has no such
+// assumption — it finds the state wherever it actually is, regardless of
+// which step conflicted or what is currently checked out where.
+//
+// A worktree whose directory is gone, or that fails to open for any other
+// reason, is skipped rather than treated as an error: the caller's own
+// fallback (report "no merge in progress") is exactly right for a repo this
+// function cannot make sense of.
+func findFinishStateAcrossWorktrees(repo *git.Repo, fullBranchName string) *git.Repo {
+	entries, err := repo.ListWorktrees()
+	if err != nil {
+		return nil
+	}
+	for _, entry := range entries {
+		candidate, openErr := git.Open(entry.Path)
+		if openErr != nil {
+			continue
+		}
+		if !mergestate.IsMergeInProgress(candidate) {
+			continue
+		}
+		state, loadErr := mergestate.LoadMergeState(candidate)
+		if loadErr != nil || state == nil {
+			continue
+		}
+		if state.Action == "finish" && state.FullBranchName == fullBranchName {
+			return candidate
+		}
+	}
+	return nil
+}
+
+// refuseIfChildWorktreeConflicts returns a ChildBranchWorktreeError for the
+// first child branch (of childBranches) whose own separate worktree does not
+// match the one repo is bound to. repo is expected to already be the
+// redirect target — the point of this check is exactly that finish is about
+// to check each of these branches out ON repo, later, in
+// handleUpdateChildrenStep.
+func refuseIfChildWorktreeConflicts(repo *git.Repo, childBranches []string) error {
+	for _, child := range childBranches {
+		entry, err := repo.WorktreeForBranch(child)
+		if err != nil {
+			return &errors.GitError{Operation: "look up worktree for branch", Err: err}
+		}
+		if entry != nil && !entry.Main && !git.SamePath(repo.WorkTree(), entry.Path) {
+			return &errors.ChildBranchWorktreeError{Branch: child, Path: entry.Path}
+		}
+	}
+	return nil
+}
 
 // resolveBranchName tries to find the branch name with and without prefix
 func resolveBranchName(repo *git.Repo, name string, branchConfig config.BranchConfig) (string, error) {

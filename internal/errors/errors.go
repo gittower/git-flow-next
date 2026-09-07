@@ -767,6 +767,30 @@ func (e *RebaseWorktreeError) ExitCode() ExitCode {
 	return ExitCodeValidationError
 }
 
+// ChildBranchWorktreeError indicates finish was asked to auto-update a child
+// base branch that has its own separate linked worktree, one that does not
+// match the worktree finish is actually operating from. redirectPreferring
+// ParentWorktree guarantees the topic's own parent is always safe to check
+// out on the operating repo — it specifically prefers the parent's own
+// worktree as the redirect target — but a child base branch is a different
+// branch, and nothing steers the redirect toward wherever IT happens to
+// live. Checking it out on the operating repo would fail outright, and
+// unlike the topic-worktree checks this runs after the merge (and any tag)
+// are already done, which is what makes refusing before any of that starts
+// worth doing instead of discovering the failure partway through.
+type ChildBranchWorktreeError struct {
+	Branch string // the child base branch
+	Path   string // its worktree
+}
+
+func (e *ChildBranchWorktreeError) Error() string {
+	return fmt.Sprintf("cannot finish: child base branch '%s' has its own worktree at %s, which this finish cannot check out; remove or detach that worktree first ('git flow worktree remove %s')", e.Branch, e.Path, e.Branch)
+}
+
+func (e *ChildBranchWorktreeError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
 // RemovalRefusedError indicates a forced removal was asked to remove something
 // it must not: forcing exists to clear a stale directory out of the way, and
 // every other occupant of the target path is either somebody's data or

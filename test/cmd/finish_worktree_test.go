@@ -1043,3 +1043,207 @@ echo "uncommitted" > dirty.txt
 		t.Errorf("Expected the hook's uncommitted file to still be there, got: %v", statErr)
 	}
 }
+
+// TestFinishAbortAndContinueAfterChildUpdateConflict guards against a
+// regression found by a from-scratch audit of the redirect mechanism (#175
+// follow-up): --continue/--abort used to RECOMPUTE where the initial run's
+// redirect would have landed (the parent's own worktree, or main) instead of
+// looking for the state directly. That works while the merge step itself is
+// conflicted, since the parent is still checked out at the redirect target —
+// but once handleUpdateChildrenStep has moved on and checked a child base
+// branch out at that same location instead, WorktreeForBranch(parent) finds
+// nothing there anymore and the recompute misses the state entirely, even
+// though it is sitting right there. findFinishStateAcrossWorktrees replaces
+// the recompute with a direct search across every worktree.
+// Steps:
+//  1. Initializes git-flow; gives main (hotfix's parent) its own separate
+//     worktree, and diverges develop (an auto-update child of main) via a
+//     scratch worktree that is then removed, freeing develop up
+//  2. Creates hotfix/x from main with a conflicting change to the same file,
+//     with its own worktree
+//  3. Runs 'git flow hotfix finish x': the main merge succeeds, but updating
+//     develop conflicts — main's worktree ends up checked out on develop
+//  4. Runs 'git flow hotfix finish x --abort' from hotfix/x's own worktree
+//  5. Verifies the abort actually finds and clears the conflict in main's
+//     worktree, and hotfix/x survives
+func TestFinishAbortAndContinueAfterChildUpdateConflict(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	// Move the main worktree off develop so both main and develop are free
+	// to get their own separate worktree below.
+	if out, err := testutil.RunGit(t, dir, "checkout", "-b", "idle"); err != nil {
+		t.Fatalf("Failed to move the main worktree off develop: %v\nOutput: %s", err, out)
+	}
+
+	// main gets its own worktree — hotfix's parent — so the initial finish
+	// redirect lands there instead of the main worktree.
+	mainWtPath := addWorktree(t, dir, "main")
+
+	// Diverge develop from main via a scratch worktree, then remove it so
+	// develop is free again for the child-update step to check out later.
+	scratchWtPath := filepath.Join(t.TempDir(), "develop-scratch")
+	if out, err := testutil.RunGit(t, dir, "worktree", "add", scratchWtPath, "develop"); err != nil {
+		t.Fatalf("Failed to add scratch worktree for develop: %v\nOutput: %s", err, out)
+	}
+	if err := testutil.WriteFile(t, scratchWtPath, "conflict.txt", "from develop"); err != nil {
+		t.Fatalf("Failed to write divergent content on develop: %v", err)
+	}
+	if out, err := testutil.RunGit(t, scratchWtPath, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage divergent content: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, scratchWtPath, "commit", "-m", "develop change"); err != nil {
+		t.Fatalf("Failed to commit divergent content: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, dir, "worktree", "remove", scratchWtPath); err != nil {
+		t.Fatalf("Failed to remove scratch worktree: %v\nOutput: %s", err, out)
+	}
+
+	// hotfix/x branches from main with a conflicting change to the same file.
+	if out, err := testutil.RunGit(t, dir, "branch", "hotfix/x", "main"); err != nil {
+		t.Fatalf("Failed to create hotfix/x: %v\nOutput: %s", err, out)
+	}
+	hotfixWtPath := addWorktree(t, dir, "hotfix/x")
+	commitFileInWorktree(t, hotfixWtPath, "conflict.txt", "from hotfix", "hotfix change")
+
+	// Finish: the main merge succeeds cleanly (fast-forward from hotfix/x);
+	// auto-updating develop then conflicts on the same file.
+	output, err := testutil.RunGitFlow(t, hotfixWtPath, "hotfix", "finish", "x")
+	if err == nil {
+		t.Fatalf("Expected the child-update step to conflict, got success: %s", output)
+	}
+	if !testutil.IsMergeInProgress(t, mainWtPath) {
+		t.Fatal("Expected the conflict state to be in main's own worktree (the redirect target)")
+	}
+
+	// --abort from the hotfix worktree must find and actually abort that
+	// state, even though main's worktree is now checked out on develop (not
+	// main) and a recompute of the original redirect would miss it.
+	output, err = testutil.RunGitFlow(t, hotfixWtPath, "hotfix", "finish", "x", "--abort")
+	if err != nil {
+		t.Fatalf("Expected --abort to find and abort the conflict: %v\nOutput: %s", err, output)
+	}
+	if testutil.IsMergeInProgress(t, mainWtPath) {
+		t.Error("Expected the conflict to actually be aborted in main's worktree")
+	}
+	if testutil.GitFlowMergeStateExists(t, mainWtPath) {
+		t.Error("Expected merge state to be cleared after abort")
+	}
+	if !testutil.BranchExists(t, dir, "hotfix/x") {
+		t.Error("Expected hotfix/x to survive the abort")
+	}
+}
+
+// TestFinishRefusesChildBranchWithConflictingWorktree guards against a
+// regression found by the same from-scratch audit as
+// TestFinishAbortAndContinueAfterChildUpdateConflict (#175 follow-up):
+// redirectPreferringParentWorktree only ever steers the redirect toward the
+// TOPIC's own parent — nothing steered it toward a child base branch due for
+// auto-update, so handleUpdateChildrenStep's checkout of that child on the
+// redirected repo would fail outright whenever the child had its own,
+// different, separate worktree — and it would do so only AFTER the merge
+// (and any tag) had already completed, too late to refuse cleanly.
+// refuseIfChildWorktreeConflicts now checks every auto-update child before
+// the merge starts.
+// Steps:
+//  1. Initializes git-flow; moves the main worktree off develop and gives
+//     develop its own separate worktree instead, so it differs from where
+//     hotfix's redirect (main has no worktree of its own) would land
+//  2. Creates hotfix/x with its own worktree
+//  3. Runs 'git flow hotfix finish x' from hotfix/x's own worktree
+//  4. Verifies exit 6, naming develop and its worktree, and that nothing
+//     changed: no merge state anywhere, hotfix/x and develop both untouched
+func TestFinishRefusesChildBranchWithConflictingWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	// Move the main worktree off develop so develop is free for its own
+	// separate worktree, distinct from where the redirect (main has none of
+	// its own) will land: the main worktree itself.
+	if out, err := testutil.RunGit(t, dir, "checkout", "-b", "idle"); err != nil {
+		t.Fatalf("Failed to move the main worktree off develop: %v\nOutput: %s", err, out)
+	}
+	developWtPath := addWorktree(t, dir, "develop")
+
+	createFreeBranch(t, dir, "hotfix/x")
+	hotfixWtPath := addWorktree(t, dir, "hotfix/x")
+	commitFileInWorktree(t, hotfixWtPath, "hotfix-x.txt", "hello", "add hotfix-x.txt")
+
+	output, err := testutil.RunGitFlow(t, hotfixWtPath, "hotfix", "finish", "x")
+	if got := worktreeExitCode(err); got != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", got, output)
+	}
+	if !strings.Contains(output, "develop") {
+		t.Errorf("Expected the refusal to name develop, got: %s", output)
+	}
+	if !strings.Contains(output, developWtPath) {
+		t.Errorf("Expected the refusal to name develop's worktree path, got: %s", output)
+	}
+
+	if testutil.IsMergeInProgress(t, dir) || testutil.IsMergeInProgress(t, developWtPath) || testutil.IsMergeInProgress(t, hotfixWtPath) {
+		t.Error("Expected no merge state anywhere — the refusal must happen before the merge starts")
+	}
+	if !testutil.BranchExists(t, dir, "hotfix/x") {
+		t.Error("Expected hotfix/x to survive the refusal")
+	}
+	if _, statErr := os.Stat(hotfixWtPath); statErr != nil {
+		t.Errorf("Expected hotfix/x's worktree to survive the refusal, got: %v", statErr)
+	}
+	if _, statErr := os.Stat(developWtPath); statErr != nil {
+		t.Errorf("Expected develop's worktree to survive the refusal, got: %v", statErr)
+	}
+}
+
+// TestFinishCDFileAfterChildUpdateTargetsActualLandingSpot guards against a
+// regression found by the same from-scratch audit (#175 follow-up):
+// handleDeleteBranchStep re-derived the worktree-free step's CD-file
+// destination via a fresh WorktreeForBranch(state.ParentBranch) lookup
+// instead of trusting repo's own current worktree. That goes stale once the
+// child-update step has checked a child base branch out at the redirect
+// target in repo's place — WorktreeForBranch(parent) then finds nothing, and
+// a user standing in the topic's own worktree was sent to the main worktree
+// instead of where finish actually landed.
+// Steps:
+//  1. Initializes git-flow; gives main (hotfix's parent) its own separate
+//     worktree, distinct from the main worktree
+//  2. Creates hotfix/x from main with its own worktree
+//  3. Runs 'git flow hotfix finish x' from hotfix/x's own worktree with
+//     GIT_FLOW_CD_FILE set: the merge and the develop auto-update both
+//     succeed cleanly, leaving main's worktree checked out on develop
+//  4. Verifies the CD file names main's own worktree (where repo actually
+//     ended up), not the main worktree
+func TestFinishCDFileAfterChildUpdateTargetsActualLandingSpot(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	// Move the main worktree off develop so both main and develop are free
+	// to get their own separate worktree (develop's, implicitly, once the
+	// child-update step checks it out in main's worktree below).
+	if out, err := testutil.RunGit(t, dir, "checkout", "-b", "idle"); err != nil {
+		t.Fatalf("Failed to move the main worktree off develop: %v\nOutput: %s", err, out)
+	}
+	mainWtPath := addWorktree(t, dir, "main")
+
+	createFreeBranch(t, dir, "hotfix/x")
+	hotfixWtPath := addWorktree(t, dir, "hotfix/x")
+	commitFileInWorktree(t, hotfixWtPath, "hotfix-x.txt", "hello", "add hotfix-x.txt")
+	cdFile := cdFilePath(t)
+
+	output, err := testutil.RunGitFlowWithEnv(t, hotfixWtPath, cdEnv(cdFile), "hotfix", "finish", "x")
+	if err != nil {
+		t.Fatalf("hotfix finish failed: %v\nOutput: %s", err, output)
+	}
+
+	if got := readCDFile(t, cdFile); got != mainWtPath {
+		t.Errorf("Expected CD file to hold main's own worktree %q (where finish landed), got %q", mainWtPath, got)
+	}
+	if testutil.BranchExists(t, dir, "hotfix/x") {
+		t.Error("Expected hotfix/x to be deleted")
+	}
+}
