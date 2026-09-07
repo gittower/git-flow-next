@@ -23,7 +23,7 @@ Branch names are matched **case-insensitively**. The case used when a branch is 
 ### Listing Configuration
 
 **list**
-: Display current git-flow configuration showing branch hierarchy and settings
+: Display current git-flow configuration showing branch hierarchy and settings. Only configured branch types are listed; branches you have started are runtime state, not configuration, and do not appear. Trunk branches, child base branches and topic branch types are each listed alphabetically by branch type name within their own group, so identical runs on an unchanged repository produce the same output.
 
 ### Adding Configuration
 
