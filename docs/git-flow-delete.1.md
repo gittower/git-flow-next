@@ -235,6 +235,9 @@ git checkout -b recovered-branch <commit-hash>
 **5**
 : Cannot delete current branch (checkout another branch first)
 
+**6**
+: A validation error: the branch's git-flow-created worktree has uncommitted or untracked changes and `--force-worktree` was not given, or its worktree has a merge, rebase, bisect, cherry-pick, or revert in progress.
+
 ## SEE ALSO
 
 **git-flow**(1), **git-flow-finish**(1), **git-flow-list**(1), **git-flow-worktree**(1), **git-branch**(1), **git-push**(1)
