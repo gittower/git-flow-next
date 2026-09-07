@@ -436,6 +436,19 @@ func finishBranch(repo *git.Repo, cfg *config.Config, branchType string, name st
 		return err
 	}
 
+	// Worktree pre-flight, repeated (#175 follow-up): executeFinish's own
+	// check ran before this hook, but the hook itself just ran ON the topic's
+	// worktree and could have dirtied it or started an operation there (a
+	// hook that shells out to git for its own reasons). Checking again here,
+	// before anything below moves toward the merge, keeps the promise that a
+	// refused cleanup can never follow a completed merge — the hook's own
+	// side effects included, not just the ones finish makes itself.
+	if !finishKeepsLocalBranch(resolvedOptions) {
+		if err := preflightWorktreeCleanup(repo, name, worktreeOpts); err != nil {
+			return err
+		}
+	}
+
 	// Redirect away from the branch's own worktree (#175), now that the
 	// pre-finish hook has run — a version-bump hook is expected and tested
 	// (TestFinishFFOnlyAcceptsTopicMovedByPreFinishHook) to commit on the
@@ -450,6 +463,23 @@ func finishBranch(repo *git.Repo, cfg *config.Config, branchType string, name st
 		return &errors.GitError{Operation: "resolve worktree for branch", Err: err}
 	}
 	repo = redirectedRepo
+
+	// Refuse to overwrite an operation already in progress at the redirected
+	// destination (#175 follow-up): merge state is per-worktree by design
+	// (see redirectPreferringParentWorktree's own doc comment on why), so
+	// redirecting into a worktree that already has ITS OWN in-progress
+	// finish/update/integrate would silently clobber that operation's
+	// recovery state with this one's. This is deliberately unconditional —
+	// not just a foreign-owner check — since even two unrelated finishes
+	// landing in the same parent worktree one after another (its own
+	// worktree, or main) must never overwrite each other's state.
+	if mergestate.IsMergeInProgress(repo) {
+		existing, loadErr := mergestate.LoadMergeState(repo)
+		if loadErr != nil {
+			return &errors.GitError{Operation: "load merge state at the redirected worktree", Err: loadErr}
+		}
+		return &errors.MergeInProgressError{Action: existing.Action, BranchName: existing.FullBranchName, BranchType: existing.BranchType}
+	}
 
 	// Save merge state before starting
 	state := &mergestate.MergeState{
@@ -860,16 +890,21 @@ func handleMergeStep(repo *git.Repo, cfg *config.Config, state *mergestate.Merge
 	case strategyRebase:
 		fmt.Printf("Rebase strategy selected\n")
 		// For rebase, we need to:
-		// 1. Stay on feature branch. executeFinish's own guard refuses this
-		//    whole strategy up front whenever the topic has its own separate
-		//    worktree (#175 follow-up) — running the rebase in that worktree
-		//    instead was tried and reverted: it left conflict state split
-		//    across two git-dirs, with --continue and --abort unable to find
-		//    or resolve it correctly. So repo is always the right place to
-		//    check the branch out by the time this runs.
-		err = repo.Checkout(state.FullBranchName)
-		if err != nil {
-			return &errors.GitError{Operation: "checkout feature branch for rebase", Err: err}
+		// 1. Stay on feature branch — skipped under --ff-only, along with the
+		//    rebase call itself in step 2: with nothing to rebase, execution
+		//    goes straight to checking the parent out and performing the
+		//    direct ff-only merge in step 3. Skipping this checkout too, not
+		//    only the rebase call, is what actually makes executeFinish's
+		//    --ff-only exemption from the rebase-worktree refusal hold —
+		//    unconditional, it would still fail against a topic branch that
+		//    has its own separate worktree, exactly the case the guard
+		//    refuses everywhere else and the exemption assumes never reaches
+		//    here.
+		if !resolvedOptions.RequireFastForward {
+			err = repo.Checkout(state.FullBranchName)
+			if err != nil {
+				return &errors.GitError{Operation: "checkout feature branch for rebase", Err: err}
+			}
 		}
 		// 2. Rebase onto target branch with options — never under --ff-only, which
 		//    promises the tested topic tip lands unchanged. The checks above prove the
