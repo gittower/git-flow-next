@@ -171,7 +171,7 @@ A branch checked out in a linked worktree cannot be deleted while it is checked 
 : Keep the branch's worktree instead of removing it, even when git-flow created it. The directory survives on a detached HEAD, and the branch is still deleted. Has no additional effect on a worktree git-flow did not create, which is always detached rather than removed. Persisted across **--continue**, so a conflict resolved after finishing with this flag still detaches rather than removes.
 
 **--force-worktree**, **-W**
-: Remove a git-flow-created worktree even if it has uncommitted or untracked changes, discarding them. Only applies to the removal path — detaching never needs it, since detaching changes no files. If the worktree has a merge, rebase, or bisect in progress, finish is refused before the merge starts, regardless of **--force-worktree**: an in-progress operation cannot be abandoned by either freeing path. Persisted across **--continue** like **--keep-worktree**.
+: Remove a git-flow-created worktree even if it has uncommitted or untracked changes, discarding them. Only applies to the removal path — detaching never needs it, since detaching changes no files. If the worktree has a merge, rebase, bisect, cherry-pick, or revert in progress, finish is refused before the merge starts, regardless of **--force-worktree**: an in-progress operation cannot be abandoned by either freeing path. Persisted across **--continue** like **--keep-worktree**.
 
 The worktree pre-flight (the dirty/in-progress check above) runs before the merge starts, and again, identically, at the top of a resumed **--continue** — a finish that reaches branch deletion by either path never arrives there with an unfreeable worktree. **--keep**/**--keeplocal** (which retain the branch itself) skip worktree handling entirely: freeing a worktree is only ever done because the branch is about to disappear.
 
@@ -560,7 +560,7 @@ git config gitflow.<type>.finish.noverify true
 : A required branch (the topic branch or its parent) does not exist.
 
 **6**
-: A validation error (the topic or parent branch is not in sync with its remote, the `--ff-only` precondition failed because the parent carries commits the topic branch does not, the branch's git-flow-created worktree has uncommitted or untracked changes and `--force-worktree` was not given, or its worktree has a merge, rebase, or bisect in progress).
+: A validation error (the topic or parent branch is not in sync with its remote, the `--ff-only` precondition failed because the parent carries commits the topic branch does not, the branch's git-flow-created worktree has uncommitted or untracked changes and `--force-worktree` was not given, or its worktree has a merge, rebase, bisect, cherry-pick, or revert in progress).
 
 ## SEE ALSO
 

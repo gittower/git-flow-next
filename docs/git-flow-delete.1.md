@@ -52,9 +52,9 @@ A branch checked out in a linked worktree cannot be deleted while it is checked 
 : Keep the branch's worktree instead of removing it, even when git-flow created it. The directory survives on a detached HEAD, and the branch is still deleted. Has no additional effect on a worktree git-flow did not create, which is always detached rather than removed.
 
 **--force-worktree**, **-W**
-: Remove a git-flow-created worktree even if it has uncommitted or untracked changes, discarding them. Only applies to the removal path — detaching never needs it, since detaching changes no files. If the worktree has a merge, rebase, or bisect in progress, deletion is refused regardless of **--force-worktree**: an in-progress operation cannot be abandoned by either freeing path.
+: Remove a git-flow-created worktree even if it has uncommitted or untracked changes, discarding them. Only applies to the removal path — detaching never needs it, since detaching changes no files. If the worktree has a merge, rebase, bisect, cherry-pick, or revert in progress, deletion is refused regardless of **--force-worktree**: an in-progress operation cannot be abandoned by either freeing path.
 
-If you are standing inside the worktree being removed, its path is written to **GIT_FLOW_CD_FILE** (see **git-flow-worktree**(1)) as the destination, and delete always offers the main worktree — unlike **finish**, delete has no merge target of its own to prefer instead. Detaching never navigates: the directory stays exactly where it is.
+If you are standing inside the worktree being removed, the main worktree's path — not the one being removed — is written to **GIT_FLOW_CD_FILE** (see **git-flow-worktree**(1)) as the destination; delete always offers the main worktree, unlike **finish**, which has no merge target of its own to prefer instead. Detaching never navigates: the directory stays exactly where it is.
 
 A branch with no worktree, or one checked out in the main worktree, is unaffected by either flag.
 
