@@ -185,6 +185,8 @@ func RegisterShorthandCommands() {
 				FF:             ffMode,
 				Squash:         getBoolPtr(cmd, "squash", "no-squash"),
 				SquashMessage:  getStringPtrFromFlag(cmd, "squash-message"),
+				MergeMessage:   getStringPtrFromFlag(cmd, "merge-message"),
+				UpdateMessage:  getStringPtrFromFlag(cmd, "update-message"),
 			}
 			// Get no-verify flag
 			noVerify, _ := cmd.Flags().GetBool("no-verify")

@@ -1,6 +1,7 @@
 package cmd_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/gittower/git-flow-next/internal/errors"
@@ -457,4 +458,74 @@ func TestShorthandFinishWithoutInitialization(t *testing.T) {
 	}
 	assert.Contains(t, output, "Error: git flow is not initialized")
 	assert.NotContains(t, output, "does not exist")
+}
+
+// TestShorthandFinishWithMergeMessage tests that the shorthand 'git flow finish' honors --merge-message for the upstream merge, matching the per-type surface ('git flow feature finish <name> --merge-message').
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates feature branch 'shorthand-merge-msg' and adds a commit
+// 3. Checks out the feature branch and runs the shorthand 'git flow finish --no-ff --merge-message "feat: custom shorthand merge"'
+// 4. Verifies the merge commit subject on develop equals the custom message
+func TestShorthandFinishWithMergeMessage(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	assert.NoError(t, err)
+
+	// Create a feature branch with a commit
+	_, err = testutil.RunGitFlow(t, dir, "feature", "start", "shorthand-merge-msg")
+	assert.NoError(t, err)
+	testutil.WriteFile(t, dir, "feature.txt", "feature content")
+	testutil.RunGit(t, dir, "add", "feature.txt")
+	testutil.RunGit(t, dir, "commit", "-m", "Add feature file")
+
+	// Finish from the feature branch via the shorthand surface
+	testutil.RunGit(t, dir, "checkout", "feature/shorthand-merge-msg")
+	customMessage := "feat: custom shorthand merge"
+	output, err := testutil.RunGitFlow(t, dir, "finish", "--no-ff", "--merge-message", customMessage)
+	assert.NoError(t, err, "Output: %s", output)
+
+	// The merge commit on develop must carry the custom message
+	testutil.RunGit(t, dir, "checkout", "develop")
+	commitMsg, err := testutil.RunGit(t, dir, "log", "-1", "--format=%s")
+	assert.NoError(t, err)
+	assert.Equal(t, customMessage, strings.TrimSpace(commitMsg))
+}
+
+// TestShorthandFinishWithUpdateMessage tests that the shorthand 'git flow finish' honors --update-message for the downstream auto-update of child base branches, matching the per-type surface.
+// Steps:
+// 1. Sets up a test repository and initializes git-flow with defaults
+// 2. Creates release branch '1.0.0' and adds a commit
+// 3. Checks out the release branch and runs the shorthand 'git flow finish --update-message "chore: custom shorthand update"'
+// 4. Verifies the release file reached develop via the auto-update from main
+// 5. Verifies the auto-update commit subject on develop equals the custom message
+func TestShorthandFinishWithUpdateMessage(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+
+	_, err := testutil.RunGitFlow(t, dir, "init", "--defaults")
+	assert.NoError(t, err)
+
+	// Create a release branch with a commit
+	_, err = testutil.RunGitFlow(t, dir, "release", "start", "1.0.0")
+	assert.NoError(t, err)
+	testutil.WriteFile(t, dir, "release.txt", "release content")
+	testutil.RunGit(t, dir, "add", "release.txt")
+	testutil.RunGit(t, dir, "commit", "-m", "Add release file")
+
+	// Finish from the release branch via the shorthand surface
+	testutil.RunGit(t, dir, "checkout", "release/1.0.0")
+	customUpdateMessage := "chore: custom shorthand update"
+	output, err := testutil.RunGitFlow(t, dir, "finish", "--update-message", customUpdateMessage)
+	assert.NoError(t, err, "Output: %s", output)
+
+	// develop is auto-updated from main; that commit must carry the message
+	testutil.RunGit(t, dir, "checkout", "develop")
+	assert.True(t, testutil.FileExists(t, dir, "release.txt"))
+	commitMsg, err := testutil.RunGit(t, dir, "log", "-1", "--format=%s")
+	assert.NoError(t, err)
+	assert.Equal(t, customUpdateMessage, strings.TrimSpace(commitMsg))
 }
