@@ -324,6 +324,113 @@ func TestWorktreeHasChangesDetectsUntrackedFile(t *testing.T) {
 	}
 }
 
+// TestWorktreeOperationInProgressDetectsMerge verifies a conflicted merge
+// inside a worktree is reported as "merge" in progress.
+// Steps:
+// 1. Creates a repository with feature/x and a linked worktree for it
+// 2. Commits conflicting content to the same file on main and on the worktree
+// 3. Merges main into the worktree by hand, producing a conflict
+// 4. Calls repo.WorktreeOperationInProgress on the worktree path
+// 5. Verifies it reports "merge" in progress with no error
+func TestWorktreeOperationInProgressDetectsMerge(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("from feature"), 0644); err != nil {
+		t.Fatalf("Failed to write conflicting content on the worktree: %v", err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-am", "feature change"); err != nil {
+		t.Fatalf("Failed to commit on the worktree: %v\nOutput: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("from main"), 0644); err != nil {
+		t.Fatalf("Failed to write conflicting content on main: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "commit", "-am", "main change"); err != nil {
+		t.Fatalf("Failed to commit on main: %v\nOutput: %s", err, out)
+	}
+
+	if out, err := testutil.RunGit(t, wtPath, "merge", "main"); err == nil {
+		t.Fatalf("Expected the merge to conflict, but it succeeded: %s", out)
+	}
+
+	label, inProgress, err := repo.WorktreeOperationInProgress(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeOperationInProgress failed: %v", err)
+	}
+	if !inProgress {
+		t.Fatal("Expected an operation to be reported in progress")
+	}
+	if label != "merge" {
+		t.Errorf("Expected label 'merge', got %q", label)
+	}
+}
+
+// TestWorktreeOperationInProgressDetectsRebase verifies a conflicted rebase
+// inside a worktree is reported as "rebase" in progress.
+// Steps:
+// 1. Creates a repository with feature/x (one commit ahead) and a linked worktree for it
+// 2. Commits conflicting content to the same file on main
+// 3. Starts 'git rebase main' by hand inside the worktree, producing a conflict
+// 4. Calls repo.WorktreeOperationInProgress on the worktree path
+// 5. Verifies it reports "rebase" in progress with no error
+func TestWorktreeOperationInProgressDetectsRebase(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("from feature"), 0644); err != nil {
+		t.Fatalf("Failed to write conflicting content on the worktree: %v", err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-am", "feature change"); err != nil {
+		t.Fatalf("Failed to commit on the worktree: %v\nOutput: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("from main"), 0644); err != nil {
+		t.Fatalf("Failed to write conflicting content on main: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "commit", "-am", "main change"); err != nil {
+		t.Fatalf("Failed to commit on main: %v\nOutput: %s", err, out)
+	}
+
+	if out, err := testutil.RunGit(t, wtPath, "rebase", "main"); err == nil {
+		t.Fatalf("Expected the rebase to conflict, but it succeeded: %s", out)
+	}
+
+	label, inProgress, err := repo.WorktreeOperationInProgress(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeOperationInProgress failed: %v", err)
+	}
+	if !inProgress {
+		t.Fatal("Expected an operation to be reported in progress")
+	}
+	if label != "rebase" {
+		t.Errorf("Expected label 'rebase', got %q", label)
+	}
+}
+
+// TestWorktreeOperationInProgressReportsCleanWorktree verifies a worktree with
+// no merge, rebase, or bisect underway reports nothing in progress.
+// Steps:
+// 1. Creates a repository with feature/x and a linked worktree for it
+// 2. Calls repo.WorktreeOperationInProgress on the worktree path
+// 3. Verifies it reports no operation in progress and no error
+func TestWorktreeOperationInProgressReportsCleanWorktree(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	label, inProgress, err := repo.WorktreeOperationInProgress(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeOperationInProgress failed: %v", err)
+	}
+	if inProgress {
+		t.Errorf("Expected no operation in progress, got %q", label)
+	}
+}
+
 // TestRemoveWorktreeRefusesMainWorktree verifies removal refuses the main
 // worktree before invoking git.
 // Steps:

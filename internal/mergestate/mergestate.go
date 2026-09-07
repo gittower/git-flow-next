@@ -60,6 +60,13 @@ type MergeState struct {
 
 	// Hook options
 	NoVerify bool `json:"noVerify,omitempty"` // Skip pre-commit and commit-msg hooks
+
+	// Persisted worktree cleanup choice (#175). --continue re-derives the
+	// worktree's dirty/in-progress state itself, but the flags that decide
+	// remove-vs-detach and whether dirt is tolerated are CLI-only with no
+	// config fallback, so they have to be saved here to survive a conflict.
+	KeepWorktree  bool `json:"keepWorktree,omitempty"`
+	ForceWorktree bool `json:"forceWorktree,omitempty"`
 }
 
 // SaveMergeState saves the current merge state to a file

@@ -704,13 +704,43 @@ func (e *MainWorktreeError) ExitCode() ExitCode {
 type WorktreeDirtyError struct {
 	Branch string
 	Path   string
+	// Flag names the CLI flag that overrides the refusal. Empty means
+	// '--force', the wording 'worktree remove' has always used; finish and
+	// delete set it to '--force-worktree' so the message names the flag that
+	// actually exists on those commands (their own --force means something
+	// else: force-finish / force-delete an unmerged branch).
+	Flag string
 }
 
 func (e *WorktreeDirtyError) Error() string {
-	return fmt.Sprintf("worktree for branch '%s' at %s has uncommitted or untracked changes; commit them or pass --force to discard them", e.Branch, e.Path)
+	flag := e.Flag
+	if flag == "" {
+		flag = "--force"
+	}
+	return fmt.Sprintf("worktree for branch '%s' at %s has uncommitted or untracked changes; commit them or pass %s to discard them", e.Branch, e.Path, flag)
 }
 
 func (e *WorktreeDirtyError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
+// WorktreeOperationInProgressError indicates a worktree cannot be freed because
+// it has a merge, rebase, or bisect underway. Removing it would discard that
+// operation's state along with everything else --force already covers, and
+// detaching is refused unconditionally: it would abandon the operation with no
+// way back to it, and detaching is supposed to need no force at all since it
+// otherwise changes no files.
+type WorktreeOperationInProgressError struct {
+	Branch    string
+	Path      string
+	Operation string // "merge", "rebase", or "bisect"
+}
+
+func (e *WorktreeOperationInProgressError) Error() string {
+	return fmt.Sprintf("worktree for branch '%s' at %s has a %s in progress; resolve or abort it there before finishing or deleting the branch", e.Branch, e.Path, e.Operation)
+}
+
+func (e *WorktreeOperationInProgressError) ExitCode() ExitCode {
 	return ExitCodeValidationError
 }
 

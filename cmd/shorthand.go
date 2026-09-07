@@ -54,7 +54,9 @@ func RegisterShorthandCommands() {
 			fetchFlag, _ := cmd.Flags().GetBool("fetch")
 			noFetchFlag, _ := cmd.Flags().GetBool("no-fetch")
 			fetch := getBoolFlag(fetchFlag, noFetchFlag)
-			DeleteCommand(branchType, name, force, remote, fetch)
+			keepWorktree, _ := cmd.Flags().GetBool("keep-worktree")
+			forceWorktree, _ := cmd.Flags().GetBool("force-worktree")
+			DeleteCommand(branchType, name, force, remote, fetch, WorktreeCleanupOptions{Keep: keepWorktree, Force: forceWorktree})
 			return nil
 		},
 	}
@@ -64,6 +66,7 @@ func RegisterShorthandCommands() {
 	deleteCmd.Flags().Bool("no-remote", false, "Don't delete remote tracking branch")
 	deleteCmd.Flags().Bool("fetch", false, "Fetch from remote before deleting")
 	deleteCmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before deleting")
+	addWorktreeCleanupFlags(deleteCmd)
 	rootCmd.AddCommand(deleteCmd)
 
 	// Update
@@ -196,7 +199,10 @@ func RegisterShorthandCommands() {
 			fetch := getBoolPtr(cmd, "fetch", "no-fetch")
 			push := getBoolPtr(cmd, "push", "no-push")
 			pushTag := getBoolPtr(cmd, "pushtag", "no-pushtag")
-			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, fetch, noVerifyPtr, push, pushTag)
+			keepWorktree, _ := cmd.Flags().GetBool("keep-worktree")
+			forceWorktree, _ := cmd.Flags().GetBool("force-worktree")
+			worktreeOpts := WorktreeCleanupOptions{Keep: keepWorktree, Force: forceWorktree}
+			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, fetch, noVerifyPtr, push, pushTag, worktreeOpts)
 		},
 	}
 
