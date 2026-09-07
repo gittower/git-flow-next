@@ -744,6 +744,29 @@ func (e *WorktreeOperationInProgressError) ExitCode() ExitCode {
 	return ExitCodeValidationError
 }
 
+// RebaseWorktreeError indicates finish was asked to rebase a topic branch that
+// has its own separate linked worktree. The branch stays checked out there
+// throughout a redirected finish (#175), by design — checking it out a
+// second time to rebase it would fail outright, and a conflict there cannot
+// currently be continued or aborted correctly (the rebase's conflict state,
+// the merge, rebase, and Merge/rebase/bisect markers all live in a different
+// worktree than the one finish's --continue/--abort would resolve them from).
+// Merge and squash both redirect around the topic worktree without ever
+// needing to check it out again, so neither hits this; --ff-only skips the
+// rebase call entirely and is exempt for the same reason.
+type RebaseWorktreeError struct {
+	Branch string
+	Path   string
+}
+
+func (e *RebaseWorktreeError) Error() string {
+	return fmt.Sprintf("cannot finish '%s' with the rebase strategy: it has its own worktree at %s; use --merge or --squash instead, or remove that worktree first ('git flow worktree remove %s')", e.Branch, e.Path, e.Branch)
+}
+
+func (e *RebaseWorktreeError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
 // RemovalRefusedError indicates a forced removal was asked to remove something
 // it must not: forcing exists to clear a stale directory out of the way, and
 // every other occupant of the target path is either somebody's data or

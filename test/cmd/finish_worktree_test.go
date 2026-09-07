@@ -368,17 +368,23 @@ func TestFinishFromInsideOwnWorktreeNavigatesToMainWorktree(t *testing.T) {
 	}
 }
 
-// TestFinishRebaseFromInsideOwnWorktreeSucceeds guards against a regression:
-// the rebase strategy's own "stay on the feature branch" step used to check
-// the branch out on the (redirected) operating repo unconditionally, which
-// fails outright when the branch still has its own separate worktree — the
-// exact situation #175's redirect creates on purpose, specifically so the
-// merge's own checkouts leave that worktree alone.
+// TestFinishRebaseRefusedWhenTopicHasSeparateWorktree pins a deliberate
+// design decision, not a bug: running finish --rebase against a topic branch
+// that has its own separate linked worktree is refused outright, rather than
+// attempting to rebase inside that worktree. That was tried (round 2) and
+// reverted (round 3) — it left conflict state split across two git-dirs, with
+// --continue and --abort both unable to find or resolve it correctly; see the
+// "fix: Refuse rebase..." commit body for the full analysis. This combination
+// never worked before #175 either — the checkout would have failed the same
+// way, just with an undocumented git error ("already used by worktree").
+// Refusing clearly here is a strict improvement, not a new restriction; real
+// support is left to a follow-up issue.
 // Steps:
-// 1. Initializes git-flow, moves the main worktree onto 'main', creates feature/x with a managed worktree and a distinguishing commit
+// 1. Initializes git-flow, moves the main worktree onto 'main', creates feature/x with a managed worktree
 // 2. Runs 'git flow feature finish x --rebase' with cwd inside the feature worktree
-// 3. Verifies exit 0, the commit landed on develop, the worktree is gone, and the branch is deleted
-func TestFinishRebaseFromInsideOwnWorktreeSucceeds(t *testing.T) {
+// 3. Verifies exit 6, a message naming the worktree and the --merge/--squash alternative
+// 4. Verifies nothing was touched: no merge state was written, and the worktree and branch both survive
+func TestFinishRebaseRefusedWhenTopicHasSeparateWorktree(t *testing.T) {
 	t.Parallel()
 	dir := initWorktreeRepo(t)
 	defer testutil.CleanupTestRepo(t, dir)
@@ -391,15 +397,23 @@ func TestFinishRebaseFromInsideOwnWorktreeSucceeds(t *testing.T) {
 	commitFileInWorktree(t, wtPath, "feature-x.txt", "hello", "add feature-x.txt")
 
 	output, err := testutil.RunGitFlow(t, wtPath, "feature", "finish", "x", "--rebase")
-	if err != nil {
-		t.Fatalf("feature finish --rebase from inside the worktree failed: %v\nOutput: %s", err, output)
+	if got := worktreeExitCode(err); got != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", got, output)
 	}
-	assertFileOnBranch(t, dir, "develop", "feature-x.txt")
-	if _, statErr := os.Stat(wtPath); !os.IsNotExist(statErr) {
-		t.Errorf("Expected the worktree directory to be removed, got: %v", statErr)
+	if !strings.Contains(output, wtPath) {
+		t.Errorf("Expected the refusal to name the worktree path, got: %s", output)
 	}
-	if testutil.BranchExists(t, dir, "feature/x") {
-		t.Error("Expected feature/x to be deleted")
+	if !strings.Contains(output, "--merge") || !strings.Contains(output, "--squash") {
+		t.Errorf("Expected the refusal to suggest --merge or --squash, got: %s", output)
+	}
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected no merge state to have been written")
+	}
+	if !testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to survive the refusal")
+	}
+	if _, statErr := os.Stat(wtPath); statErr != nil {
+		t.Errorf("Expected the worktree directory to survive the refusal, got: %v", statErr)
 	}
 }
 

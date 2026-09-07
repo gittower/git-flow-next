@@ -102,37 +102,33 @@ func redirectPreferringParentWorktree(repo *git.Repo, branch string, parentBranc
 	return redirected, true, nil
 }
 
-// topicWorktreeIfSeparate looks up branch's own worktree and returns a repo
-// handle bound to it, ONLY when that worktree exists and differs from the one
-// repo is itself bound to.
+// topicHasSeparateWorktree reports whether branch has its own worktree that
+// differs from the one repo is itself bound to.
 //
 // Once a redirect (redirectPreferringParentWorktree) has moved repo away from
 // branch's own worktree, that worktree still has branch checked out
-// throughout — the whole point of redirecting was to leave it untouched. Every
-// finish step that would otherwise try to check branch out again on repo needs
-// this: the rebase step (which genuinely needs to run wherever branch already
-// is, not fail trying to check it out a second time), --abort's return-to-
-// topic checkout, and the --ff-only failure recovery checkout (both of which
-// have nothing to do at all in that case — branch is already exactly where it
-// needs to be).
+// throughout — the whole point of redirecting was to leave it untouched. Two
+// finish steps that would otherwise try to check branch out again on repo
+// need this, since in that case there is nothing to do at all — branch is
+// already exactly where it needs to be: --abort's return-to-topic checkout,
+// and the --ff-only failure recovery checkout. (A third case, the rebase
+// step, would seem to need this too, and round 2 tried exactly that —
+// rebasing IN the separate worktree instead of skipping the checkout. It was
+// reverted in round 3: that split the operation's state across two git-dirs,
+// which --continue and --abort then had no reliable way to find or resolve.
+// executeFinish now refuses the rebase strategy outright whenever this would
+// be true for the topic branch, so the rebase step itself never needs to ask.)
 //
-// It returns (nil, false, nil) — not an error — whenever branch has no
-// worktree of its own, is checked out in the main worktree, or is already the
-// one repo is bound to: every case where an ordinary checkout on repo is both
-// safe and the right thing to do.
-func topicWorktreeIfSeparate(repo *git.Repo, branch string) (*git.Repo, bool, error) {
+// It is false — not an error — whenever branch has no worktree of its own,
+// is checked out in the main worktree, or is already the one repo is bound
+// to: every case where an ordinary checkout on repo is both safe and the
+// right thing to do.
+func topicHasSeparateWorktree(repo *git.Repo, branch string) (bool, error) {
 	entry, err := repo.WorktreeForBranch(branch)
 	if err != nil {
-		return nil, false, err
+		return false, err
 	}
-	if entry == nil || entry.Main || git.SamePath(repo.WorkTree(), entry.Path) {
-		return nil, false, nil
-	}
-	opened, err := git.Open(entry.Path)
-	if err != nil {
-		return nil, false, err
-	}
-	return opened, true, nil
+	return entry != nil && !entry.Main && !git.SamePath(repo.WorkTree(), entry.Path), nil
 }
 
 // isManaged reports whether branch's worktree was created by git-flow. There

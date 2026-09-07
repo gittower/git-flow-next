@@ -267,6 +267,24 @@ func executeFinish(repo *git.Repo, branchType string, name string, continueOp bo
 		return &errors.InvalidInputError{Message: "cannot combine --ff-only with the squash strategy: a squash always creates a new commit, so a fast-forward is impossible"}
 	}
 
+	// Rebase cannot run against a topic branch that has its own separate
+	// linked worktree: the branch stays checked out there throughout a
+	// redirected finish (#175), so checking it out again to rebase it would
+	// fail outright, and a conflict there could not currently be continued or
+	// aborted correctly. This never worked before #175 either (the same
+	// checkout would have failed, just with an undocumented git error) —
+	// refusing clearly here is a strict improvement, not a new restriction.
+	// --ff-only is exempt: the rebase call is always skipped under it (see
+	// handleMergeStep), so the conflict never arises. Runs alongside the
+	// squash/--ff-only check above, before any network or mutation.
+	if resolvedOptions.MergeStrategy == strategyRebase && !resolvedOptions.RequireFastForward {
+		if entry, err := repo.WorktreeForBranch(name); err != nil {
+			return &errors.GitError{Operation: "look up worktree for branch", Err: err}
+		} else if entry != nil && !entry.Main {
+			return &errors.RebaseWorktreeError{Branch: name, Path: entry.Path}
+		}
+	}
+
 	// Fetch the topic (and parent, best-effort) and verify the topic is in sync with its remote.
 	// This runs only on the initial finish, never on --continue/--abort (handled above). A fatal
 	// fetch failure or a behind/diverged topic aborts here, before any merge. Being *ahead* is
@@ -752,7 +770,7 @@ func handleAbort(repo *git.Repo, state *mergestate.MergeState) error {
 	// nothing to return to, since the branch is already checked out exactly
 	// where it needs to be, and checking it out again here would fail
 	// outright.
-	if _, separate, err := topicWorktreeIfSeparate(repo, state.FullBranchName); err != nil {
+	if separate, err := topicHasSeparateWorktree(repo, state.FullBranchName); err != nil {
 		return &errors.GitError{Operation: "look up worktree for branch", Err: err}
 	} else if !separate {
 		if err := repo.Checkout(state.FullBranchName); err != nil {
@@ -832,25 +850,16 @@ func handleMergeStep(repo *git.Repo, cfg *config.Config, state *mergestate.Merge
 	case strategyRebase:
 		fmt.Printf("Rebase strategy selected\n")
 		// For rebase, we need to:
-		// 1. Stay on feature branch — or, when it has its own worktree
-		//    separate from repo (left untouched by a #175 redirect, still
-		//    holding the branch checked out throughout), rebase THERE
-		//    instead: it is already checked out there, and checking it out
-		//    again on repo would fail outright ("already used by
-		//    worktree"). The rebase itself only needs to run wherever the
-		//    branch already lives — nothing below depends on which repo
-		//    handle did it, since refs are shared across every worktree of
-		//    the same repository.
-		rebaseRepo := repo
-		if topicRepo, separate, topicErr := topicWorktreeIfSeparate(repo, state.FullBranchName); topicErr != nil {
-			return &errors.GitError{Operation: "look up worktree for branch", Err: topicErr}
-		} else if separate {
-			rebaseRepo = topicRepo
-		} else {
-			err = repo.Checkout(state.FullBranchName)
-			if err != nil {
-				return &errors.GitError{Operation: "checkout feature branch for rebase", Err: err}
-			}
+		// 1. Stay on feature branch. executeFinish's own guard refuses this
+		//    whole strategy up front whenever the topic has its own separate
+		//    worktree (#175 follow-up) — running the rebase in that worktree
+		//    instead was tried and reverted: it left conflict state split
+		//    across two git-dirs, with --continue and --abort unable to find
+		//    or resolve it correctly. So repo is always the right place to
+		//    check the branch out by the time this runs.
+		err = repo.Checkout(state.FullBranchName)
+		if err != nil {
+			return &errors.GitError{Operation: "checkout feature branch for rebase", Err: err}
 		}
 		// 2. Rebase onto target branch with options — never under --ff-only, which
 		//    promises the tested topic tip lands unchanged. The checks above prove the
@@ -860,7 +869,7 @@ func handleMergeStep(repo *git.Repo, cfg *config.Config, state *mergestate.Merge
 		//    Skipping closes that window rather than narrowing it: git's own --ff-only
 		//    then rejects the merge and the topic keeps its commits.
 		if !resolvedOptions.RequireFastForward {
-			mergeErr = rebaseRepo.RebaseWithOptions(state.ParentBranch, resolvedOptions.PreserveMerges)
+			mergeErr = repo.RebaseWithOptions(state.ParentBranch, resolvedOptions.PreserveMerges)
 		}
 		if mergeErr == nil {
 			// 3. If rebase succeeds, checkout target and merge
@@ -904,7 +913,7 @@ func handleMergeStep(repo *git.Repo, cfg *config.Config, state *mergestate.Merge
 			// Skipped, like the same check elsewhere, when the branch has its
 			// own worktree separate from repo: nothing to return to there,
 			// and the checkout would just fail.
-			if _, separate, wtErr := topicWorktreeIfSeparate(repo, state.FullBranchName); wtErr != nil {
+			if separate, wtErr := topicHasSeparateWorktree(repo, state.FullBranchName); wtErr != nil {
 				fmt.Fprintf(os.Stderr, "Warning: %v\n", wtErr)
 			} else if !separate {
 				if checkoutErr := repo.Checkout(state.FullBranchName); checkoutErr != nil {
