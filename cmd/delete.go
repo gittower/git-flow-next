@@ -153,6 +153,16 @@ func performDelete(repo *git.Repo, branchType, name, fullBranchName string, bran
 		return &errors.RemoteNotConfiguredError{Remote: cfg.Remote, Operation: "delete remote branch"}
 	}
 
+	// Worktree pre-flight (#175): refuse before ANY destructive step, not just
+	// immediately before the free step. Moved here — ahead of the parent
+	// checkout and the ffParent fast-forward below, both of which mutate
+	// state — so a dirty or mid-operation worktree is caught before anything
+	// else happens, matching finish's own ordering and the "pre-flight before
+	// any destructive step" promise.
+	if err := preflightWorktreeCleanup(repo, fullBranchName, worktreeOpts); err != nil {
+		return err
+	}
+
 	// If we're on the branch to be deleted, switch to its parent first. This happens before the
 	// fetch/sync preflight so that fast-forwarding the parent (see below) operates on HEAD, which
 	// is what `git branch -d` checks a topic against when it has no upstream.
@@ -194,15 +204,37 @@ func performDelete(repo *git.Repo, branchType, name, fullBranchName string, bran
 		return err
 	}
 
+	// Confirm the branch can actually be deleted BEFORE freeing its worktree
+	// (#175): freeing is a one-way trip (a git-flow-created worktree is
+	// removed outright; even a hand-made one, detached, does not un-detach
+	// itself), and 'git branch -d' below would otherwise be the first thing
+	// to notice a clean-but-unmerged branch — by which point the worktree is
+	// already gone. This mirrors 'git branch -d's own no-upstream mergedness
+	// check (branch must be an ancestor of the branch now checked out, which
+	// the steps above already arranged to be the parent whenever that
+	// mattered) without trying to reproduce every rule 'git branch -d' itself
+	// applies (a configured upstream, for instance): a false negative here
+	// just means that real call further down — unreached in the cases that
+	// matter — makes the final call.
+	if !forceDelete {
+		headBranch, err := repo.GetCurrentBranch()
+		if err != nil {
+			return &errors.GitError{Operation: "get current branch", Err: err}
+		}
+		merged, err := repo.IsAncestor(fullBranchName, headBranch)
+		if err != nil {
+			return &errors.GitError{Operation: "check whether branch is merged", Err: err}
+		}
+		if !merged {
+			return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", fullBranchName), Err: fmt.Errorf("the branch is not fully merged into '%s'; use --force to delete it anyway", headBranch)}
+		}
+	}
+
 	// Free the branch's worktree (#175), right before the branch itself goes
 	// away: a branch checked out in a linked worktree cannot be deleted while
-	// checked out there. Pre-flight (dirty/mid-operation check, no mutation)
-	// runs first, so a refusal here leaves the branch and its worktree intact.
-	// Delete always prefers the main worktree as the navigation destination —
-	// unlike finish, it has no merge target to prefer instead.
-	if err := preflightWorktreeCleanup(repo, fullBranchName, worktreeOpts); err != nil {
-		return err
-	}
+	// checked out there. Delete always prefers the main worktree as the
+	// navigation destination — unlike finish, it has no merge target to
+	// prefer instead.
 	freedRepo, err := freeWorktreeForBranch(repo, fullBranchName, worktreeOpts, "")
 	if err != nil {
 		return err

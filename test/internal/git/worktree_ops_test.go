@@ -469,6 +469,96 @@ func TestWorktreeOperationInProgressDetectsBisect(t *testing.T) {
 	}
 }
 
+// TestWorktreeOperationInProgressDetectsCherryPick covers the cherry-pick
+// marker, added alongside merge/rebase/bisect for #175.
+// Steps:
+// 1. Creates a worktree and a diverging, conflicting commit on main
+// 2. Starts a conflicting 'git cherry-pick' of main's commit into the worktree, leaving it unresolved
+// 3. Verifies WorktreeOperationInProgress reports ("cherry-pick", true, nil)
+func TestWorktreeOperationInProgressDetectsCherryPick(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("from feature"), 0644); err != nil {
+		t.Fatalf("Failed to write conflicting content on the worktree: %v", err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-am", "feature change"); err != nil {
+		t.Fatalf("Failed to commit on the worktree: %v\nOutput: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("from main"), 0644); err != nil {
+		t.Fatalf("Failed to write conflicting content on main: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "commit", "-am", "main change"); err != nil {
+		t.Fatalf("Failed to commit on main: %v\nOutput: %s", err, out)
+	}
+	mainRev, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to resolve main's tip: %v", err)
+	}
+
+	if out, err := testutil.RunGit(t, wtPath, "cherry-pick", strings.TrimSpace(mainRev)); err == nil {
+		t.Fatalf("Expected the cherry-pick to conflict, but it succeeded: %s", out)
+	}
+
+	label, inProgress, err := repo.WorktreeOperationInProgress(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeOperationInProgress failed: %v", err)
+	}
+	if !inProgress {
+		t.Fatal("Expected an operation to be reported in progress")
+	}
+	if label != "cherry-pick" {
+		t.Errorf("Expected label 'cherry-pick', got %q", label)
+	}
+}
+
+// TestWorktreeOperationInProgressDetectsRevert covers the revert marker,
+// added alongside merge/rebase/bisect for #175.
+// Steps:
+// 1. Creates a worktree, commits a change, then commits a second change touching the same content
+// 2. Starts a conflicting 'git revert' of the first commit, leaving it unresolved
+// 3. Verifies WorktreeOperationInProgress reports ("revert", true, nil)
+func TestWorktreeOperationInProgressDetectsRevert(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("first change"), 0644); err != nil {
+		t.Fatalf("Failed to write the first change: %v", err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-am", "first change"); err != nil {
+		t.Fatalf("Failed to commit the first change: %v\nOutput: %s", err, out)
+	}
+	revertTarget, err := testutil.RunGit(t, wtPath, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to resolve the commit to revert: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("second change"), 0644); err != nil {
+		t.Fatalf("Failed to write the second change: %v", err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-am", "second change"); err != nil {
+		t.Fatalf("Failed to commit the second change: %v\nOutput: %s", err, out)
+	}
+
+	if out, err := testutil.RunGit(t, wtPath, "revert", "--no-edit", strings.TrimSpace(revertTarget)); err == nil {
+		t.Fatalf("Expected the revert to conflict, but it succeeded: %s", out)
+	}
+
+	label, inProgress, err := repo.WorktreeOperationInProgress(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeOperationInProgress failed: %v", err)
+	}
+	if !inProgress {
+		t.Fatal("Expected an operation to be reported in progress")
+	}
+	if label != "revert" {
+		t.Errorf("Expected label 'revert', got %q", label)
+	}
+}
+
 // TestWorktreeOperationInProgressReportsCleanWorktree verifies a worktree with
 // no merge, rebase, or bisect underway reports nothing in progress.
 // Steps:

@@ -239,6 +239,42 @@ func TestDeleteForceAndForceWorktreeOnUnmergedDirtyBranch(t *testing.T) {
 	}
 }
 
+// TestDeleteRefusesUnmergedBranchWithoutFreeingWorktree guards against a
+// regression: the worktree used to be freed before 'git branch -d' had any
+// chance to refuse an unmerged branch, so a clean-but-unmerged delete without
+// --force lost its worktree even though the branch itself correctly survived
+// — a refusal that "worked" but still cost the user their worktree.
+// Steps:
+// 1. Initializes git-flow, creates feature/x with a managed worktree and an unmerged commit (the worktree itself is clean — no uncommitted changes)
+// 2. Runs 'git flow feature delete x' without --force
+// 3. Verifies a non-zero exit, and that BOTH the branch and its worktree (directory, admin entry, provenance marker) survive
+func TestDeleteRefusesUnmergedBranchWithoutFreeingWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "unmerged.txt", "unmerged work", "unmerged commit")
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "x")
+	if err == nil {
+		t.Fatalf("Expected delete to refuse an unmerged branch, got success: %s", output)
+	}
+	if !testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to survive the refusal")
+	}
+	if _, statErr := os.Stat(wtPath); statErr != nil {
+		t.Errorf("Expected the worktree directory to survive the refusal, got: %v", statErr)
+	}
+	if !strings.Contains(gitWorktreeList(t, dir), wtPath) {
+		t.Error("Expected the worktree's admin entry to survive the refusal")
+	}
+	if !testutil.GitConfigExists(t, dir, managedMarkerFor("feature/x")) {
+		t.Error("Expected the managed marker to survive the refusal")
+	}
+}
+
 // TestDeleteFromInsideOwnWorktreeChecksMergednessAgainstParent guards against a
 // regression the #175 redirect could otherwise introduce: when the parent has
 // no dedicated worktree of its own, delete's redirect lands on the main

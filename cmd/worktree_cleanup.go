@@ -102,6 +102,39 @@ func redirectPreferringParentWorktree(repo *git.Repo, branch string, parentBranc
 	return redirected, true, nil
 }
 
+// topicWorktreeIfSeparate looks up branch's own worktree and returns a repo
+// handle bound to it, ONLY when that worktree exists and differs from the one
+// repo is itself bound to.
+//
+// Once a redirect (redirectPreferringParentWorktree) has moved repo away from
+// branch's own worktree, that worktree still has branch checked out
+// throughout — the whole point of redirecting was to leave it untouched. Every
+// finish step that would otherwise try to check branch out again on repo needs
+// this: the rebase step (which genuinely needs to run wherever branch already
+// is, not fail trying to check it out a second time), --abort's return-to-
+// topic checkout, and the --ff-only failure recovery checkout (both of which
+// have nothing to do at all in that case — branch is already exactly where it
+// needs to be).
+//
+// It returns (nil, false, nil) — not an error — whenever branch has no
+// worktree of its own, is checked out in the main worktree, or is already the
+// one repo is bound to: every case where an ordinary checkout on repo is both
+// safe and the right thing to do.
+func topicWorktreeIfSeparate(repo *git.Repo, branch string) (*git.Repo, bool, error) {
+	entry, err := repo.WorktreeForBranch(branch)
+	if err != nil {
+		return nil, false, err
+	}
+	if entry == nil || entry.Main || git.SamePath(repo.WorkTree(), entry.Path) {
+		return nil, false, nil
+	}
+	opened, err := git.Open(entry.Path)
+	if err != nil {
+		return nil, false, err
+	}
+	return opened, true, nil
+}
+
 // preflightWorktreeCleanup checks, without changing anything, whether branch's
 // worktree can be freed once the caller's operation reaches that point. It is
 // the "refuse before anything destructive happens" half of the worktree
