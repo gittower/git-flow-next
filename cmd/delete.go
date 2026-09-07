@@ -209,24 +209,29 @@ func performDelete(repo *git.Repo, branchType, name, fullBranchName string, bran
 	// removed outright; even a hand-made one, detached, does not un-detach
 	// itself), and 'git branch -d' below would otherwise be the first thing
 	// to notice a clean-but-unmerged branch — by which point the worktree is
-	// already gone. This mirrors 'git branch -d's own no-upstream mergedness
-	// check (branch must be an ancestor of the branch now checked out, which
-	// the steps above already arranged to be the parent whenever that
-	// mattered) without trying to reproduce every rule 'git branch -d' itself
-	// applies (a configured upstream, for instance): a false negative here
-	// just means that real call further down — unreached in the cases that
-	// matter — makes the final call.
+	// already gone. This mirrors 'git branch -d's own mergedness check
+	// exactly: against the branch's configured upstream when it has one,
+	// else against whatever is now checked out (which the steps above
+	// already arranged to be the parent whenever that mattered) — matching
+	// both branches of git's own rule, not just the no-upstream one, closes
+	// the gap where this pre-check could pass and the real deletion still
+	// fail afterward, worktree already gone.
 	if !forceDelete {
-		headBranch, err := repo.GetCurrentBranch()
+		mergeTarget, err := repo.GetTrackingBranch(fullBranchName)
 		if err != nil {
-			return &errors.GitError{Operation: "get current branch", Err: err}
+			// No upstream configured — not a real failure, git's own rule
+			// falls back to HEAD in exactly this case.
+			mergeTarget, err = repo.GetCurrentBranch()
+			if err != nil {
+				return &errors.GitError{Operation: "get current branch", Err: err}
+			}
 		}
-		merged, err := repo.IsAncestor(fullBranchName, headBranch)
+		merged, err := repo.IsAncestor(fullBranchName, mergeTarget)
 		if err != nil {
 			return &errors.GitError{Operation: "check whether branch is merged", Err: err}
 		}
 		if !merged {
-			return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", fullBranchName), Err: fmt.Errorf("the branch is not fully merged into '%s'; use --force to delete it anyway", headBranch)}
+			return &errors.GitError{Operation: fmt.Sprintf("delete branch '%s'", fullBranchName), Err: fmt.Errorf("the branch is not fully merged into '%s'; use --force to delete it anyway", mergeTarget)}
 		}
 	}
 

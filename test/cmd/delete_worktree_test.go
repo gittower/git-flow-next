@@ -275,6 +275,46 @@ func TestDeleteRefusesUnmergedBranchWithoutFreeingWorktree(t *testing.T) {
 	}
 }
 
+// TestDeleteRefusesAgainstConfiguredUpstreamNotHead guards against a
+// regression in the mergedness pre-check above: 'git branch -d' checks a
+// branch's configured upstream when it has one, not HEAD — so a pre-check
+// that only compared against HEAD could pass (branch merged into HEAD) while
+// the real 'git branch -d' still refuses (branch not merged into its
+// upstream), freeing the worktree for a deletion that then fails anyway.
+// Steps:
+// 1. Initializes git-flow, creates feature/x with a managed worktree and a commit
+// 2. Merges feature/x into develop directly (so it IS an ancestor of HEAD/develop)
+// 3. Points feature/x's upstream at 'main' instead — which never received that merge, so feature/x is NOT an ancestor of its upstream
+// 4. Runs 'git flow feature delete x' without --force
+// 5. Verifies a non-zero exit, and that both the branch and its worktree survive
+func TestDeleteRefusesAgainstConfiguredUpstreamNotHead(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "feature-x.txt", "hello", "add feature-x.txt")
+
+	if out, err := testutil.RunGit(t, dir, "merge", "feature/x"); err != nil {
+		t.Fatalf("Failed to merge feature/x into develop: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, dir, "branch", "--set-upstream-to=main", "feature/x"); err != nil {
+		t.Fatalf("Failed to point feature/x's upstream at main: %v\nOutput: %s", err, out)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "delete", "x")
+	if err == nil {
+		t.Fatalf("Expected delete to refuse (not merged into its configured upstream), got success: %s", output)
+	}
+	if !testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to survive the refusal")
+	}
+	if _, statErr := os.Stat(wtPath); statErr != nil {
+		t.Errorf("Expected the worktree directory to survive the refusal, got: %v", statErr)
+	}
+}
+
 // TestDeleteFromInsideOwnWorktreeChecksMergednessAgainstParent guards against a
 // regression the #175 redirect could otherwise introduce: when the parent has
 // no dedicated worktree of its own, delete's redirect lands on the main
