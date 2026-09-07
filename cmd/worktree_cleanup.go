@@ -135,6 +135,27 @@ func topicWorktreeIfSeparate(repo *git.Repo, branch string) (*git.Repo, bool, er
 	return opened, true, nil
 }
 
+// isManaged reports whether branch's worktree was created by git-flow. There
+// is no single-branch query left in the worktree package — its former
+// IsManaged was removed once ListMarkers (bulk) became the only caller that
+// mattered (see main's perf(worktree) history) — so this reads the full
+// marker list and checks membership. Each call here is one git-flow
+// invocation resolving one branch, not a listing, so the extra names in the
+// result are simply unused; it costs the same one git process IsManaged
+// itself used to.
+func isManaged(repo *git.Repo, branch string) (bool, error) {
+	markers, err := worktree.ListMarkers(repo)
+	if err != nil {
+		return false, err
+	}
+	for _, m := range markers {
+		if m == branch {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // preflightWorktreeCleanup checks, without changing anything, whether branch's
 // worktree can be freed once the caller's operation reaches that point. It is
 // the "refuse before anything destructive happens" half of the worktree
@@ -171,7 +192,11 @@ func preflightWorktreeCleanup(repo *git.Repo, branch string, opts WorktreeCleanu
 		return &errors.WorktreeOperationInProgressError{Branch: branch, Path: entry.Path, Operation: op}
 	}
 
-	willRemove := worktree.IsManaged(repo, branch) && !opts.Keep
+	managed, err := isManaged(repo, branch)
+	if err != nil {
+		return &errors.GitError{Operation: "check worktree provenance", Err: err}
+	}
+	willRemove := managed && !opts.Keep
 	if !willRemove || opts.Force {
 		return nil
 	}
@@ -226,7 +251,10 @@ func freeWorktreeForBranch(repo *git.Repo, branch string, opts WorktreeCleanupOp
 		return repo, nil
 	}
 
-	managed := worktree.IsManaged(repo, branch)
+	managed, err := isManaged(repo, branch)
+	if err != nil {
+		return repo, &errors.GitError{Operation: "check worktree provenance", Err: err}
+	}
 	remove := managed && !opts.Keep
 
 	if !remove {
