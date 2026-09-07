@@ -177,6 +177,8 @@ The worktree pre-flight (the dirty/in-progress check above) runs before the merg
 
 If you are standing inside the worktree being removed, the destination written to **GIT_FLOW_CD_FILE** (see **git-flow-worktree**(1)) is the parent branch's own worktree if it has one, otherwise the main worktree. Detaching never navigates: the directory stays exactly where it is. A branch with no worktree, or one checked out in the main worktree, is unaffected by either flag.
 
+The rebase strategy (**--rebase**, or `gitflow.<type>.finish.rebase`) is the one combination this does not cover: finish refuses outright when the topic branch has its own separate worktree and the merge would actually rebase (not skipped, as it is under **--ff-only**), naming the worktree and suggesting **--merge**, **--squash**, or removing the worktree first. Merge and squash both work correctly from inside such a worktree; only rebase does not yet.
+
 ### Hook Control
 
 **--no-verify**
@@ -560,7 +562,7 @@ git config gitflow.<type>.finish.noverify true
 : A required branch (the topic branch or its parent) does not exist.
 
 **6**
-: A validation error (the topic or parent branch is not in sync with its remote, the `--ff-only` precondition failed because the parent carries commits the topic branch does not, the branch's git-flow-created worktree has uncommitted or untracked changes and `--force-worktree` was not given, or its worktree has a merge, rebase, bisect, cherry-pick, or revert in progress).
+: A validation error (the topic or parent branch is not in sync with its remote, the `--ff-only` precondition failed because the parent carries commits the topic branch does not, the branch's git-flow-created worktree has uncommitted or untracked changes and `--force-worktree` was not given, its worktree has a merge, rebase, bisect, cherry-pick, or revert in progress, or the rebase strategy was requested against a topic branch that has its own separate worktree).
 
 ## SEE ALSO
 
