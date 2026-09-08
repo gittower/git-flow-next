@@ -1,0 +1,1249 @@
+package cmd_test
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/gittower/git-flow-next/test/testutil"
+)
+
+// commitFileInWorktree writes name with content into the worktree at wtPath,
+// stages it and commits it there, giving a topic branch a distinguishing
+// change that finish's merge should carry onto the parent.
+func commitFileInWorktree(t *testing.T, wtPath string, name string, content string, message string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(wtPath, name), []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write %s: %v", name, err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "add", name); err != nil {
+		t.Fatalf("Failed to stage %s: %v\nOutput: %s", name, err, out)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-m", message); err != nil {
+		t.Fatalf("Failed to commit %s: %v\nOutput: %s", name, err, out)
+	}
+}
+
+// assertFileOnBranch fails unless name exists (and is committed) on branch.
+func assertFileOnBranch(t *testing.T, dir string, branch string, name string) {
+	t.Helper()
+	if out, err := testutil.RunGit(t, dir, "show", branch+":"+name); err != nil {
+		t.Errorf("Expected %s to exist on %s: %v\nOutput: %s", name, branch, err, out)
+	}
+}
+
+// assertWorktreeHeadDetached fails unless the worktree at path has a detached
+// HEAD (symbolic-ref fails).
+func assertWorktreeHeadDetached(t *testing.T, path string) {
+	t.Helper()
+	if out, err := testutil.RunGit(t, path, "symbolic-ref", "-q", "HEAD"); err == nil {
+		t.Errorf("Expected a detached HEAD at %s, got a symbolic ref: %s", path, out)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// finish + worktree cleanup (spec #175)
+// ---------------------------------------------------------------------------
+
+// TestFinishRemovesCleanManagedWorktree covers spec scenario 1: finishing a
+// branch with a clean git-flow-created worktree merges, removes the worktree,
+// clears its marker, and deletes the branch.
+// Steps:
+// 1. Initializes git-flow, creates feature/x and a managed worktree for it with a distinguishing commit
+// 2. Runs 'git flow feature finish x' from the main worktree
+// 3. Verifies exit 0, the merge landed on develop, the worktree directory and admin entry are gone
+// 4. Verifies the provenance marker is cleared and the branch is gone
+func TestFinishRemovesCleanManagedWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "feature-x.txt", "hello", "add feature-x.txt")
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x")
+	if err != nil {
+		t.Fatalf("feature finish failed: %v\nOutput: %s", err, output)
+	}
+
+	assertFileOnBranch(t, dir, "develop", "feature-x.txt")
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Errorf("Expected worktree directory %q to be gone", wtPath)
+	}
+	if strings.Contains(gitWorktreeList(t, dir), wtPath) {
+		t.Error("Expected the admin entry to be gone")
+	}
+	if testutil.GitConfigExists(t, dir, managedMarkerFor("feature/x")) {
+		t.Error("Expected the managed marker to be cleared")
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+}
+
+// TestFinishDetachesHandMadeWorktree covers spec scenario 2: a worktree created
+// by hand is detached, not removed, and its files stay exactly as they were.
+// Steps:
+// 1. Initializes git-flow, creates feature/x and a hand-made worktree via plain 'git worktree add'
+// 2. Writes an extra file inside it (proof the directory is untouched afterward)
+// 3. Runs 'git flow feature finish x'
+// 4. Verifies exit 0, the merge landed, the branch is gone
+// 5. Verifies 'git worktree list' still shows the path, HEAD is detached, and both files survive
+func TestFinishDetachesHandMadeWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := filepath.Join(t.TempDir(), "handmade")
+	if out, err := testutil.RunGit(t, dir, "worktree", "add", wtPath, "feature/x"); err != nil {
+		t.Fatalf("git worktree add failed: %v\nOutput: %s", err, out)
+	}
+	commitFileInWorktree(t, wtPath, "feature-x.txt", "hello", "add feature-x.txt")
+	if err := os.WriteFile(filepath.Join(wtPath, "untouched.txt"), []byte("still here"), 0644); err != nil {
+		t.Fatalf("Failed to write extra file: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x")
+	if err != nil {
+		t.Fatalf("feature finish failed: %v\nOutput: %s", err, output)
+	}
+
+	assertFileOnBranch(t, dir, "develop", "feature-x.txt")
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+	if !strings.Contains(gitWorktreeList(t, dir), wtPath) {
+		t.Errorf("Expected git worktree list to still show %s", wtPath)
+	}
+	assertWorktreeHeadDetached(t, wtPath)
+	assertFileContent(t, filepath.Join(wtPath, "untouched.txt"), "still here")
+	assertFileContent(t, filepath.Join(wtPath, "feature-x.txt"), "hello")
+}
+
+// TestFinishKeepWorktreeDetachesManagedWorktree covers spec scenario 3:
+// --keep-worktree applies the detach path to a git-flow-created worktree too.
+// Steps:
+// 1. Initializes git-flow and creates feature/x with a managed worktree
+// 2. Runs 'git flow feature finish x --keep-worktree'
+// 3. Verifies exit 0, the merge landed, the branch is deleted
+// 4. Verifies the directory survives, detached, and its provenance marker is cleared
+func TestFinishKeepWorktreeDetachesManagedWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x", "--keep-worktree")
+	if err != nil {
+		t.Fatalf("feature finish --keep-worktree failed: %v\nOutput: %s", err, output)
+	}
+
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+	if info, err := os.Stat(wtPath); err != nil || !info.IsDir() {
+		t.Fatalf("Expected the worktree directory to survive: %v", err)
+	}
+	assertWorktreeHeadDetached(t, wtPath)
+	if testutil.GitConfigExists(t, dir, managedMarkerFor("feature/x")) {
+		t.Error("Expected the managed marker to be cleared")
+	}
+}
+
+// TestFinishRefusesDirtyManagedWorktreeWithoutForce covers spec scenario 4
+// (first half): a dirty git-flow-created worktree without --force-worktree
+// aborts before the merge starts.
+// Steps:
+// 1. Initializes git-flow, creates feature/x with a managed worktree, and modifies a tracked file inside it
+// 2. Runs 'git flow feature finish x'
+// 3. Verifies exit 6 and a message naming --force-worktree
+// 4. Verifies develop never received the merge, feature/x still exists, and the worktree/modification/marker survive
+func TestFinishRefusesDirtyManagedWorktreeWithoutForce(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("modified"), 0644); err != nil {
+		t.Fatalf("Failed to modify tracked file: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x")
+	if got := worktreeExitCode(err); got != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", got, output)
+	}
+	if !strings.Contains(output, "--force-worktree") {
+		t.Errorf("Expected the refusal to name --force-worktree, got: %s", output)
+	}
+	if !testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to survive the refusal")
+	}
+	content, err := os.ReadFile(filepath.Join(wtPath, "README.md"))
+	if err != nil || string(content) != "modified" {
+		t.Errorf("Expected the modification to survive, got %q (%v)", string(content), err)
+	}
+	if v := testutil.GitConfigValue(t, dir, managedMarkerFor("feature/x")); v != "true" {
+		t.Errorf("Expected the marker to survive, got %q", v)
+	}
+	if testutil.IsMergeInProgress(t, dir) {
+		t.Error("Expected no merge state to have been written")
+	}
+}
+
+// TestFinishForceWorktreeRemovesDirtyManagedWorktree covers spec scenario 4
+// (second half): --force-worktree lets a dirty git-flow-created worktree be
+// removed and the finish proceed.
+// Steps:
+// 1. Initializes git-flow, creates feature/x with a managed worktree, and modifies a tracked file inside it
+// 2. Runs 'git flow feature finish x --force-worktree'
+// 3. Verifies exit 0, the merge landed, and the worktree and branch are gone
+func TestFinishForceWorktreeRemovesDirtyManagedWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("modified"), 0644); err != nil {
+		t.Fatalf("Failed to modify tracked file: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x", "--force-worktree")
+	if err != nil {
+		t.Fatalf("feature finish --force-worktree failed: %v\nOutput: %s", err, output)
+	}
+
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Errorf("Expected worktree directory %q to be gone", wtPath)
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+}
+
+// TestFinishDetachesDirtyHandMadeWorktreeWithoutForce covers spec scenario 5: a
+// hand-made worktree with uncommitted changes needs no force at all — it is
+// detached, and the changes survive.
+// Steps:
+// 1. Initializes git-flow, creates feature/x with a hand-made worktree
+// 2. Modifies a tracked file and adds an untracked file inside it
+// 3. Runs 'git flow feature finish x' with no worktree flags
+// 4. Verifies exit 0, the merge landed, the branch is gone, and both changes are still present
+func TestFinishDetachesDirtyHandMadeWorktreeWithoutForce(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := filepath.Join(t.TempDir(), "handmade")
+	if out, err := testutil.RunGit(t, dir, "worktree", "add", wtPath, "feature/x"); err != nil {
+		t.Fatalf("git worktree add failed: %v\nOutput: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("modified"), 0644); err != nil {
+		t.Fatalf("Failed to modify tracked file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(wtPath, "scratch.txt"), []byte("scratch"), 0644); err != nil {
+		t.Fatalf("Failed to write untracked file: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x")
+	if err != nil {
+		t.Fatalf("feature finish failed: %v\nOutput: %s", err, output)
+	}
+
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+	assertWorktreeHeadDetached(t, wtPath)
+	assertFileContent(t, filepath.Join(wtPath, "README.md"), "modified")
+	if _, err := os.Stat(filepath.Join(wtPath, "scratch.txt")); err != nil {
+		t.Errorf("Expected the untracked file to survive: %v", err)
+	}
+}
+
+// TestFinishRefusesWorktreeWithOperationInProgress covers spec scenario 6: a
+// worktree with a merge underway cannot be freed, so finish aborts before
+// touching anything.
+// Steps:
+// 1. Initializes git-flow, creates feature/x with a managed worktree
+// 2. Creates a diverging branch and, inside the worktree, starts a conflicting 'git merge' by hand, leaving it unresolved
+// 3. Runs 'git flow feature finish x'
+// 4. Verifies exit 6 and a message naming the worktree and 'merge'
+// 5. Verifies nothing was removed or detached, the in-progress merge survives, and feature/x still exists
+func TestFinishRefusesWorktreeWithOperationInProgress(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "conflict.txt", "from feature", "feature change")
+
+	// 'git flow init' leaves develop checked out in the main worktree, so
+	// committing conflicting content there (via the main worktree directly,
+	// with plain git — no git-flow operation involved) needs no extra branch
+	// or worktree of its own.
+	if err := testutil.WriteFile(t, dir, "conflict.txt", "from develop"); err != nil {
+		t.Fatalf("Failed to write conflicting content on develop: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage conflicting content: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, dir, "commit", "-m", "develop change"); err != nil {
+		t.Fatalf("Failed to commit conflicting content: %v\nOutput: %s", err, out)
+	}
+
+	if out, err := testutil.RunGit(t, wtPath, "merge", "develop"); err == nil {
+		t.Fatalf("Expected the merge to conflict, but it succeeded: %s", out)
+	}
+	if _, err := os.Stat(filepath.Join(wtPath, ".git")); err != nil {
+		t.Fatalf("Worktree lost after inducing the conflict: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x")
+	if got := worktreeExitCode(err); got != 6 {
+		t.Fatalf("Expected exit code 6, got %d: %s", got, output)
+	}
+	if !strings.Contains(output, "merge") {
+		t.Errorf("Expected the refusal to name 'merge', got: %s", output)
+	}
+	if !strings.Contains(output, wtPath) {
+		t.Errorf("Expected the refusal to name the worktree path, got: %s", output)
+	}
+	if !testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to survive the refusal")
+	}
+	// wtPath's .git is a FILE pointing at its private git-dir (the linked
+	// worktree form), so MERGE_HEAD is not reachable by joining wtPath/.git
+	// directly; 'rev-parse --verify' resolves it the same way git itself would.
+	if out, err := testutil.RunGit(t, wtPath, "rev-parse", "--verify", "-q", "MERGE_HEAD"); err != nil {
+		t.Errorf("Expected the in-progress merge to survive untouched: %v\nOutput: %s", err, out)
+	}
+}
+
+// TestFinishFromInsideOwnWorktreeNavigatesToMainWorktree covers spec scenario
+// 7: finish run from inside the branch's own git-flow-created worktree merges
+// successfully (redirected away from that worktree so the merge's own
+// checkout cannot repurpose it), then removes it and records the main
+// worktree as the destination, since the parent branch (develop) has no
+// worktree of its own here.
+// Steps:
+// 1. Initializes git-flow and moves the main worktree onto 'main' (so 'develop' is free for the merge to check out)
+// 2. Creates feature/x with a managed worktree
+// 3. Runs 'git flow feature finish x' with cwd inside that worktree and GIT_FLOW_CD_FILE set
+// 4. Verifies exit 0, the merge landed on develop, and the worktree is gone
+// 5. Verifies the CD file holds the main worktree path and the branch is deleted
+func TestFinishFromInsideOwnWorktreeNavigatesToMainWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	if out, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to move the main worktree onto main: %v\nOutput: %s", err, out)
+	}
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "feature-x.txt", "hello", "add feature-x.txt")
+	cdFile := cdFilePath(t)
+	mainRoot := testutil.EvalPath(t, dir)
+
+	output, err := testutil.RunGitFlowWithEnv(t, wtPath, cdEnv(cdFile), "feature", "finish", "x")
+	if err != nil {
+		t.Fatalf("feature finish from inside the worktree failed: %v\nOutput: %s", err, output)
+	}
+
+	assertFileOnBranch(t, dir, "develop", "feature-x.txt")
+	if got := readCDFile(t, cdFile); got != mainRoot {
+		t.Errorf("Expected CD file to hold the main worktree %q, got %q", mainRoot, got)
+	}
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Errorf("Expected worktree directory %q to be gone", wtPath)
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+}
+
+// TestFinishRebaseRefusedWhenTopicHasSeparateWorktree pins a deliberate
+// design decision, not a bug: running finish --rebase against a topic branch
+// that has its own separate linked worktree is refused outright, rather than
+// attempting to rebase inside that worktree. That was tried (round 2) and
+// reverted (round 3) — it left conflict state split across two git-dirs, with
+// --continue and --abort both unable to find or resolve it correctly; see the
+// "fix: Refuse rebase..." commit body for the full analysis. This combination
+// never worked before #175 either — the checkout would have failed the same
+// way, just with an undocumented git error ("already used by worktree").
+// Refusing clearly here is a strict improvement, not a new restriction; real
+// support is left to a follow-up issue.
+// Steps:
+// 1. Initializes git-flow, moves the main worktree onto 'main', creates feature/x with a managed worktree
+// 2. Runs 'git flow feature finish x --rebase' with cwd inside the feature worktree
+// 3. Verifies exit 6, a message naming the worktree and the --merge/--squash alternative
+// 4. Verifies nothing was touched: no merge state was written, and the worktree and branch both survive
+func TestFinishRebaseRefusedWhenTopicHasSeparateWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	if out, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to move the main worktree onto main: %v\nOutput: %s", err, out)
+	}
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "feature-x.txt", "hello", "add feature-x.txt")
+
+	output, err := testutil.RunGitFlow(t, wtPath, "feature", "finish", "x", "--rebase")
+	if got := worktreeExitCode(err); got != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", got, output)
+	}
+	if !strings.Contains(output, wtPath) {
+		t.Errorf("Expected the refusal to name the worktree path, got: %s", output)
+	}
+	if !strings.Contains(output, "--merge") || !strings.Contains(output, "--squash") {
+		t.Errorf("Expected the refusal to suggest --merge or --squash, got: %s", output)
+	}
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected no merge state to have been written")
+	}
+	if !testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to survive the refusal")
+	}
+	if _, statErr := os.Stat(wtPath); statErr != nil {
+		t.Errorf("Expected the worktree directory to survive the refusal, got: %v", statErr)
+	}
+}
+
+// TestFinishFromInsideOwnWorktreeNavigatesToParentWorktree covers spec
+// scenario 7's other half: when the parent branch DOES have its own worktree,
+// that is the destination, not the main-worktree fallback.
+// Steps:
+// 1. Initializes git-flow, moves the main worktree onto 'main', and gives 'develop' its own managed worktree
+// 2. Creates feature/x with a managed worktree
+// 3. Runs 'git flow feature finish x' with cwd inside the feature worktree and GIT_FLOW_CD_FILE set
+// 4. Verifies exit 0 and that the CD file holds develop's worktree path, not the main worktree
+func TestFinishFromInsideOwnWorktreeNavigatesToParentWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	if out, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to move the main worktree onto main: %v\nOutput: %s", err, out)
+	}
+	developWtPath := addWorktree(t, dir, "develop")
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	cdFile := cdFilePath(t)
+
+	output, err := testutil.RunGitFlowWithEnv(t, wtPath, cdEnv(cdFile), "feature", "finish", "x")
+	if err != nil {
+		t.Fatalf("feature finish from inside the worktree failed: %v\nOutput: %s", err, output)
+	}
+
+	if got := readCDFile(t, cdFile); got != developWtPath {
+		t.Errorf("Expected CD file to hold develop's worktree %q, got %q", developWtPath, got)
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+}
+
+// TestFinishFromInsideHandMadeWorktreeWritesNothing covers spec scenario 8:
+// finishing from inside a hand-made worktree never navigates, because the
+// directory is detached in place rather than removed.
+// Steps:
+// 1. Initializes git-flow and creates feature/x with a hand-made worktree
+// 2. Runs 'git flow feature finish x' with cwd inside that worktree and GIT_FLOW_CD_FILE set
+// 3. Verifies exit 0 and that the CD file stays empty
+// 4. Verifies the directory survives, detached, at the same path
+func TestFinishFromInsideHandMadeWorktreeWritesNothing(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := filepath.Join(t.TempDir(), "handmade")
+	if out, err := testutil.RunGit(t, dir, "worktree", "add", wtPath, "feature/x"); err != nil {
+		t.Fatalf("git worktree add failed: %v\nOutput: %s", err, out)
+	}
+	cdFile := cdFilePath(t)
+
+	output, err := testutil.RunGitFlowWithEnv(t, wtPath, cdEnv(cdFile), "feature", "finish", "x")
+	if err != nil {
+		t.Fatalf("feature finish from inside the worktree failed: %v\nOutput: %s", err, output)
+	}
+
+	assertCDFileEmpty(t, cdFile)
+	if info, err := os.Stat(wtPath); err != nil || !info.IsDir() {
+		t.Fatalf("Expected the worktree directory to survive: %v", err)
+	}
+	assertWorktreeHeadDetached(t, wtPath)
+}
+
+// TestFinishKeepBranchLeavesWorktreeUntouched pins a judgment call: freeing a
+// worktree is only ever done because the branch is about to disappear, so
+// --keep (retain the branch) leaves a managed worktree completely alone, even
+// though --force-worktree/--keep-worktree were also given.
+// Steps:
+// 1. Initializes git-flow and creates feature/x with a managed worktree
+// 2. Runs 'git flow feature finish x --keep --force-worktree'
+// 3. Verifies exit 0, the merge landed, and feature/x still exists
+// 4. Verifies the worktree is untouched: still present, still attached to feature/x, marker still true
+func TestFinishKeepBranchLeavesWorktreeUntouched(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x", "--keep", "--force-worktree")
+	if err != nil {
+		t.Fatalf("feature finish --keep failed: %v\nOutput: %s", err, output)
+	}
+
+	if !testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to survive --keep")
+	}
+	if !strings.Contains(gitWorktreeList(t, dir), wtPath) {
+		t.Errorf("Expected the worktree to still be listed at %s", wtPath)
+	}
+	if got := testutil.GetCurrentBranch(t, wtPath); got != "feature/x" {
+		t.Errorf("Expected the worktree to still be on feature/x, got %q", got)
+	}
+	if v := testutil.GitConfigValue(t, dir, managedMarkerFor("feature/x")); v != "true" {
+		t.Errorf("Expected the marker to survive untouched, got %q", v)
+	}
+}
+
+// TestFinishNoWorktreeFlagsAreNoOps covers spec scenario 15: with no worktree
+// for the branch, the new flags change nothing.
+// Steps:
+// 1. Initializes git-flow and creates feature/x with no worktree anywhere
+// 2. Runs 'git flow feature finish x --keep-worktree --force-worktree'
+// 3. Verifies exit 0, the merge landed, the branch is gone, and no worktree-related output appears
+func TestFinishNoWorktreeFlagsAreNoOps(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	createFreeBranch(t, dir, "feature/x")
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x", "--keep-worktree", "--force-worktree")
+	if err != nil {
+		t.Fatalf("feature finish failed: %v\nOutput: %s", err, output)
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+	if strings.Contains(strings.ToLower(output), "worktree") {
+		t.Errorf("Expected no worktree-related output, got: %s", output)
+	}
+}
+
+// TestFinishMainWorktreeFlagsAreNoOps covers spec scenario 16: a branch checked
+// out in the main worktree is unaffected by the new flags.
+// Steps:
+// 1. Initializes git-flow and runs 'feature start x', leaving feature/x checked out in the main worktree
+// 2. Runs 'git flow feature finish x --keep-worktree --force-worktree'
+// 3. Verifies exit 0, the merge landed, the branch is gone, and no worktree-related output appears
+func TestFinishMainWorktreeFlagsAreNoOps(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	if out, err := testutil.RunGitFlow(t, dir, "feature", "start", "x"); err != nil {
+		t.Fatalf("feature start failed: %v\nOutput: %s", err, out)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x", "--keep-worktree", "--force-worktree")
+	if err != nil {
+		t.Fatalf("feature finish failed: %v\nOutput: %s", err, output)
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+	if strings.Contains(strings.ToLower(output), "worktree") {
+		t.Errorf("Expected no worktree-related output, got: %s", output)
+	}
+}
+
+// TestFinishContinuePreflightRefusesDirtyManagedWorktree verifies the
+// technical note that --continue must run the same worktree pre-flight: a
+// finish that conflicts, gets resolved, and then hits a dirtied managed
+// worktree on --continue must refuse there too, leaving the merge state
+// intact for a later retry.
+// Steps:
+// 1. Initializes git-flow, creates feature/x with a managed worktree, and sets up a merge conflict on finish
+// 2. Runs 'git flow feature finish x', which stops with unresolved conflicts
+// 3. Resolves the conflict and stages it, then dirties the worktree with an unrelated untracked file
+// 4. Runs 'git flow feature finish x --continue'
+// 5. Verifies exit 6, a message naming --force-worktree, and that the merge state file still exists
+func TestFinishContinuePreflightRefusesDirtyManagedWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "conflict.txt", "from feature", "feature change")
+	if out, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop: %v\nOutput: %s", err, out)
+	}
+	if err := testutil.WriteFile(t, dir, "conflict.txt", "from develop"); err != nil {
+		t.Fatalf("Failed to write conflicting content on develop: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage conflicting content: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, dir, "commit", "-m", "develop change"); err != nil {
+		t.Fatalf("Failed to commit conflicting content: %v\nOutput: %s", err, out)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x")
+	if err == nil {
+		t.Fatalf("Expected the finish to conflict, got success: %s", output)
+	}
+	if !testutil.IsMergeInProgress(t, dir) {
+		t.Fatalf("Expected a merge to be in progress after the conflict")
+	}
+
+	if err := testutil.WriteFile(t, dir, "conflict.txt", "resolved"); err != nil {
+		t.Fatalf("Failed to resolve conflict: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage resolution: %v\nOutput: %s", err, out)
+	}
+
+	if err := os.WriteFile(filepath.Join(wtPath, "scratch.txt"), []byte("scratch"), 0644); err != nil {
+		t.Fatalf("Failed to dirty the worktree: %v", err)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "x", "--continue")
+	if got := worktreeExitCode(err); got != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", got, output)
+	}
+	if !strings.Contains(output, "--force-worktree") {
+		t.Errorf("Expected the refusal to name --force-worktree, got: %s", output)
+	}
+	if !testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected the merge state to survive the refused continue")
+	}
+}
+
+// TestFinishContinueForceWorktreeOverridesPersistedChoice guards against a
+// regression: --continue re-resolves several finish options from freshly
+// parsed CLI flags (see resolvedOptions in handleContinue's caller), but the
+// worktree cleanup flags are persisted-only unless explicitly OR'd in. Without
+// that, a refusal naming --force-worktree (exactly the one
+// TestFinishContinuePreflightRefusesDirtyManagedWorktree provokes) would be
+// unescapable: re-running '--continue --force-worktree' would parse the flag
+// and then silently discard it, refusing identically forever.
+// Steps:
+// 1. Reproduces the same conflict-then-dirty-worktree setup as TestFinishContinuePreflightRefusesDirtyManagedWorktree
+// 2. Runs 'git flow feature finish x --continue' and confirms the same refusal (exit 6)
+// 3. Runs 'git flow feature finish x --continue --force-worktree'
+// 4. Verifies exit 0, the merge completed, the worktree was removed despite the untracked file, and the branch is gone
+func TestFinishContinueForceWorktreeOverridesPersistedChoice(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "conflict.txt", "from feature", "feature change")
+	if out, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop: %v\nOutput: %s", err, out)
+	}
+	if err := testutil.WriteFile(t, dir, "conflict.txt", "from develop"); err != nil {
+		t.Fatalf("Failed to write conflicting content on develop: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage conflicting content: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, dir, "commit", "-m", "develop change"); err != nil {
+		t.Fatalf("Failed to commit conflicting content: %v\nOutput: %s", err, out)
+	}
+
+	if _, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x"); err == nil {
+		t.Fatalf("Expected the finish to conflict, got success")
+	}
+	if err := testutil.WriteFile(t, dir, "conflict.txt", "resolved"); err != nil {
+		t.Fatalf("Failed to resolve conflict: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage resolution: %v\nOutput: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(wtPath, "scratch.txt"), []byte("scratch"), 0644); err != nil {
+		t.Fatalf("Failed to dirty the worktree: %v", err)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x", "--continue")
+	if got := worktreeExitCode(err); got != 6 {
+		t.Fatalf("Expected the first --continue to be refused with exit code 6, got %d\nOutput: %s", got, output)
+	}
+
+	output, err = testutil.RunGitFlow(t, dir, "feature", "finish", "x", "--continue", "--force-worktree")
+	if err != nil {
+		t.Fatalf("Expected '--continue --force-worktree' to override the earlier refusal and succeed: %v\nOutput: %s", err, output)
+	}
+	if _, statErr := os.Stat(wtPath); !os.IsNotExist(statErr) {
+		t.Errorf("Expected the worktree directory to be removed, got: %v", statErr)
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+	if testutil.GitFlowMergeStateExists(t, dir) {
+		t.Error("Expected the merge state to be cleared after the successful continue")
+	}
+}
+
+// TestFinishContinueFromInsideOriginalWorktreeAfterRedirect guards against a
+// regression: a redirected finish (invoked from inside the topic's own
+// worktree) that conflicts saves its merge state in the REDIRECTED location
+// (the main worktree here, since develop has no worktree of its own) — the
+// topic's own worktree is deliberately left untouched by the redirect, so
+// nothing is saved there. --continue run from that same original location — a
+// fresh process invocation, and plausibly right where the user still is —
+// must still find and complete the operation rather than reporting no merge
+// in progress.
+// Steps:
+// 1. Initializes git-flow, moves the main worktree onto 'main', creates feature/x with a managed worktree, and sets up a merge conflict on finish
+// 2. Runs 'git flow feature finish x' with cwd inside the feature worktree — stops with unresolved conflicts, state saved in the main worktree
+// 3. Resolves the conflict IN THE MAIN WORKTREE, where the merge actually is
+// 4. Runs 'git flow feature finish x --continue' with cwd STILL inside the original feature worktree
+// 5. Verifies exit 0, the merge completed on develop, the worktree is gone, and the branch is deleted
+func TestFinishContinueFromInsideOriginalWorktreeAfterRedirect(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	if out, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to move the main worktree onto main: %v\nOutput: %s", err, out)
+	}
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "conflict.txt", "from feature", "feature change")
+
+	if out, err := testutil.RunGit(t, dir, "checkout", "develop"); err != nil {
+		t.Fatalf("Failed to checkout develop in the main worktree: %v\nOutput: %s", err, out)
+	}
+	if err := testutil.WriteFile(t, dir, "conflict.txt", "from develop"); err != nil {
+		t.Fatalf("Failed to write conflicting content on develop: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage conflicting content: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, dir, "commit", "-m", "develop change"); err != nil {
+		t.Fatalf("Failed to commit conflicting content: %v\nOutput: %s", err, out)
+	}
+
+	output, err := testutil.RunGitFlow(t, wtPath, "feature", "finish", "x")
+	if err == nil {
+		t.Fatalf("Expected the finish to conflict, got success: %s", output)
+	}
+	if !testutil.IsMergeInProgress(t, dir) {
+		t.Fatal("Expected the merge state to be in the main worktree (the redirected location)")
+	}
+
+	if err := testutil.WriteFile(t, dir, "conflict.txt", "resolved"); err != nil {
+		t.Fatalf("Failed to resolve conflict: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage resolution: %v\nOutput: %s", err, out)
+	}
+
+	output, err = testutil.RunGitFlow(t, wtPath, "feature", "finish", "x", "--continue")
+	if err != nil {
+		t.Fatalf("feature finish --continue from the original worktree failed: %v\nOutput: %s", err, output)
+	}
+	assertFileOnBranch(t, dir, "develop", "conflict.txt")
+	if _, statErr := os.Stat(wtPath); !os.IsNotExist(statErr) {
+		t.Errorf("Expected the worktree directory to be removed, got: %v", statErr)
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+}
+
+// TestFinishWorktreeFlagsHaveNoConfigEquivalent pins the "Layer 3 only, no
+// config key" scoping decision for #175: unlike finish's other options
+// (--keep, --rebase, --tag, ...), --keep-worktree and --force-worktree have
+// no gitflow.<type>.finish.* counterpart. A config key shaped like one must be
+// silently ignored rather than "fixed" by a future config-hierarchy sweep.
+// Steps:
+// 1. Initializes git-flow, creates feature/x with a clean, managed worktree
+// 2. Sets gitflow.feature.finish.keep-worktree=true in git config — a key that does not exist as a real option
+// 3. Runs 'git flow feature finish x' with no worktree flags at all
+// 4. Verifies the worktree was REMOVED, not detached, proving the config key was never consulted
+func TestFinishWorktreeFlagsHaveNoConfigEquivalent(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+
+	if out, err := testutil.RunGit(t, dir, "config", "gitflow.feature.finish.keep-worktree", "true"); err != nil {
+		t.Fatalf("Failed to set config: %v\nOutput: %s", err, out)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x")
+	if err != nil {
+		t.Fatalf("feature finish failed: %v\nOutput: %s", err, output)
+	}
+	if _, statErr := os.Stat(wtPath); !os.IsNotExist(statErr) {
+		t.Errorf("Expected the worktree directory to be removed despite the config key, got: %v", statErr)
+	}
+	if strings.Contains(gitWorktreeList(t, dir), wtPath) {
+		t.Error("Expected the admin entry to be gone despite the config key")
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+}
+
+// TestFinishPreservesWorktreeWhenRemoteDeletionFails guards against a
+// regression: freeing the topic's worktree used to happen before remote
+// branch deletion was attempted, so a remote that rejects the deletion (a
+// protected branch, a permission error) left the worktree gone even though
+// the branch itself correctly survived. deleteRemoteBranchIfNeeded now runs,
+// and can fail, before the worktree is freed at all — matching
+// TestFinishClearsMergeStateWhenBranchDeletionFails's existing pinned
+// behavior for the no-worktree case (merge state is still cleared regardless;
+// this test adds the worktree that one doesn't have).
+// Steps:
+// 1. Initializes git-flow with a remote, creates feature/x with a managed worktree, pushes it
+// 2. Configures the remote to reject branch deletions (receive.denyDeletes)
+// 3. Runs 'git flow feature finish x'
+// 4. Verifies a non-zero exit, the remote branch survives, and BOTH the local branch and its worktree survive
+func TestFinishPreservesWorktreeWhenRemoteDeletionFails(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	remoteDir, err := testutil.AddRemote(t, dir, "origin", true)
+	if err != nil {
+		t.Fatalf("Failed to add remote: %v", err)
+	}
+	defer testutil.CleanupTestRepo(t, remoteDir)
+
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "feature-x.txt", "hello", "add feature-x.txt")
+	if out, err := testutil.RunGit(t, dir, "push", "origin", "feature/x"); err != nil {
+		t.Fatalf("Failed to push feature/x: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, remoteDir, "config", "receive.denyDeletes", "true"); err != nil {
+		t.Fatalf("Failed to configure receive.denyDeletes: %v\nOutput: %s", err, out)
+	}
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x")
+	if err == nil {
+		t.Fatalf("Expected finish to fail when remote deletion is rejected, got success: %s", output)
+	}
+	remoteRefs, lsErr := testutil.RunGit(t, dir, "ls-remote", "--heads", "origin", "feature/x")
+	if lsErr != nil {
+		t.Fatalf("Failed to list remote refs: %v", lsErr)
+	}
+	if remoteRefs == "" {
+		t.Fatal("Expected the remote branch to survive the rejected deletion")
+	}
+	if !testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to survive the rejected remote deletion")
+	}
+	if _, statErr := os.Stat(wtPath); statErr != nil {
+		t.Errorf("Expected the worktree directory to survive the rejected remote deletion, got: %v", statErr)
+	}
+}
+
+// TestFinishPreHookRunsOnTopicWorktreeWhenRedirected guards against a
+// regression: passing the redirected repo into finishBranch also changed the
+// pre-finish hook's working directory, since hooks run with
+// cmd.Dir = repo.WorkTree(). A version-bump hook — the documented,
+// tested (TestFinishFFOnlyAcceptsTopicMovedByPreFinishHook) use case — is
+// expected to commit ON THE TOPIC BRANCH; redirected too early, it would
+// instead commit on the parent's own worktree (or main), landing the bump in
+// the wrong place and, under --ff-only, risking advancing the parent itself.
+// Steps:
+// 1. Initializes git-flow, moves the main worktree onto 'main', creates feature/x with a managed worktree
+// 2. Installs a pre-flow-feature-finish hook that commits a version bump
+// 3. Runs 'git flow feature finish x' with cwd inside the feature worktree
+// 4. Verifies exit 0 and that develop carries BOTH the feature content and the hook's version bump
+func TestFinishPreHookRunsOnTopicWorktreeWhenRedirected(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	if out, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to move the main worktree onto main: %v\nOutput: %s", err, out)
+	}
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "feature-x.txt", "hello", "add feature-x.txt")
+
+	createHookScript(t, dir, "pre-flow-feature-finish", `#!/bin/sh
+set -e
+echo 1.2.3 > version.txt
+git add version.txt
+git commit -q -m "Hook bumped the version"
+`)
+
+	output, err := testutil.RunGitFlow(t, wtPath, "feature", "finish", "x")
+	if err != nil {
+		t.Fatalf("feature finish from inside the worktree failed: %v\nOutput: %s", err, output)
+	}
+	assertFileOnBranch(t, dir, "develop", "feature-x.txt")
+	assertFileOnBranch(t, dir, "develop", "version.txt")
+	if _, statErr := os.Stat(wtPath); !os.IsNotExist(statErr) {
+		t.Errorf("Expected the worktree directory to be removed, got: %v", statErr)
+	}
+}
+
+// TestFinishRefusesRedirectIntoBusyDestinationWorktree guards against a
+// regression: after redirecting, finish used to save merge state without
+// checking whether the destination worktree already had its OWN in-progress
+// operation. Two different topic branches sharing a parent that has its own
+// worktree both redirect to that SAME destination — the second finish to
+// reach it would otherwise silently overwrite the first one's recovery
+// state, stranding it.
+// Steps:
+// 1. Initializes git-flow, moves the main worktree onto 'main', gives develop its own worktree, creates feature/x and feature/y each with their own managed worktree
+// 2. Sets up a conflict for feature/x and runs 'git flow feature finish x' from inside its worktree — stops with unresolved conflicts, state saved in develop's worktree (the shared redirect destination)
+// 3. Runs 'git flow feature finish y' from inside its worktree — redirects to the SAME destination
+// 4. Verifies finish y is refused, naming the in-progress finish for feature/x
+// 5. Verifies feature/x's own operation survived untouched: resolving its conflict and continuing still works
+func TestFinishRefusesRedirectIntoBusyDestinationWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	if out, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to move the main worktree onto main: %v\nOutput: %s", err, out)
+	}
+	developWtPath := addWorktree(t, dir, "develop")
+	createFreeBranch(t, dir, "feature/x")
+	xWtPath := addWorktree(t, dir, "feature/x")
+	createFreeBranch(t, dir, "feature/y")
+	yWtPath := addWorktree(t, dir, "feature/y")
+
+	commitFileInWorktree(t, xWtPath, "conflict.txt", "from feature x", "feature x change")
+	if err := testutil.WriteFile(t, developWtPath, "conflict.txt", "from develop"); err != nil {
+		t.Fatalf("Failed to write conflicting content on develop: %v", err)
+	}
+	if out, err := testutil.RunGit(t, developWtPath, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage conflicting content: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, developWtPath, "commit", "-m", "develop change"); err != nil {
+		t.Fatalf("Failed to commit conflicting content: %v\nOutput: %s", err, out)
+	}
+
+	output, err := testutil.RunGitFlow(t, xWtPath, "feature", "finish", "x")
+	if err == nil {
+		t.Fatalf("Expected feature x's finish to conflict, got success: %s", output)
+	}
+	if !testutil.IsMergeInProgress(t, developWtPath) {
+		t.Fatal("Expected feature x's merge state to be in develop's worktree")
+	}
+
+	output, err = testutil.RunGitFlow(t, yWtPath, "feature", "finish", "y")
+	if err == nil {
+		t.Fatalf("Expected feature y's finish to be refused (destination worktree busy), got success: %s", output)
+	}
+	if !strings.Contains(output, "feature/x") {
+		t.Errorf("Expected the refusal to name the in-progress finish for feature/x, got: %s", output)
+	}
+
+	if err := testutil.WriteFile(t, developWtPath, "conflict.txt", "resolved"); err != nil {
+		t.Fatalf("Failed to resolve conflict: %v", err)
+	}
+	if out, err := testutil.RunGit(t, developWtPath, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage resolution: %v\nOutput: %s", err, out)
+	}
+	output, err = testutil.RunGitFlow(t, xWtPath, "feature", "finish", "x", "--continue")
+	if err != nil {
+		t.Fatalf("Expected feature x's continue to still work after y's refused finish: %v\nOutput: %s", err, output)
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted after continue")
+	}
+}
+
+// TestFinishFFOnlyRebaseFromInsideOwnWorktreeSucceeds guards against a
+// regression in executeFinish's --ff-only exemption from the rebase-worktree
+// refusal (#175 follow-up): the exemption assumed the rebase call being
+// skipped under --ff-only was enough, but handleMergeStep's rebase case also
+// unconditionally checked the topic branch out first — a checkout that fails
+// exactly like the refusal was meant to prevent, for the one combination the
+// guard was supposed to let through.
+// Steps:
+// 1. Initializes git-flow, creates feature/x with a managed worktree and a commit
+// 2. Runs 'git flow feature finish x --rebase --ff-only'
+// 3. Verifies exit 0, the commit landed on develop by fast-forward, and the worktree is gone
+func TestFinishFFOnlyRebaseFromInsideOwnWorktreeSucceeds(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+	commitFileInWorktree(t, wtPath, "feature-x.txt", "hello", "add feature-x.txt")
+
+	output, err := testutil.RunGitFlow(t, dir, "feature", "finish", "x", "--rebase", "--ff-only")
+	if err != nil {
+		t.Fatalf("feature finish --rebase --ff-only failed: %v\nOutput: %s", err, output)
+	}
+	assertFileOnBranch(t, dir, "develop", "feature-x.txt")
+	if _, statErr := os.Stat(wtPath); !os.IsNotExist(statErr) {
+		t.Errorf("Expected the worktree directory to be removed, got: %v", statErr)
+	}
+	if testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to be deleted")
+	}
+}
+
+// TestFinishRefusesWhenPreHookDirtiesWorktree guards against a regression:
+// the worktree preflight ran once, before the pre-finish hook — but the hook
+// itself runs ON the topic's worktree (round 4's fix, since finish is
+// invoked from inside it here) and could dirty it, which the earlier check
+// could not have seen. Re-checking after the hook keeps "a refused cleanup
+// can never follow a completed merge" true even when the hook is what caused
+// the dirt.
+// Steps:
+// 1. Initializes git-flow, creates feature/x with a managed worktree
+// 2. Installs a pre-finish hook that leaves an uncommitted file in the worktree
+// 3. Runs 'git flow feature finish x' with cwd inside the feature worktree
+// 4. Verifies exit 6, and that the branch, the worktree, and the hook's uncommitted file all survive (nothing merged, nothing removed)
+func TestFinishRefusesWhenPreHookDirtiesWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+	if out, err := testutil.RunGit(t, dir, "checkout", "main"); err != nil {
+		t.Fatalf("Failed to move the main worktree onto main: %v\nOutput: %s", err, out)
+	}
+	createFreeBranch(t, dir, "feature/x")
+	wtPath := addWorktree(t, dir, "feature/x")
+
+	createHookScript(t, dir, "pre-flow-feature-finish", `#!/bin/sh
+echo "uncommitted" > dirty.txt
+`)
+
+	output, err := testutil.RunGitFlow(t, wtPath, "feature", "finish", "x")
+	if got := worktreeExitCode(err); got != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", got, output)
+	}
+	if !testutil.BranchExists(t, dir, "feature/x") {
+		t.Error("Expected feature/x to survive the refusal")
+	}
+	if _, statErr := os.Stat(wtPath); statErr != nil {
+		t.Errorf("Expected the worktree directory to survive the refusal, got: %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(wtPath, "dirty.txt")); statErr != nil {
+		t.Errorf("Expected the hook's uncommitted file to still be there, got: %v", statErr)
+	}
+}
+
+// TestFinishAbortAndContinueAfterChildUpdateConflict guards against a
+// regression found by a from-scratch audit of the redirect mechanism (#175
+// follow-up): --continue/--abort used to RECOMPUTE where the initial run's
+// redirect would have landed (the parent's own worktree, or main) instead of
+// looking for the state directly. That works while the merge step itself is
+// conflicted, since the parent is still checked out at the redirect target —
+// but once handleUpdateChildrenStep has moved on and checked a child base
+// branch out at that same location instead, WorktreeForBranch(parent) finds
+// nothing there anymore and the recompute misses the state entirely, even
+// though it is sitting right there. findFinishStateAcrossWorktrees replaces
+// the recompute with a direct search across every worktree.
+// Steps:
+//  1. Initializes git-flow; gives main (hotfix's parent) its own separate
+//     worktree, and diverges develop (an auto-update child of main) via a
+//     scratch worktree that is then removed, freeing develop up
+//  2. Creates hotfix/x from main with a conflicting change to the same file,
+//     with its own worktree
+//  3. Runs 'git flow hotfix finish x': the main merge succeeds, but updating
+//     develop conflicts — main's worktree ends up checked out on develop
+//  4. Runs 'git flow hotfix finish x --abort' from hotfix/x's own worktree
+//  5. Verifies the abort actually finds and clears the conflict in main's
+//     worktree, and hotfix/x survives
+func TestFinishAbortAndContinueAfterChildUpdateConflict(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	// Move the main worktree off develop so both main and develop are free
+	// to get their own separate worktree below.
+	if out, err := testutil.RunGit(t, dir, "checkout", "-b", "idle"); err != nil {
+		t.Fatalf("Failed to move the main worktree off develop: %v\nOutput: %s", err, out)
+	}
+
+	// main gets its own worktree — hotfix's parent — so the initial finish
+	// redirect lands there instead of the main worktree.
+	mainWtPath := addWorktree(t, dir, "main")
+
+	// Diverge develop from main via a scratch worktree, then remove it so
+	// develop is free again for the child-update step to check out later.
+	scratchWtPath := filepath.Join(t.TempDir(), "develop-scratch")
+	if out, err := testutil.RunGit(t, dir, "worktree", "add", scratchWtPath, "develop"); err != nil {
+		t.Fatalf("Failed to add scratch worktree for develop: %v\nOutput: %s", err, out)
+	}
+	if err := testutil.WriteFile(t, scratchWtPath, "conflict.txt", "from develop"); err != nil {
+		t.Fatalf("Failed to write divergent content on develop: %v", err)
+	}
+	if out, err := testutil.RunGit(t, scratchWtPath, "add", "conflict.txt"); err != nil {
+		t.Fatalf("Failed to stage divergent content: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, scratchWtPath, "commit", "-m", "develop change"); err != nil {
+		t.Fatalf("Failed to commit divergent content: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, dir, "worktree", "remove", scratchWtPath); err != nil {
+		t.Fatalf("Failed to remove scratch worktree: %v\nOutput: %s", err, out)
+	}
+
+	// hotfix/x branches from main with a conflicting change to the same file.
+	if out, err := testutil.RunGit(t, dir, "branch", "hotfix/x", "main"); err != nil {
+		t.Fatalf("Failed to create hotfix/x: %v\nOutput: %s", err, out)
+	}
+	hotfixWtPath := addWorktree(t, dir, "hotfix/x")
+	commitFileInWorktree(t, hotfixWtPath, "conflict.txt", "from hotfix", "hotfix change")
+
+	// Finish: the main merge succeeds cleanly (fast-forward from hotfix/x);
+	// auto-updating develop then conflicts on the same file.
+	output, err := testutil.RunGitFlow(t, hotfixWtPath, "hotfix", "finish", "x")
+	if err == nil {
+		t.Fatalf("Expected the child-update step to conflict, got success: %s", output)
+	}
+	if !testutil.IsMergeInProgress(t, mainWtPath) {
+		t.Fatal("Expected the conflict state to be in main's own worktree (the redirect target)")
+	}
+
+	// --abort from the hotfix worktree must find and actually abort that
+	// state, even though main's worktree is now checked out on develop (not
+	// main) and a recompute of the original redirect would miss it.
+	output, err = testutil.RunGitFlow(t, hotfixWtPath, "hotfix", "finish", "x", "--abort")
+	if err != nil {
+		t.Fatalf("Expected --abort to find and abort the conflict: %v\nOutput: %s", err, output)
+	}
+	if testutil.IsMergeInProgress(t, mainWtPath) {
+		t.Error("Expected the conflict to actually be aborted in main's worktree")
+	}
+	if testutil.GitFlowMergeStateExists(t, mainWtPath) {
+		t.Error("Expected merge state to be cleared after abort")
+	}
+	if !testutil.BranchExists(t, dir, "hotfix/x") {
+		t.Error("Expected hotfix/x to survive the abort")
+	}
+}
+
+// TestFinishRefusesChildBranchWithConflictingWorktree guards against a
+// regression found by the same from-scratch audit as
+// TestFinishAbortAndContinueAfterChildUpdateConflict (#175 follow-up):
+// redirectPreferringParentWorktree only ever steers the redirect toward the
+// TOPIC's own parent — nothing steered it toward a child base branch due for
+// auto-update, so handleUpdateChildrenStep's checkout of that child on the
+// redirected repo would fail outright whenever the child had its own,
+// different, separate worktree — and it would do so only AFTER the merge
+// (and any tag) had already completed, too late to refuse cleanly.
+// refuseIfChildWorktreeConflicts now checks every auto-update child before
+// the merge starts.
+// Steps:
+//  1. Initializes git-flow; moves the main worktree off develop and gives
+//     develop its own separate worktree instead, so it differs from where
+//     hotfix's redirect (main has no worktree of its own) would land
+//  2. Creates hotfix/x with its own worktree
+//  3. Runs 'git flow hotfix finish x' from hotfix/x's own worktree
+//  4. Verifies exit 6, naming develop and its worktree, and that nothing
+//     changed: no merge state anywhere, hotfix/x and develop both untouched
+func TestFinishRefusesChildBranchWithConflictingWorktree(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	// Move the main worktree off develop so develop is free for its own
+	// separate worktree, distinct from where the redirect (main has none of
+	// its own) will land: the main worktree itself.
+	if out, err := testutil.RunGit(t, dir, "checkout", "-b", "idle"); err != nil {
+		t.Fatalf("Failed to move the main worktree off develop: %v\nOutput: %s", err, out)
+	}
+	developWtPath := addWorktree(t, dir, "develop")
+
+	createFreeBranch(t, dir, "hotfix/x")
+	hotfixWtPath := addWorktree(t, dir, "hotfix/x")
+	commitFileInWorktree(t, hotfixWtPath, "hotfix-x.txt", "hello", "add hotfix-x.txt")
+
+	output, err := testutil.RunGitFlow(t, hotfixWtPath, "hotfix", "finish", "x")
+	if got := worktreeExitCode(err); got != 6 {
+		t.Fatalf("Expected exit code 6, got %d\nOutput: %s", got, output)
+	}
+	if !strings.Contains(output, "develop") {
+		t.Errorf("Expected the refusal to name develop, got: %s", output)
+	}
+	if !strings.Contains(output, developWtPath) {
+		t.Errorf("Expected the refusal to name develop's worktree path, got: %s", output)
+	}
+
+	if testutil.IsMergeInProgress(t, dir) || testutil.IsMergeInProgress(t, developWtPath) || testutil.IsMergeInProgress(t, hotfixWtPath) {
+		t.Error("Expected no merge state anywhere — the refusal must happen before the merge starts")
+	}
+	if !testutil.BranchExists(t, dir, "hotfix/x") {
+		t.Error("Expected hotfix/x to survive the refusal")
+	}
+	if _, statErr := os.Stat(hotfixWtPath); statErr != nil {
+		t.Errorf("Expected hotfix/x's worktree to survive the refusal, got: %v", statErr)
+	}
+	if _, statErr := os.Stat(developWtPath); statErr != nil {
+		t.Errorf("Expected develop's worktree to survive the refusal, got: %v", statErr)
+	}
+}
+
+// TestFinishCDFileAfterChildUpdateTargetsActualLandingSpot guards against a
+// regression found by the same from-scratch audit (#175 follow-up):
+// handleDeleteBranchStep re-derived the worktree-free step's CD-file
+// destination via a fresh WorktreeForBranch(state.ParentBranch) lookup
+// instead of trusting repo's own current worktree. That goes stale once the
+// child-update step has checked a child base branch out at the redirect
+// target in repo's place — WorktreeForBranch(parent) then finds nothing, and
+// a user standing in the topic's own worktree was sent to the main worktree
+// instead of where finish actually landed.
+// Steps:
+//  1. Initializes git-flow; gives main (hotfix's parent) its own separate
+//     worktree, distinct from the main worktree
+//  2. Creates hotfix/x from main with its own worktree
+//  3. Runs 'git flow hotfix finish x' from hotfix/x's own worktree with
+//     GIT_FLOW_CD_FILE set: the merge and the develop auto-update both
+//     succeed cleanly, leaving main's worktree checked out on develop
+//  4. Verifies the CD file names main's own worktree (where repo actually
+//     ended up), not the main worktree
+func TestFinishCDFileAfterChildUpdateTargetsActualLandingSpot(t *testing.T) {
+	t.Parallel()
+	dir := initWorktreeRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	defer os.RemoveAll(worktreeRootFor(dir))
+
+	// Move the main worktree off develop so both main and develop are free
+	// to get their own separate worktree (develop's, implicitly, once the
+	// child-update step checks it out in main's worktree below).
+	if out, err := testutil.RunGit(t, dir, "checkout", "-b", "idle"); err != nil {
+		t.Fatalf("Failed to move the main worktree off develop: %v\nOutput: %s", err, out)
+	}
+	mainWtPath := addWorktree(t, dir, "main")
+
+	createFreeBranch(t, dir, "hotfix/x")
+	hotfixWtPath := addWorktree(t, dir, "hotfix/x")
+	commitFileInWorktree(t, hotfixWtPath, "hotfix-x.txt", "hello", "add hotfix-x.txt")
+	cdFile := cdFilePath(t)
+
+	output, err := testutil.RunGitFlowWithEnv(t, hotfixWtPath, cdEnv(cdFile), "hotfix", "finish", "x")
+	if err != nil {
+		t.Fatalf("hotfix finish failed: %v\nOutput: %s", err, output)
+	}
+
+	if got := readCDFile(t, cdFile); got != mainWtPath {
+		t.Errorf("Expected CD file to hold main's own worktree %q (where finish landed), got %q", mainWtPath, got)
+	}
+	if testutil.BranchExists(t, dir, "hotfix/x") {
+		t.Error("Expected hotfix/x to be deleted")
+	}
+}

@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -321,6 +322,261 @@ func TestWorktreeHasChangesDetectsUntrackedFile(t *testing.T) {
 	}
 	if !dirty {
 		t.Error("Expected an untracked file to make the worktree dirty")
+	}
+}
+
+// TestWorktreeOperationInProgressDetectsMerge verifies a conflicted merge
+// inside a worktree is reported as "merge" in progress.
+// Steps:
+// 1. Creates a repository with feature/x and a linked worktree for it
+// 2. Commits conflicting content to the same file on main and on the worktree
+// 3. Merges main into the worktree by hand, producing a conflict
+// 4. Calls repo.WorktreeOperationInProgress on the worktree path
+// 5. Verifies it reports "merge" in progress with no error
+func TestWorktreeOperationInProgressDetectsMerge(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("from feature"), 0644); err != nil {
+		t.Fatalf("Failed to write conflicting content on the worktree: %v", err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-am", "feature change"); err != nil {
+		t.Fatalf("Failed to commit on the worktree: %v\nOutput: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("from main"), 0644); err != nil {
+		t.Fatalf("Failed to write conflicting content on main: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "commit", "-am", "main change"); err != nil {
+		t.Fatalf("Failed to commit on main: %v\nOutput: %s", err, out)
+	}
+
+	if out, err := testutil.RunGit(t, wtPath, "merge", "main"); err == nil {
+		t.Fatalf("Expected the merge to conflict, but it succeeded: %s", out)
+	}
+
+	label, inProgress, err := repo.WorktreeOperationInProgress(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeOperationInProgress failed: %v", err)
+	}
+	if !inProgress {
+		t.Fatal("Expected an operation to be reported in progress")
+	}
+	if label != "merge" {
+		t.Errorf("Expected label 'merge', got %q", label)
+	}
+}
+
+// TestWorktreeOperationInProgressDetectsRebase verifies a conflicted rebase
+// inside a worktree is reported as "rebase" in progress.
+// Steps:
+// 1. Creates a repository with feature/x (one commit ahead) and a linked worktree for it
+// 2. Commits conflicting content to the same file on main
+// 3. Starts 'git rebase main' by hand inside the worktree, producing a conflict
+// 4. Calls repo.WorktreeOperationInProgress on the worktree path
+// 5. Verifies it reports "rebase" in progress with no error
+func TestWorktreeOperationInProgressDetectsRebase(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("from feature"), 0644); err != nil {
+		t.Fatalf("Failed to write conflicting content on the worktree: %v", err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-am", "feature change"); err != nil {
+		t.Fatalf("Failed to commit on the worktree: %v\nOutput: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("from main"), 0644); err != nil {
+		t.Fatalf("Failed to write conflicting content on main: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "commit", "-am", "main change"); err != nil {
+		t.Fatalf("Failed to commit on main: %v\nOutput: %s", err, out)
+	}
+
+	if out, err := testutil.RunGit(t, wtPath, "rebase", "main"); err == nil {
+		t.Fatalf("Expected the rebase to conflict, but it succeeded: %s", out)
+	}
+
+	label, inProgress, err := repo.WorktreeOperationInProgress(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeOperationInProgress failed: %v", err)
+	}
+	if !inProgress {
+		t.Fatal("Expected an operation to be reported in progress")
+	}
+	if label != "rebase" {
+		t.Errorf("Expected label 'rebase', got %q", label)
+	}
+}
+
+// TestWorktreeOperationInProgressDetectsBisect covers the bisect marker,
+// which the merge/rebase tests above don't exercise. Four commits are used
+// (not two) so bisect has a midpoint left to test after 'good'/'bad' are
+// given, rather than immediately concluding and cleaning up BISECT_LOG on its
+// own.
+// Steps:
+// 1. Creates a worktree with four commits
+// 2. Starts a bisect there, marking the tip bad and the oldest commit good
+// 3. Verifies WorktreeOperationInProgress reports ("bisect", true, nil)
+func TestWorktreeOperationInProgressDetectsBisect(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("commit 1"), 0644); err != nil {
+		t.Fatalf("Failed to write commit 1 content: %v", err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-am", "commit 1"); err != nil {
+		t.Fatalf("Failed to create commit 1: %v\nOutput: %s", err, out)
+	}
+	goodRev, err := testutil.RunGit(t, wtPath, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to resolve commit 1: %v", err)
+	}
+	goodRev = strings.TrimSpace(goodRev)
+	for i := 2; i <= 4; i++ {
+		content := fmt.Sprintf("commit %d", i)
+		if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to write %s content: %v", content, err)
+		}
+		if out, err := testutil.RunGit(t, wtPath, "commit", "-am", content); err != nil {
+			t.Fatalf("Failed to create %s: %v\nOutput: %s", content, err, out)
+		}
+	}
+
+	if out, err := testutil.RunGit(t, wtPath, "bisect", "start"); err != nil {
+		t.Fatalf("Failed to start bisect: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "bisect", "bad", "HEAD"); err != nil {
+		t.Fatalf("Failed to mark HEAD bad: %v\nOutput: %s", err, out)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "bisect", "good", goodRev); err != nil {
+		t.Fatalf("Failed to mark commit 1 good: %v\nOutput: %s", err, out)
+	}
+
+	label, inProgress, err := repo.WorktreeOperationInProgress(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeOperationInProgress failed: %v", err)
+	}
+	if !inProgress {
+		t.Fatal("Expected an operation to be reported in progress")
+	}
+	if label != "bisect" {
+		t.Errorf("Expected label 'bisect', got %q", label)
+	}
+}
+
+// TestWorktreeOperationInProgressDetectsCherryPick covers the cherry-pick
+// marker, added alongside merge/rebase/bisect for #175.
+// Steps:
+// 1. Creates a worktree and a diverging, conflicting commit on main
+// 2. Starts a conflicting 'git cherry-pick' of main's commit into the worktree, leaving it unresolved
+// 3. Verifies WorktreeOperationInProgress reports ("cherry-pick", true, nil)
+func TestWorktreeOperationInProgressDetectsCherryPick(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("from feature"), 0644); err != nil {
+		t.Fatalf("Failed to write conflicting content on the worktree: %v", err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-am", "feature change"); err != nil {
+		t.Fatalf("Failed to commit on the worktree: %v\nOutput: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("from main"), 0644); err != nil {
+		t.Fatalf("Failed to write conflicting content on main: %v", err)
+	}
+	if out, err := testutil.RunGit(t, dir, "commit", "-am", "main change"); err != nil {
+		t.Fatalf("Failed to commit on main: %v\nOutput: %s", err, out)
+	}
+	mainRev, err := testutil.RunGit(t, dir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to resolve main's tip: %v", err)
+	}
+
+	if out, err := testutil.RunGit(t, wtPath, "cherry-pick", strings.TrimSpace(mainRev)); err == nil {
+		t.Fatalf("Expected the cherry-pick to conflict, but it succeeded: %s", out)
+	}
+
+	label, inProgress, err := repo.WorktreeOperationInProgress(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeOperationInProgress failed: %v", err)
+	}
+	if !inProgress {
+		t.Fatal("Expected an operation to be reported in progress")
+	}
+	if label != "cherry-pick" {
+		t.Errorf("Expected label 'cherry-pick', got %q", label)
+	}
+}
+
+// TestWorktreeOperationInProgressDetectsRevert covers the revert marker,
+// added alongside merge/rebase/bisect for #175.
+// Steps:
+// 1. Creates a worktree, commits a change, then commits a second change touching the same content
+// 2. Starts a conflicting 'git revert' of the first commit, leaving it unresolved
+// 3. Verifies WorktreeOperationInProgress reports ("revert", true, nil)
+func TestWorktreeOperationInProgressDetectsRevert(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("first change"), 0644); err != nil {
+		t.Fatalf("Failed to write the first change: %v", err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-am", "first change"); err != nil {
+		t.Fatalf("Failed to commit the first change: %v\nOutput: %s", err, out)
+	}
+	revertTarget, err := testutil.RunGit(t, wtPath, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("Failed to resolve the commit to revert: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(wtPath, "README.md"), []byte("second change"), 0644); err != nil {
+		t.Fatalf("Failed to write the second change: %v", err)
+	}
+	if out, err := testutil.RunGit(t, wtPath, "commit", "-am", "second change"); err != nil {
+		t.Fatalf("Failed to commit the second change: %v\nOutput: %s", err, out)
+	}
+
+	if out, err := testutil.RunGit(t, wtPath, "revert", "--no-edit", strings.TrimSpace(revertTarget)); err == nil {
+		t.Fatalf("Expected the revert to conflict, but it succeeded: %s", out)
+	}
+
+	label, inProgress, err := repo.WorktreeOperationInProgress(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeOperationInProgress failed: %v", err)
+	}
+	if !inProgress {
+		t.Fatal("Expected an operation to be reported in progress")
+	}
+	if label != "revert" {
+		t.Errorf("Expected label 'revert', got %q", label)
+	}
+}
+
+// TestWorktreeOperationInProgressReportsCleanWorktree verifies a worktree with
+// no merge, rebase, or bisect underway reports nothing in progress.
+// Steps:
+// 1. Creates a repository with feature/x and a linked worktree for it
+// 2. Calls repo.WorktreeOperationInProgress on the worktree path
+// 3. Verifies it reports no operation in progress and no error
+func TestWorktreeOperationInProgressReportsCleanWorktree(t *testing.T) {
+	t.Parallel()
+	dir := testutil.SetupTestRepo(t)
+	defer testutil.CleanupTestRepo(t, dir)
+	repo, wtPath := setupWorktreeRepo(t, dir, "feature/x")
+
+	label, inProgress, err := repo.WorktreeOperationInProgress(wtPath)
+	if err != nil {
+		t.Fatalf("WorktreeOperationInProgress failed: %v", err)
+	}
+	if inProgress {
+		t.Errorf("Expected no operation in progress, got %q", label)
 	}
 }
 

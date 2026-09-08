@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -216,6 +217,61 @@ func worktreeStatusLines(path string) ([]string, error) {
 		}
 	}
 	return lines, nil
+}
+
+// WorktreeOperationInProgress reports whether the worktree at path has a
+// merge, rebase, bisect, cherry-pick, or revert underway, and a short label
+// naming which one for use in an error message. It checks the worktree's OWN
+// git-dir directly — the files a git subcommand run there would itself be
+// racing to finish or abort — rather than shelling out for a status a caller
+// only needs to decide whether it is safe to detach or remove the worktree at
+// all.
+func (r *Repo) WorktreeOperationInProgress(path string) (string, bool, error) {
+	gitDir, err := worktreeGitDir(path)
+	if err != nil {
+		return "", false, err
+	}
+
+	// Order matters only for the label reported, not for correctness: a rebase
+	// leaves both MERGE_HEAD (from an internal 'git merge' it runs to fast
+	// forward) and rebase-apply/-merge in some Git versions, so rebase markers
+	// are checked first to report the more specific state.
+	markers := []struct {
+		label string
+		entry string
+	}{
+		{"rebase", "rebase-merge"},
+		{"rebase", "rebase-apply"},
+		{"merge", "MERGE_HEAD"},
+		{"bisect", "BISECT_LOG"},
+		{"cherry-pick", "CHERRY_PICK_HEAD"},
+		{"revert", "REVERT_HEAD"},
+	}
+	for _, m := range markers {
+		switch _, statErr := os.Stat(filepath.Join(gitDir, m.entry)); {
+		case statErr == nil:
+			return m.label, true, nil
+		case !os.IsNotExist(statErr):
+			return "", false, statErr
+		}
+	}
+	return "", false, nil
+}
+
+// worktreeGitDir resolves the absolute git-dir of the worktree at path — its
+// own private directory for a linked worktree, distinct from every other
+// worktree's — by asking Git rather than assuming a layout, since a bare-repo
+// or otherwise unusual main worktree does not follow the ".git/worktrees/<id>"
+// convention.
+func worktreeGitDir(path string) (string, error) {
+	output, err := gitCommand(path, "rev-parse", "--absolute-git-dir").Output()
+	if err != nil {
+		if detail := stderrOf(err); detail != "" {
+			return "", fmt.Errorf("failed to resolve git dir for worktree at %s: %s: %w", path, detail, err)
+		}
+		return "", fmt.Errorf("failed to resolve git dir for worktree at %s: %w", path, err)
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 // stderrOf returns the trimmed stderr a failed command wrote, which Output()

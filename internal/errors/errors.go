@@ -704,13 +704,90 @@ func (e *MainWorktreeError) ExitCode() ExitCode {
 type WorktreeDirtyError struct {
 	Branch string
 	Path   string
+	// Flag names the CLI flag that overrides the refusal. Empty means
+	// '--force', the wording 'worktree remove' has always used; finish and
+	// delete set it to '--force-worktree' so the message names the flag that
+	// actually exists on those commands (their own --force means something
+	// else: force-finish / force-delete an unmerged branch).
+	Flag string
 }
 
 func (e *WorktreeDirtyError) Error() string {
-	return fmt.Sprintf("worktree for branch '%s' at %s has uncommitted or untracked changes; commit them or pass --force to discard them", e.Branch, e.Path)
+	flag := e.Flag
+	if flag == "" {
+		flag = "--force"
+	}
+	return fmt.Sprintf("worktree for branch '%s' at %s has uncommitted or untracked changes; commit them or pass %s to discard them", e.Branch, e.Path, flag)
 }
 
 func (e *WorktreeDirtyError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
+// WorktreeOperationInProgressError indicates a worktree cannot be freed because
+// it has a merge, rebase, bisect, cherry-pick, or revert underway. Removing it would discard that
+// operation's state along with everything else --force already covers, and
+// detaching is refused unconditionally: it would abandon the operation with no
+// way back to it, and detaching is supposed to need no force at all since it
+// otherwise changes no files.
+type WorktreeOperationInProgressError struct {
+	Branch    string
+	Path      string
+	Operation string // "merge", "rebase", or "bisect"
+}
+
+func (e *WorktreeOperationInProgressError) Error() string {
+	return fmt.Sprintf("worktree for branch '%s' at %s has a %s in progress; resolve or abort it there before finishing or deleting the branch", e.Branch, e.Path, e.Operation)
+}
+
+func (e *WorktreeOperationInProgressError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
+// RebaseWorktreeError indicates finish was asked to rebase a topic branch that
+// has its own separate linked worktree. The branch stays checked out there
+// throughout a redirected finish (#175), by design — checking it out a
+// second time to rebase it would fail outright, and a conflict there cannot
+// currently be continued or aborted correctly (the rebase's conflict state,
+// the merge, rebase, and Merge/rebase/bisect markers all live in a different
+// worktree than the one finish's --continue/--abort would resolve them from).
+// Merge and squash both redirect around the topic worktree without ever
+// needing to check it out again, so neither hits this; --ff-only skips the
+// rebase call entirely and is exempt for the same reason.
+type RebaseWorktreeError struct {
+	Branch string
+	Path   string
+}
+
+func (e *RebaseWorktreeError) Error() string {
+	return fmt.Sprintf("cannot finish '%s' with the rebase strategy: it has its own worktree at %s; use --merge or --squash instead, or remove that worktree first ('git flow worktree remove %s')", e.Branch, e.Path, e.Branch)
+}
+
+func (e *RebaseWorktreeError) ExitCode() ExitCode {
+	return ExitCodeValidationError
+}
+
+// ChildBranchWorktreeError indicates finish was asked to auto-update a child
+// base branch that has its own separate linked worktree, one that does not
+// match the worktree finish is actually operating from. redirectPreferring
+// ParentWorktree guarantees the topic's own parent is always safe to check
+// out on the operating repo — it specifically prefers the parent's own
+// worktree as the redirect target — but a child base branch is a different
+// branch, and nothing steers the redirect toward wherever IT happens to
+// live. Checking it out on the operating repo would fail outright, and
+// unlike the topic-worktree checks this runs after the merge (and any tag)
+// are already done, which is what makes refusing before any of that starts
+// worth doing instead of discovering the failure partway through.
+type ChildBranchWorktreeError struct {
+	Branch string // the child base branch
+	Path   string // its worktree
+}
+
+func (e *ChildBranchWorktreeError) Error() string {
+	return fmt.Sprintf("cannot finish: child base branch '%s' has its own worktree at %s, which this finish cannot check out; remove or detach that worktree first ('git flow worktree remove %s')", e.Branch, e.Path, e.Branch)
+}
+
+func (e *ChildBranchWorktreeError) ExitCode() ExitCode {
 	return ExitCodeValidationError
 }
 

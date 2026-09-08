@@ -281,8 +281,13 @@ func registerBranchCommand(branchType string) {
 				UpdateMessage:  getStringPtr(updateMessage),
 			}
 
+			// Get worktree cleanup flags (#175)
+			keepWorktree, _ := cmd.Flags().GetBool("keep-worktree")
+			forceWorktree, _ := cmd.Flags().GetBool("force-worktree")
+			worktreeOpts := WorktreeCleanupOptions{Keep: keepWorktree, Force: forceWorktree}
+
 			// Call the generic finish command with the branch type and name
-			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, getBoolFlag(fetch, noFetch), getSingleBoolPtr(noVerify), getBoolFlag(push, noPush), getBoolFlag(pushtag, noPushtag))
+			FinishCommand(branchType, name, continueOp, abortOp, force, tagOptions, retentionOptions, mergeOptions, getBoolFlag(fetch, noFetch), getSingleBoolPtr(noVerify), getBoolFlag(push, noPush), getBoolFlag(pushtag, noPushtag), worktreeOpts)
 		},
 	}
 
@@ -349,8 +354,10 @@ func registerBranchCommand(branchType string) {
 			noRemote, _ := cmd.Flags().GetBool("no-remote")
 			fetch, _ := cmd.Flags().GetBool("fetch")
 			noFetch, _ := cmd.Flags().GetBool("no-fetch")
+			keepWorktree, _ := cmd.Flags().GetBool("keep-worktree")
+			forceWorktree, _ := cmd.Flags().GetBool("force-worktree")
 
-			DeleteCommand(branchType, args[0], getBoolFlag(force, noForce), getBoolFlag(remote, noRemote), getBoolFlag(fetch, noFetch))
+			DeleteCommand(branchType, args[0], getBoolFlag(force, noForce), getBoolFlag(remote, noRemote), getBoolFlag(fetch, noFetch), WorktreeCleanupOptions{Keep: keepWorktree, Force: forceWorktree})
 			return nil
 		},
 	}
@@ -362,6 +369,7 @@ func registerBranchCommand(branchType string) {
 	deleteCmd.Flags().Bool("no-remote", false, "Don't delete the remote tracking branch")
 	deleteCmd.Flags().Bool("fetch", false, "Fetch from remote before deleting")
 	deleteCmd.Flags().Bool("no-fetch", false, "Don't fetch from remote before deleting")
+	addWorktreeCleanupFlags(deleteCmd)
 
 	branchCmd.AddCommand(deleteCmd)
 
@@ -549,6 +557,9 @@ func addFinishFlags(cmd *cobra.Command) {
 
 	// Hook Control Flags
 	cmd.Flags().Bool("no-verify", false, "Bypass pre-commit and commit-msg hooks during merge and commit operations")
+
+	// Worktree Cleanup Flags (#175)
+	addWorktreeCleanupFlags(cmd)
 }
 
 // ffModeFromFlags collapses the --ff-only / --no-ff / --ff trio into the
