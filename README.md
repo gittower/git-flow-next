@@ -40,7 +40,7 @@ Our goal is to contribute back to the developer community with tools that make v
 ### Homebrew (macOS and Linux)
 
 ```bash
-brew install gittower/tap/git-flow-next
+brew install git-flow-next
 ```
 
 ### WinGet (Windows)
