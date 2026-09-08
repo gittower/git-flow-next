@@ -7,6 +7,7 @@ This file lists the contributors to git-flow-next.
 - [Alexander Rinass](https://github.com/alexrinass) - *Initial work, maintainer*
 - [Bruno Brito](https://github.com/brunofbrito) - *Maintainer*
 - [Filip Persson](https://github.com/FilleTP) - *Maintainer*
+- [Michal Berner](https://github.com/MichalBerner) - *Maintainer*
 
 ## Contributors
 
@@ -15,13 +16,18 @@ This list is regenerated from git history at release time — see
 "How to Get Listed" below. Ordered alphabetically by name.
 -->
 
+- [Alex Younger](https://github.com/AlextheYounga)
 - [Andrea Scarpino](https://github.com/ilpianista)
+- [Damian Tabiszewski](https://github.com/coding-snake)
 - [Daniel Evers](https://github.com/dermojo)
 - [Guflly](https://github.com/Guflly)
 - [Jannatin Naim](https://github.com/JannatinNaim)
 - [Mrin2you](https://github.com/Mrin2you)
+- [nkoshell](https://github.com/nkoshell)
 - [Ralph Slooten](https://github.com/axllent)
 - [Ron Wolf](https://github.com/ron-wolf)
+- [SAY-5](https://github.com/SAY-5)
+- [Sebastian Walter](https://github.com/evilbaschdi)
 - [sjh9714](https://github.com/sjh9714)
 
 ## Original git-flow Authors

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-08
+
 ### Added
 
 - `checkout` is worktree-aware: when the branch has a worktree, it reports the path and offers it to the calling shell instead of switching the current worktree's branch. `--worktree` creates a missing worktree first and records git-flow as its creator, `--force` clears a plain directory out of the way, `--no-cd` suppresses only the shell handover, and `--quiet` drops the shell-init tip
@@ -16,10 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gitflow.branch.<type>.worktree` makes worktree creation the default for a topic branch type, so `start` needs no flag. `init` writes the key for topic branch types only
 - `<type> list --worktrees` appends a column reporting each branch's linked worktree: its path relative to the main worktree root, `[n]` for the number of changed entries, `(unmanaged)` for a worktree git-flow did not create, `(missing)` for one that is no longer present at its recorded path, and `-` for a branch with no linked worktree — including a branch checked out in the main worktree, since the column reports *linked* worktrees. The count is of `git status --porcelain` entries rather than files, so an untracked directory counts once however many files it holds. Without the flag the output is unchanged
 - `finish --ff-only` (and `gitflow.<type>.finish.ff-only`) makes a fast-forward into the parent a precondition rather than a strategy: if the parent carries any commit the topic branch does not — a true divergence, or merely being ahead — finish aborts before touching any local branch, tag or the working tree, so what lands on the parent is exactly the tested topic tip. It is rejected in combination with `--ff`, `--no-ff`, or a squash strategy, it suppresses the rebase of a rebase strategy rather than rewriting the topic branch to make it land, and it constrains the upstream merge only, not the automatic child updates
+- `finish` and `delete` free a branch's linked worktree as part of deleting the branch, instead of leaving a stale checkout behind or failing outright because Git refuses to delete a branch that is still checked out somewhere. A worktree git-flow created is removed; one created by hand (`git worktree add`) is kept, with its HEAD detached from the branch so the directory and every file in it, including uncommitted work, survive untouched. `--keep-worktree` routes even a git-flow-created worktree through the detach path instead of removing it, and `--force-worktree`/`-W` allows removing one with uncommitted or untracked changes; neither flag has a git config equivalent. Both commands refuse up front, before any destructive step, if the worktree has a merge, rebase, bisect, cherry-pick, or revert in progress. Running finish or delete from inside the worktree being freed first redirects the operation to the parent branch's own worktree (or the main worktree) so the worktree is left untouched until the free step, and reports the new location via `GIT_FLOW_CD_FILE` if the invoking shell was standing there. A rebase-strategy finish is refused outright against a topic branch with its own separate worktree, and a child base branch due for auto-update is refused the same way if it has its own separate worktree — both before the merge starts
 
 ### Changed
 
 - `start` no longer checks the new branch out when it creates a worktree for it: Git allows a branch in only one worktree at a time, so the invocation worktree stays where it was. Without a worktree, `start` checks the branch out exactly as before
+- `worktree list` now reads every worktree's provenance in one bulked lookup instead of one `git config` call per row, so the cost of the listing no longer scales with the number of worktrees
 
 ### Fixed
 
@@ -31,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `config list` categorized the configured branches by ranging over the branch configuration map, so on a stock repository the topic branch type sections — and, with more than one trunk or child base branch, those lists too — came out in Go's randomized map order and varied between identical runs. Trunk branches, child base branches and topic branch types are now each listed alphabetically by branch type name, matching `overview`
 - `config list` presented every started topic branch as a branch type with no parent, start point or prefix. Each `start` records a runtime `gitflow.branch.<branch>.base` key, which the config parser turns into an entry with no type, and the listing put anything that was not a base branch in the topic type section. It now lists the configured topic branch types only
 - Worktree path comparison ignores case on Windows, where two spellings of one location differing only in case were treated as different paths. The refusal to remove or detach the main worktree, the refusal to delete a registered worktree, and the detection that the shell is standing inside a worktree being removed all failed to fire on a case mismatch
+- The shorthand `git flow finish` accepted `--merge-message` and `--update-message` but built its merge strategy without them, silently ignoring both flags even though the per-type command surface honored them as documented
+- Zsh tab completion for the `git flow <type> ...` form (as opposed to `git-flow <type> ...`) tried to invoke a nonexistent `flow` command; the dispatcher's word-shifting now gets the same fixup already applied for the bash and fish bridges
 
 ## [2.0.0] - 2026-08-09
 
@@ -180,7 +186,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic updates to child branches (e.g., develop syncs from main)
 - Compatibility with existing git-flow-avh repositories
 
-[Unreleased]: https://github.com/gittower/git-flow-next/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/gittower/git-flow-next/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/gittower/git-flow-next/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/gittower/git-flow-next/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/gittower/git-flow-next/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/gittower/git-flow-next/compare/v1.0.0...v1.1.0
