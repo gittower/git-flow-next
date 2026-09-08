@@ -1,15 +1,16 @@
 ---
 name: full-release
-description: Run the full release process end-to-end - prep, tag, CI verification, Homebrew tap, WinGet verification, and website sync
+description: Run the full release process end-to-end - prep, tag, CI verification, Homebrew tap, WinGet verification, website sync, and a Discussions announcement
 allowed-tools: Bash, Read, Edit, Grep, Glob
 ---
 
 # Full Release
 
 Orchestrate a complete release: version prep, push + tag, GitHub Actions
-verification, Homebrew tap update, WinGet verification, and website
-documentation sync. Follows the process defined in `RELEASING.md` — read it
-first; this skill sequences it, it does not replace it.
+verification, Homebrew tap update, WinGet verification, website
+documentation sync, and a Discussions announcement. Follows the process
+defined in `RELEASING.md` — read it first; this skill sequences it, it
+does not replace it.
 
 One gate: explicit user confirmation before pushing the tag (step 5).
 Everything before it is local and reversible; everything after it is
@@ -93,7 +94,7 @@ release is exactly `## [X.Y.Z]` for tag `vX.Y.Z` — a mismatch publishes a
 release with an empty body.
 
 Also determine whether this is a preview release (version contains
-`-alpha`, `-beta`, or `-rc`). Preview releases skip steps 7–10.
+`-alpha`, `-beta`, or `-rc`). Preview releases skip steps 7–11.
 
 ### 4. Confirm with User
 
@@ -156,6 +157,13 @@ move on — do not overwrite an already-closed version milestone.
 **Skip for preview releases** — `update_formula.rb` picks the newest
 non-draft release and does not filter prereleases, so running it after a
 preview tag would ship the preview to brew users.
+
+`git-flow-next` is in homebrew-core — `brew install git-flow-next` is the
+documented install path, no tap needed — and Homebrew's own `BrewTestBot`
+auto-bumps that formula on its own, usually within hours of the tag. This
+step is a fallback, not the primary path: it covers the gap before core's
+bump lands and stays useful if that automation ever stalls. Don't block
+the release on it or treat a failure here as release-breaking.
 
 ```bash
 cd ../homebrew-tap
@@ -223,16 +231,51 @@ Verify with `npm run build`. **Leave the changes uncommitted** for user
 review — the website deploys automatically when pushed to main, so pushing
 is publishing.
 
-### 11. Report
+### 11. Post a Release Announcement
+
+**Skip for preview releases.**
+
+Post in [GitHub Discussions](https://github.com/gittower/git-flow-next/discussions),
+category **Announcements**, for every stable release — even a small
+patch release gets a short post; consistency matters more than length.
+
+- Title: `vX.Y.Z released` (reserve a launch-style title like "X.Y.Z is
+  here!" for major milestones).
+- Body: 1–2 sentences on the headline change, then the notable
+  `Added`/`Changed` items from the new CHANGELOG.md section rewritten in
+  your own words, not a verbatim dump. Skip internal/doc-only entries.
+  Link the GitHub release and the website's changelog page. Follow
+  `GITHUB_GUIDELINES.md` for tone (no emoji, no hard-wrapping).
+- Check the Ideas and Roadmap discussion categories for anything this
+  release closes out (including one already converted to a tracked issue
+  via "Closing this in favor of #NNN") and reply there too, linking to
+  the announcement.
+
+Find the Announcements category id once per session:
+
+```bash
+gh api graphql -f query='{repository(owner:"gittower", name:"git-flow-next"){id discussionCategories(first:20){nodes{id name}}}}'
+```
+
+Then post with `createDiscussion` (and `addDiscussionComment` for any
+related-discussion reply) via `gh api graphql`.
+
+**GATE**: show the drafted announcement for review before posting — it's
+a public post, same bar as any other outward-facing content.
+
+### 12. Report
 
 Summarize:
 
 - Version released, link to the GitHub release
 - CI run status
-- Homebrew tap: pushed formula version (or skipped + why)
+- Homebrew tap: pushed formula version (or skipped + why) — note it's a
+  fallback; homebrew-core auto-bump is the primary path
 - WinGet: the verified PR URL against `microsoft/winget-pkgs`, or that
   no PR was opened and why (job failed, preview release, etc.)
 - Website: files changed, build status, and the remaining manual action —
   review the diff in `../git-flow-next-website`, then commit and push to
   deploy
+- Announcement: link to the Discussions post, and any related-discussion
+  reply
 - Any step that was skipped or failed, stated plainly

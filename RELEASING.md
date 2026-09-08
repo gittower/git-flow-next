@@ -11,7 +11,8 @@ Two skills automate this process:
   and creates the version bump commit (steps 1–4 below).
 - **`/full-release`** — runs the entire process end-to-end: `/release`
   prep, push + tag (after confirmation), CI verification, Homebrew tap
-  update, WinGet verification, and website sync (all steps below).
+  update, WinGet verification, website sync, and a Discussions
+  announcement (all steps below).
 
 The manual steps are documented here as the source of truth; the skills
 follow this document.
@@ -325,6 +326,14 @@ maintainers can list a release's scope with
 **Skip for preview releases** — the update script picks the newest
 non-draft release and does not filter prereleases.
 
+`git-flow-next` is in homebrew-core (`brew install git-flow-next`, no tap
+needed — that's what install instructions should point people to), and
+Homebrew's own `BrewTestBot` auto-bumps that formula on every release,
+usually within hours of the tag. This step keeps `gittower/tap` updated
+as a fallback: it covers the gap before core's bump lands, and stays
+useful if core's automation ever stalls on a given release. Do not wait
+on it or treat it as blocking — it is not the primary install path.
+
 After the GitHub release is published, update the Homebrew formula:
 
 ```bash
@@ -400,6 +409,18 @@ separate deploy step.
 
 Repository: https://github.com/gittower/git-flow-next-website
 
+### 11. Post a Release Announcement
+
+**Skip for preview releases.**
+
+Post a short announcement in [GitHub Discussions](https://github.com/gittower/git-flow-next/discussions), category **Announcements**. Do this for every stable release, not just large ones — a two-sentence post for a patch release is fine; the point is a reliable place to look for what changed, not a launch event every time.
+
+- **Title**: `vX.Y.Z released` (a launch-style title like "X.Y.Z is here!" is reserved for major milestones — 1.0 was the one so far).
+- **Body**: lead with 1–2 sentences on the headline change, then the notable `Added`/`Changed` items from the new CHANGELOG.md section in your own words — not a verbatim changelog dump. Skip items that are purely internal or doc-only even if they made the changelog. Link the GitHub release and, since the website's changelog page is synced in step 10, the changelog page. Follow [GITHUB_GUIDELINES.md](GITHUB_GUIDELINES.md) for tone and formatting (no emoji, h3 sections if the post is long enough to need them, no hard-wrapping).
+- **Related discussions**: if the release closes out or directly addresses an open Discussion (an Ideas/Roadmap post, or one already converted to a tracked issue via "Closing this in favor of #NNN"), reply there too with a link to the announcement — check the Ideas and Roadmap categories for anything the release resolves before posting.
+
+Show the drafted announcement for review before posting — it's a public post, same as any other outward-facing content.
+
 ## Preview Releases
 
 For preview releases, use suffixes:
@@ -410,7 +431,8 @@ For preview releases, use suffixes:
 
 These are automatically marked as prereleases on GitHub, and the
 workflow skips the WinGet submission for them on its own. Do **not**
-update the Homebrew tap or the website for preview releases.
+update the Homebrew tap or the website, or post a Discussions
+announcement, for preview releases.
 
 ## Checklist
 
@@ -427,6 +449,7 @@ update the Homebrew tap or the website for preview releases.
 - [ ] Verified the Windows signing job succeeded
 - [ ] Verified GitHub release: artifacts, checksums, non-empty release notes
 - [ ] Stamped milestone: renamed `Next` → `vX.Y.Z`, closed it, opened new `Next` — skip for previews
-- [ ] Updated Homebrew tap (`ruby update_formula.rb` + `git push`) — skip for previews
+- [ ] Updated Homebrew tap fallback (`ruby update_formula.rb` + `git push`) — skip for previews; homebrew-core auto-bumps separately and is the documented install path
 - [ ] Verified the WinGet PR was opened against `microsoft/winget-pkgs` — skip for previews
 - [ ] Updated website: version + changelog (every release), command/config docs (if changed) — skip for previews
+- [ ] Posted a Discussions announcement, and replied on any Discussion the release closes out — skip for previews
