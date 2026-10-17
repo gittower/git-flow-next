@@ -241,6 +241,11 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 
 	var cfg *config.Config
 
+	// builtinConfig is set when cfg comes from the built-in defaults or a preset
+	// rather than an import or an interactive answer, so the trunk name may
+	// follow git's init.defaultBranch.
+	builtinConfig := false
+
 	// Check if any configuration options are provided
 	hasConfigFlags := mainBranch != "" || developBranch != "" || featurePrefix != "" || bugfixPrefix != "" || releasePrefix != "" || hotfixPrefix != "" || supportPrefix != "" || tagPrefix != ""
 
@@ -267,6 +272,7 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 			fmt.Printf("Initializing git-flow with %s preset\n", preset)
 			presetType := config.PresetType(preset)
 			cfg = config.PresetConfig(presetType)
+			builtinConfig = true
 		} else if custom {
 			// Use custom configuration
 			fmt.Println("Initializing git-flow with custom configuration")
@@ -275,15 +281,27 @@ func initFlow(useDefaults, createBranches, force bool, preset string, custom boo
 			// Use default configuration
 			fmt.Println("Initializing git-flow with default settings")
 			cfg = config.DefaultConfig()
+			builtinConfig = true
 		} else if hasConfigFlags {
 			// Use default configuration with command-line overrides
 			fmt.Println("Initializing git-flow")
 			cfg = config.DefaultConfig()
+			builtinConfig = true
 		} else {
 			// Interactive mode - use legacy interactive config for backward compatibility
 			cfg = config.DefaultConfig()
 			interactiveOverrides := interactiveConfig()
 			cfg = config.ApplyOverrides(cfg, interactiveOverrides)
+		}
+	}
+
+	// Without an explicit --main, a built-in trunk named "main" follows git's
+	// init.defaultBranch. Presets with a different trunk (gitlab) are left alone.
+	if builtinConfig && mainBranch == "" && cfg.TrunkBranch() == "main" {
+		if name := gitInitDefaultBranch(); name != "" && name != "main" && name != developBranch {
+			if _, taken := cfg.Branches[name]; !taken {
+				mainBranch = name
+			}
 		}
 	}
 
@@ -494,6 +512,16 @@ func createGitFlowBranches(repo *git.Repo, cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+// gitInitDefaultBranch returns git's configured init.defaultBranch, or "" when
+// it is unset or not a valid branch name.
+func gitInitDefaultBranch() string {
+	name, err := git.GetConfigWithScope("init.defaultBranch", git.ConfigScopeDefault, "")
+	if err != nil || util.ValidateBranchName(name) != nil {
+		return ""
+	}
+	return name
 }
 
 // customConfiguration provides custom configuration flow

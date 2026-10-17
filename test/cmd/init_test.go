@@ -1810,16 +1810,16 @@ func TestInitCreatesRepositoryWithInitFlag(t *testing.T) {
 }
 
 // TestInitWithInitFlagUsesTrunkAsInitialBranch tests that the repository created
-// by --init uses the resolved git-flow trunk as its initial branch, overriding
-// an ambient init.defaultBranch.
+// by --init uses the resolved git-flow trunk as its initial branch, which
+// follows an ambient init.defaultBranch when the trunk is the built-in default.
 // Steps:
 //  1. Creates a temporary directory that is not a git repository
 //  2. Seeds a global git config with an identity and init.defaultBranch=legacy
 //  3. Runs 'git flow init --defaults --init --no-create-branches' so HEAD stays
 //     unborn and the initial branch remains observable
 //  4. Verifies the command succeeds
-//  5. Verifies HEAD points at 'main', not 'legacy'
-//  6. Verifies no 'legacy' branch exists
+//  5. Verifies HEAD points at 'legacy' (the trunk follows init.defaultBranch)
+//  6. Verifies no 'main' branch exists
 //  7. Verifies gitflow.version is 1.0 in local config
 func TestInitWithInitFlagUsesTrunkAsInitialBranch(t *testing.T) {
 	t.Parallel()
@@ -1834,11 +1834,11 @@ func TestInitWithInitFlagUsesTrunkAsInitialBranch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read HEAD: %v", err)
 	}
-	if strings.TrimSpace(head) != "main" {
-		t.Errorf("Expected initial branch 'main', got: %s", strings.TrimSpace(head))
+	if strings.TrimSpace(head) != "legacy" {
+		t.Errorf("Expected initial branch 'legacy', got: %s", strings.TrimSpace(head))
 	}
-	if branchExists(t, dir, "legacy") {
-		t.Error("Expected no 'legacy' branch; init.defaultBranch must not win over the trunk")
+	if branchExists(t, dir, "main") {
+		t.Error("Expected no 'main' branch; the trunk follows init.defaultBranch")
 	}
 	if v := getGitConfigWithScope(t, dir, "gitflow.version", "local"); v != "1.0" {
 		t.Errorf("Expected gitflow.version to be '1.0', got: %s", v)
@@ -2498,4 +2498,66 @@ func TestInitWithInitFlagAndSharedScopeForceReplacesExistingSharedConfig(t *test
 	if !branchExists(t, dir, "develop") {
 		t.Error("Expected 'develop' branch to exist")
 	}
+}
+
+// TestInitDefaultsHonorsGitInitDefaultBranch tests that the built-in trunk name
+// follows git's init.defaultBranch instead of a hardcoded 'main', while an
+// explicit --main still wins.
+// Steps:
+//  1. Creates a repository and a global git config with init.defaultBranch=master
+//  2. Runs 'git flow init --defaults --no-create-branches' and verifies 'master'
+//     is the base branch and develop's parent
+//  3. Runs 'git flow init --preset=github' and verifies the same for the preset
+//  4. Runs 'git flow init --defaults --main trunk' and verifies --main wins
+func TestInitDefaultsHonorsGitInitDefaultBranch(t *testing.T) {
+	t.Parallel()
+	env, _ := identityConfigEnv(t, map[string]string{"init.defaultBranch": "master"})
+
+	t.Run("defaults", func(t *testing.T) {
+		dir := testutil.SetupTestRepo(t)
+		defer testutil.CleanupTestRepo(t, dir)
+		output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--no-create-branches")
+		if err != nil {
+			t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+		}
+		if v := getGitConfig(t, dir, "gitflow.branch.master.type"); v != "base" {
+			t.Errorf("Expected gitflow.branch.master.type to be 'base', got: %q", v)
+		}
+		if v := getGitConfig(t, dir, "gitflow.branch.develop.parent"); v != "master" {
+			t.Errorf("Expected gitflow.branch.develop.parent to be 'master', got: %q", v)
+		}
+		if v := getGitConfig(t, dir, "gitflow.branch.hotfix.parent"); v != "master" {
+			t.Errorf("Expected gitflow.branch.hotfix.parent to be 'master', got: %q", v)
+		}
+		if testutil.GitConfigExists(t, dir, "gitflow.branch.main.type") {
+			t.Error("Expected no gitflow.branch.main.* configuration")
+		}
+	})
+
+	t.Run("github preset", func(t *testing.T) {
+		dir := testutil.SetupTestRepo(t)
+		defer testutil.CleanupTestRepo(t, dir)
+		output, err := runGitFlowWithEnv(t, dir, env, "init", "--preset=github", "--no-create-branches")
+		if err != nil {
+			t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+		}
+		if v := getGitConfig(t, dir, "gitflow.branch.feature.parent"); v != "master" {
+			t.Errorf("Expected gitflow.branch.feature.parent to be 'master', got: %q", v)
+		}
+	})
+
+	t.Run("explicit main wins", func(t *testing.T) {
+		dir := testutil.SetupTestRepo(t)
+		defer testutil.CleanupTestRepo(t, dir)
+		output, err := runGitFlowWithEnv(t, dir, env, "init", "--defaults", "--main", "trunk", "--no-create-branches")
+		if err != nil {
+			t.Fatalf("Expected success, got error: %v\nOutput: %s", err, output)
+		}
+		if v := getGitConfig(t, dir, "gitflow.branch.trunk.type"); v != "base" {
+			t.Errorf("Expected gitflow.branch.trunk.type to be 'base', got: %q", v)
+		}
+		if testutil.GitConfigExists(t, dir, "gitflow.branch.master.type") {
+			t.Error("Expected --main to win over init.defaultBranch")
+		}
+	})
 }

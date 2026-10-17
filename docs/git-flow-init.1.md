@@ -26,7 +26,7 @@ Initialize git-flow configuration in the current Git repository. This command se
 : Force reconfiguration of git-flow even if already initialized. Without this option, **git flow init** will fail if configuration already exists (in non-interactive mode) or prompt for confirmation (in interactive mode).
 
 **--init**
-: Create a git repository in the current directory when there is none, then initialize git-flow in it. Without this option, running **git flow init** outside a repository fails (exit status **3**) when stdin is not an interactive terminal, and prompts **No git repository here. Create one? [y/N]** when it is; declining creates nothing. Inside an existing repository **--init** is a no-op. The created repository's initial branch is the resolved git-flow trunk (for example **main** with **--defaults**, or **trunk** with **--main trunk**), overriding any ambient **init.defaultBranch**. **--init** governs only repository creation — it does not change how configuration is selected, and it applies with every configuration scope option, including **--global**, **--system**, **--file** and **--shared**.
+: Create a git repository in the current directory when there is none, then initialize git-flow in it. Without this option, running **git flow init** outside a repository fails (exit status **3**) when stdin is not an interactive terminal, and prompts **No git repository here. Create one? [y/N]** when it is; declining creates nothing. Inside an existing repository **--init** is a no-op. The created repository's initial branch is the resolved git-flow trunk (for example **main** with **--defaults** unless **init.defaultBranch** names another branch, or **trunk** with **--main trunk**). **--init** governs only repository creation — it does not change how configuration is selected, and it applies with every configuration scope option, including **--global**, **--system**, **--file** and **--shared**.
 
 ### Preset Options
 
@@ -37,7 +37,7 @@ Initialize git-flow configuration in the current Git repository. This command se
 : Enable custom configuration mode. Prompts for trunk branch and displays configuration commands.
 
 **--defaults**, **-d**
-: Use default branch naming conventions without prompting for customization.
+: Use default branch naming conventions without prompting for customization. The default trunk branch is **main**, or the value of git's **init.defaultBranch** when set. **--main** takes precedence.
 
 **--no-create-branches**
 : Don't create branches even if they don't exist in the repository.
