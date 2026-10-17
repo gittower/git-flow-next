@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `init --defaults`, `init --preset=classic|github` and `init` with branch flags use git's `init.defaultBranch` as the trunk branch when it is set, instead of always using `main`. `--main` still takes precedence, and the repository created by `--init` follows the same trunk
+
 ## [2.1.0] - 2026-09-08
 
 ### Added
